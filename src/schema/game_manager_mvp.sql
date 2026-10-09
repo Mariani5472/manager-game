@@ -10,6 +10,16 @@ PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;
 PRAGMA temp_store = MEMORY;
 
+-- Explicit schema version for save/master compatibility checks.
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY CHECK (version >= 1),
+    description TEXT NOT NULL,
+    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+INSERT OR IGNORE INTO schema_version (version, description)
+VALUES (1, 'Initial Game Manager schema v3');
+
+
 -- =========================================================
 -- WORLD / CLUBS
 -- =========================================================
