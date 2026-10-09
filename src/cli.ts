@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { openDatabase, validateDatabase } from "./db/database.js";
@@ -20,7 +20,7 @@ function initializeMaster(): void {
     return;
   }
   mkdirSync(dirname(masterPath), { recursive: true });
-  const schema = (awaitlessReadFile(schemaPath));
+  const schema = readSchema(schemaPath);
   const db = openDatabase(masterPath);
   try {
     db.exec(schema);
@@ -31,11 +31,9 @@ function initializeMaster(): void {
   }
 }
 
-function awaitlessReadFile(path: string): string {
-  // Static Node APIs; kept separate for testability.
-  return readText(path);
+function readSchema(path: string): string {
+  return readFileSync(path, "utf8");
 }
-import { readFileSync as readText } from "node:fs";
 
 function usage(): never {
   console.log(`Game Manager Football CLI
@@ -62,8 +60,8 @@ function parseOption(args: string[], key: string): string | undefined {
   return index >= 0 ? args[index + 1] : undefined;
 }
 
-function withSave<T>(callback: (db: ReturnType<typeof openDatabase>) => T): T {
-  const path = parseOption(process.argv.slice(3), "--save");
+function withSave<T>(args: string[], callback: (db: ReturnType<typeof openDatabase>) => T): T {
+  const path = parseOption(args, "--save");
   if (!path) throw new Error("Provide --save <path> for a campaign command.");
   const manager = new SaveManager(masterPath, savesDir);
   const db = manager.open(path);
@@ -101,17 +99,17 @@ function main(): void {
       console.table(new SaveManager(masterPath, savesDir).list());
       return;
     case "fixtures":
-      withSave((db) => console.table(listFixtures(db, args.includes("--pending"))));
+      withSave(args, (db) => console.table(listFixtures(db, args.includes("--pending"))));
       return;
     case "play": {
       const fixtureId = args[0] ? Number(args[0]) : undefined;
-      withSave((db) => console.table([advanceNextFixture(db, fixtureId)]));
+      withSave(args, (db) => console.table([advanceNextFixture(db, fixtureId)]));
       return;
     }
     case "advance-round": {
       const roundId = Number(args[0]);
       if (!Number.isInteger(roundId) || roundId <= 0) throw new Error("Provide a valid round id.");
-      withSave((db) => console.table(advanceRound(db, roundId)));
+      withSave(args, (db) => console.table(advanceRound(db, roundId)));
       return;
     }
     default:
