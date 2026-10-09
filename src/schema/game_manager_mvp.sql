@@ -592,8 +592,7 @@ BEGIN
     ) THEN RAISE(ABORT, 'lineup player must belong to the selected club') END;
 END;
 
-CREATE TRIGGER 
-
+CREATE TRIGGER trg_match_lineup_validate_update
 BEFORE UPDATE OF fixture_id, club_id, player_id ON match_lineup
 BEGIN
     SELECT CASE WHEN NOT EXISTS (
