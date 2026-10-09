@@ -33,7 +33,7 @@ export function validateDatabase(db: SqliteDatabase): void {
     throw new Error(`SQLite foreign-key check failed with ${foreignKeyErrors.length} violation(s)`);
   }
 
-  if (!tableExists(db, "fixture") || !tableExists(db, "club")) {
+  if (!tableExists(db, "fixture") || !tableExists(db, "club") || !tableExists(db, "schema_version")) {
     throw new Error("Database does not contain the required Game Manager schema");
   }
 }
