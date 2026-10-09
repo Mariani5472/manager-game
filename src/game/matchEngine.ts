@@ -153,15 +153,6 @@ export function simulateMatch(db: SqliteDatabase, fixtureId: number): MatchSumma
         UPDATE match_momentum SET home_score = ?, away_score = ?
         WHERE fixture_id = ? AND minute = ?
       `).run(homeScore, awayScore, fixtureId, minute);
-      updateFixture.run("IN_PROGRESS", minute, homeScore, awayScore, fixtureId);
-      db.prepare(`
-        INSERT INTO match_simulation_state (fixture_id, state_version, simulation_minute, state_json, updated_at)
-        VALUES (?, 1, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(fixture_id) DO UPDATE SET
-          simulation_minute = excluded.simulation_minute,
-          state_json = excluded.state_json,
-          updated_at = CURRENT_TIMESTAMP
-      `).run(fixtureId, minute, JSON.stringify({ seed, minute, homeScore, awayScore, randomState: "simulation-completes-atomically" }));
     }
     for (const event of events) {
       insertEvent.run(fixtureId, event.minute, event.clubId, event.playerId, event.type, event.xg, event.description);
