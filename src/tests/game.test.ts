@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, copyFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { openDatabase, validateDatabase } from "../db/database.js";
@@ -8,7 +8,7 @@ import { SaveManager } from "../save/saveManager.js";
 import { advanceNextFixture, listFixtures } from "../game/gameService.js";
 
 const schemaPath = resolve("src/schema/game_manager_mvp.sql");
-const schemaText = (await import("node:fs")).readFileSync(schemaPath, "utf8");
+const schemaText = readFileSync(schemaPath, "utf8");
 
 function createTempRoot(): string {
   return mkdtempSync(join(tmpdir(), "manager-game-test-"));
@@ -57,10 +57,13 @@ test("independent saves do not share mutable state", () => {
         (dbB.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status,
         "SCHEDULED",
       );
-      assert.equal(
-        (openDatabase(master, true).prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status,
-        "SCHEDULED",
-      );
+      const masterDb = openDatabase(master, true);
+      try {
+        assert.equal(
+          (masterDb.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status,
+          "SCHEDULED",
+        );
+      } finally { masterDb.close(); }
     } finally { dbA.close(); dbB.close(); }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -96,7 +99,7 @@ test("simulated match writes final score, events, momentum and conditions", () =
       const result = advanceNextFixture(db, 1);
       assert.equal(result.minutes, 90);
       assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
-      assert.equal(db.prepare("SELECT COUNT(*) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number} extends never ? 0 : 90, 90);
+      assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number}).n, 90);
       assert.ok((db.prepare("SELECT COUNT(*) AS n FROM match_event WHERE fixture_id=1").get() as {n:number}).n >= 2);
       assert.ok((db.prepare("SELECT AVG(energy) AS n FROM player_condition WHERE player_id BETWEEN 1 AND 18").get() as {n:number}).n < 100);
     } finally { db.close(); }
