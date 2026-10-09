@@ -97,6 +97,8 @@ export function simulateMatch(db: SqliteDatabase, fixtureId: number): MatchSumma
 
     const homeScorers = db.prepare("SELECT sm.player_id FROM squad_membership sm WHERE sm.club_id = ? ORDER BY sm.player_id");
     const awayScorers = db.prepare("SELECT sm.player_id FROM squad_membership sm WHERE sm.club_id = ? ORDER BY sm.player_id");
+    const homePlayers = homeScorers.all(fixture.home_club_id) as Array<{ player_id: number }>;
+    const awayPlayers = awayScorers.all(fixture.away_club_id) as Array<{ player_id: number }>;
     const insertEvent = db.prepare(`
       INSERT INTO match_event (fixture_id, minute, club_id, player_id, event_type, xg, description)
       VALUES (?, ?, ?, ?, ?, ?, ?)
