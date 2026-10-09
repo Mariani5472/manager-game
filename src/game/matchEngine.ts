@@ -1,5 +1,4 @@
 import type { SqliteDatabase } from "../db/database.js";
-import { randomInt } from "node:crypto";
 
 export interface MatchSummary {
   fixtureId: number;
