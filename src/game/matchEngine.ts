@@ -81,10 +81,10 @@ export function simulateMatch(db: SqliteDatabase, fixtureId: number): MatchSumma
     throw new Error(`Fixture ${fixtureId} is not playable (status: ${fixture.status}).`);
   }
 
-  const home = loadTeamStrength(db, fixture.home_club_id);
-  const away = loadTeamStrength(db, fixture.away_club_id);
   const seed = fixture.random_seed ?? (fixture.id * 2654435761 >>> 0);
   const random = seededRandom(seed);
+  const home = loadTeamStrength(db, fixture.home_club_id);
+  const away = loadTeamStrength(db, fixture.away_club_id);
   let homeScore = 0;
   let awayScore = 0;
   const events: Array<{ minute: number; clubId: number; playerId: number | null; type: string; xg: number; description: string }> = [];
@@ -123,8 +123,8 @@ export function simulateMatch(db: SqliteDatabase, fixtureId: number): MatchSumma
       insertMomentum.run(fixtureId, minute, homePressure, awayPressure, homeScore, awayScore);
 
       for (const side of [
-        { strength: home, chance: homeChance, clubId: fixture.home_club_id, players: homeScorers.all(fixture.home_club_id) as Array<{player_id:number}> },
-        { strength: away, chance: awayChance, clubId: fixture.away_club_id, players: awayScorers.all(fixture.away_club_id) as Array<{player_id:number}> },
+        { strength: home, chance: homeChance, clubId: fixture.home_club_id, players: homePlayers },
+        { strength: away, chance: awayChance, clubId: fixture.away_club_id, players: awayPlayers },
       ]) {
         if (random() < side.chance) {
           const shotOnTarget = random() < clamp(0.28 + side.strength.average_attribute / 250, 0.3, 0.68);
@@ -159,7 +159,7 @@ export function simulateMatch(db: SqliteDatabase, fixtureId: number): MatchSumma
           simulation_minute = excluded.simulation_minute,
           state_json = excluded.state_json,
           updated_at = CURRENT_TIMESTAMP
-      `).run(fixtureId, minute, JSON.stringify({ seed, minute, homeScore, awayScore, randomState: null }));
+      `).run(fixtureId, minute, JSON.stringify({ seed, minute, homeScore, awayScore, randomState: "simulation-completes-atomically" }));
     }
     for (const event of events) {
       insertEvent.run(fixtureId, event.minute, event.clubId, event.playerId, event.type, event.xg, event.description);
