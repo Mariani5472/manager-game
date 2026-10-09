@@ -1,5 +1,5 @@
-import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
-import { dirname, basename, resolve, join } from "node:path";
+import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync, statSync, readdirSync } from "node:fs";
+import { resolve, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { openDatabase, validateDatabase } from "../db/database.js";
 
@@ -128,7 +128,6 @@ export class SaveManager {
     const directory = resolve(this.savesDirectory);
     if (!existsSync(directory)) return [];
     // Use explicit file lookup from the directory, opening each save read-only.
-    const { readdirSync } = requireFs();
     return readdirSync(directory)
       .filter((name) => name.endsWith(".sqlite"))
       .flatMap((name) => {
@@ -153,12 +152,3 @@ export class SaveManager {
   }
 }
 
-function requireFs() {
-  // Keep the fs dependency at module scope from the perspective of Node's ESM loader.
-  return { readdirSync: (path: string) => {
-    // eslint-free thin wrapper declared here for typing simplicity.
-    return importSyncReaddir(path);
-  }};
-}
-
-import { readdirSync as importSyncReaddir } from "node:fs";
