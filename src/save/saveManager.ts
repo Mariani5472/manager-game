@@ -84,6 +84,7 @@ export class SaveManager {
       const saveDb = openDatabase(destination);
       try {
         saveDb.exec(SAVE_METADATA_TABLE);
+        saveDb.prepare("INSERT OR IGNORE INTO schema_version (version, description) VALUES (1, ?)").run("Initial Game Manager schema");
         const insertMetadata = saveDb.prepare(`
           INSERT INTO game_save_metadata (id, name, manager_name, selected_club_id, schema_version)
           VALUES (?, ?, ?, ?, 1)
