@@ -1,4 +1,5 @@
 import type { SqliteDatabase } from "../db/database.js";
+import { randomInt } from "node:crypto";
 
 export interface MatchSummary {
   fixtureId: number;
@@ -87,7 +88,7 @@ export function simulateMatch(db: SqliteDatabase, fixtureId: number): MatchSumma
   const away = loadTeamStrength(db, fixture.away_club_id);
   let homeScore = 0;
   let awayScore = 0;
-  const events: Array<{ minute: number; clubId: number; playerId: number | null; type: string; xg: number; description: string }> = [];
+  const events: Array<{ minute: number; clubId: number | null; playerId: number | null; type: string; xg: number; description: string }> = [];
 
   const tx = db.transaction(() => {
     db.prepare("DELETE FROM match_event WHERE fixture_id = ?").run(fixtureId);
@@ -97,6 +98,8 @@ export function simulateMatch(db: SqliteDatabase, fixtureId: number): MatchSumma
 
     const homeScorers = db.prepare("SELECT sm.player_id FROM squad_membership sm WHERE sm.club_id = ? ORDER BY sm.player_id");
     const awayScorers = db.prepare("SELECT sm.player_id FROM squad_membership sm WHERE sm.club_id = ? ORDER BY sm.player_id");
+    const homePlayers = homeScorers.all(fixture.home_club_id) as Array<{ player_id: number }>;
+    const awayPlayers = awayScorers.all(fixture.away_club_id) as Array<{ player_id: number }>;
     const homePlayers = homeScorers.all(fixture.home_club_id) as Array<{ player_id: number }>;
     const awayPlayers = awayScorers.all(fixture.away_club_id) as Array<{ player_id: number }>;
     const insertEvent = db.prepare(`
