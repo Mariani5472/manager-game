@@ -6,7 +6,7 @@ import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysi
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
 import {
-  advanceNextFixture, advanceRound, getManagedClub, getSeasonStatus, getStandings,
+  advanceNextFixture, advanceStageRound, getManagedClub, getSeasonStatus, getStandings,
   listClubs, listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
 } from "./game/gameService.js";
 
@@ -149,9 +149,10 @@ async function main(): Promise<void> {
       return;
     }
     case "advance-round": {
-      const rawId = args.find(value => !value.startsWith("--"));
-      const roundId = parsePositiveId(rawId, "Round ID");
-      withSave(args, db => console.table(advanceRound(db, roundId)));
+      const rawNumber = args.find(value => !value.startsWith("--"));
+      const roundNumber = parsePositiveId(rawNumber, "Round number");
+      const stageId = parsePositiveId(parseOption(args, "--stage") ?? "1", "--stage");
+      withSave(args, db => console.table(advanceStageRound(db, stageId, roundNumber)));
       return;
     }
     case "next-season": {
