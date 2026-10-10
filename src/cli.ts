@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { openDatabase, validateDatabase } from "./db/database.js";
+import { runMatchBalanceAnalysis } from "./game/matchEngine.js";
+import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
 import {
   advanceNextFixture, advanceRound, getManagedClub, getSeasonStatus, getStandings,
@@ -91,6 +93,37 @@ async function main(): Promise<void> {
       const clubId = rawClubId === undefined ? getManagedClub(db).id : parsePositiveId(rawClubId, "--club");
       console.table([getTactics(db, clubId)]);
     }); return;
+    case "lineup": {
+      const fixtureId = parsePositiveId(args.find(value => !value.startsWith("--")), "Fixture ID");
+      withSave(args, db => {
+        const rawClubId = parseOption(args, "--club");
+        const clubId = rawClubId === undefined ? getManagedClub(db).id : parsePositiveId(rawClubId, "--club");
+        const startersRaw = parseOption(args, "--starters");
+        const benchRaw = parseOption(args, "--bench");
+        const parseIds = (raw: string | undefined, label: string): number[] => {
+          if (raw === undefined || raw.trim() === "") return [];
+          const ids = raw.split(",").map(value => parsePositiveId(value.trim(), label));
+          if (new Set(ids).size !== ids.length) throw new Error(`${label} cannot contain duplicate ids.`);
+          return ids;
+        };
+        if (startersRaw === undefined) {
+          if (benchRaw !== undefined) throw new Error("--bench requires --starters.");
+          console.dir(previewLineup(db, clubId, fixtureId), { depth: null });
+        } else {
+          console.dir(saveLineup(db, fixtureId, clubId, parseIds(startersRaw, "--starters"), parseIds(benchRaw, "--bench")), { depth: null });
+        }
+      });
+      return;
+    }
+    case "balance": {
+      const homeId = parsePositiveId(parseOption(args, "--home"), "--home");
+      const awayId = parsePositiveId(parseOption(args, "--away"), "--away");
+      const simulations = parsePositiveId(parseOption(args, "--simulations") ?? "5000", "--simulations");
+      if (simulations < 100) throw new Error("--simulations must be at least 100.");
+      if (homeId === awayId) throw new Error("--home and --away must be different clubs.");
+      withSave(args, db => console.table([runMatchBalanceAnalysis(db, homeId, awayId, simulations)]));
+      return;
+    }
     case "fixtures": withSave(args, db => console.table(listFixtures(db, args.includes("--pending")))); return;
     case "standings": withSave(args, db => console.table(getStandings(db, parsePositiveId(parseOption(args, "--stage") ?? "1", "--stage")))); return;
     case "season-status": withSave(args, db => console.table(getSeasonStatus(db))); return;
@@ -112,7 +145,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
-      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, fixtures, play, advance-round, standings, season-status, next-season");
+      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, balance, fixtures, play, advance-round, standings, season-status, next-season");
   }
 }
 

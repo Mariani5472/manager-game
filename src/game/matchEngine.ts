@@ -1,190 +1,124 @@
 import type { SqliteDatabase } from "../db/database.js";
-
-export interface MatchSummary {
-  fixtureId: number;
-  homeClubId: number;
-  awayClubId: number;
-  homeScore: number;
-  awayScore: number;
-  events: number;
-  minutes: number;
-}
-
-interface FixtureRow {
-  id: number;
-  home_club_id: number;
-  away_club_id: number;
-  random_seed: number | null;
-  status: string;
-  current_minute: number;
-  home_score: number | null;
-  away_score: number | null;
-}
-
-interface TeamStrength {
-  club_id: number;
-  reputation: number;
-  average_attribute: number;
-  energy: number;
-  morale: number;
-  tactical_bias: number;
-}
-
-function seededRandom(seed: number): () => number {
-  // mulberry32: compact deterministic PRNG; state is serializable for checkpoints.
-  let state = seed >>> 0;
-  return () => {
-    state += 0x6D2B79F5;
-    let value = state;
-    value = Math.imul(value ^ (value >>> 15), value | 1);
-    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function loadTeamStrength(db: SqliteDatabase, clubId: number): TeamStrength {
-  const row = db.prepare(`
-    SELECT c.id AS club_id,
-           c.reputation,
-           COALESCE(AVG((pa.pace + pa.passing + pa.finishing + pa.positioning + pa.decisions + pa.stamina) / 6.0), 50) AS average_attribute,
-           COALESCE(AVG(pc.energy), 100) AS energy,
-           COALESCE(AVG(pc.morale), 50) AS morale,
-           COALESCE(tt.pressing, 50) * 0.05 + COALESCE(tt.tempo, 50) * 0.03 AS tactical_bias
-    FROM club c
-    LEFT JOIN squad_membership sm ON sm.club_id = c.id
-    LEFT JOIN player_attribute pa ON pa.player_id = sm.player_id
-    LEFT JOIN player_condition pc ON pc.player_id = sm.player_id
-    LEFT JOIN team_tactic tt ON tt.club_id = c.id
-    WHERE c.id = ?
-    GROUP BY c.id
-  `).get(clubId) as TeamStrength | undefined;
-  if (!row) throw new Error(`Club ${clubId} not found.`);
-  return row;
-}
-
-/**
- * Deliberately small first-pass engine:
- * - deterministic per fixture seed;
- * - minute-by-minute event/momentum output;
- * - results/events/checkpoints committed atomically.
- * It is a foundation to replace with the full event-based tactical model.
- */
-export function simulateMatch(db: SqliteDatabase, fixtureId: number): MatchSummary {
-  const fixture = db.prepare("SELECT * FROM fixture WHERE id = ?").get(fixtureId) as FixtureRow | undefined;
-  if (!fixture) throw new Error(`Fixture ${fixtureId} not found.`);
-  if (fixture.status === "COMPLETED") throw new Error(`Fixture ${fixtureId} is already completed.`);
-  if (fixture.status === "CANCELLED" || fixture.status === "POSTPONED") {
-    throw new Error(`Fixture ${fixtureId} is not playable (status: ${fixture.status}).`);
+export interface MatchSummary {fixtureId:number;homeClubId:number;awayClubId:number;homeScore:number;awayScore:number;events:number;minutes:number;homeShots:number;awayShots:number;homeShotsOnTarget:number;awayShotsOnTarget:number;homeXg:number;awayXg:number;}
+interface FixtureRow{id:number;home_club_id:number;away_club_id:number;random_seed:number|null;status:string;}
+export interface Player{id:number;name:string;goalkeeper:number;energy:number;morale:number;sharpness:number;pace:number;stamina:number;strength:number;positioning:number;decisions:number;composure:number;teamwork:number;work_rate:number;passing:number;vision:number;crossing:number;dribbling:number;finishing:number;long_shots:number;heading:number;tackling:number;marking:number;aggression:number;concentration:number;reflexes:number;handling:number;aerial_reach:number;}
+export interface Tactic{formation_id:number;mentality:string;pressing:number;tempo:number;defensive_line:number;width:number;passing_directness:number;counter_attack:number;}
+export interface MatchPlayer extends Player{role:string;slot:number;isStarting:boolean;positionRating:number;}
+export interface Team{clubId:number;reputation:number;tactic:Tactic;lineup:MatchPlayer[];attacking:number;defending:number;goalkeeping:number;energy:number;fitness:number;}
+export interface SimulatedMatchResult{homeScore:number;awayScore:number;homeShots:number;awayShots:number;homeShotsOnTarget:number;awayShotsOnTarget:number;homeXg:number;awayXg:number;}
+export interface MonteCarloReport{simulations:number;homeWinRate:number;drawRate:number;awayWinRate:number;averageHomeGoals:number;averageAwayGoals:number;averageTotalGoals:number;homeShotRate:number;awayShotRate:number;meanAbsoluteGoalDifference:number;}
+function rng(seed:number):()=>number{let s=seed>>>0;return()=>{s+=0x6D2B79F5;let v=s;v=Math.imul(v^(v>>>15),v|1);v^=v+Math.imul(v^(v>>>7),v|61);return((v^(v>>>14))>>>0)/4294967296;};}
+function clamp(n:number,a:number,b:number):number{return Math.max(a,Math.min(b,n));}
+function mean(xs:number[]):number{return xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:50;}
+const compatible:Record<string,string[]>={GK:["GK"],CB:["CB"],LB:["LB","LWB","RB"],RB:["RB","RWB","LB"],LWB:["LWB","LB","RWB"],RWB:["RWB","RB","LWB"],DM:["DM","CM"],CM:["CM","DM","AM"],AM:["AM","CM","ST"],LW:["LW","LM","RW","RM"],RW:["RW","RM","LW","LM"],LM:["LM","LW","RM","RW"],RM:["RM","RW","LM","LW"],ST:["ST","AM"]};
+function fit(actual:string,required:string):number{return actual===required?1:(compatible[required]?.includes(actual)?0.82:0.48);}
+function tactic(db:SqliteDatabase,clubId:number):Tactic{const t=db.prepare("SELECT formation_id,mentality,pressing,tempo,defensive_line,width,passing_directness,counter_attack FROM team_tactic WHERE club_id=?").get(clubId) as Tactic|undefined;if(!t)throw new Error(`Tactics for club ${clubId} were not found.`);return t;}
+function loadPlayers(db:SqliteDatabase,clubId:number):Player[]{return db.prepare(`SELECT p.person_id AS id,pe.full_name AS name,p.goalkeeper,COALESCE(pc.energy,100) energy,COALESCE(pc.morale,50) morale,COALESCE(pc.sharpness,50) sharpness,pa.pace,pa.stamina,pa.strength,pa.positioning,pa.decisions,pa.composure,pa.teamwork,pa.work_rate,pa.passing,pa.vision,pa.crossing,pa.dribbling,pa.finishing,pa.long_shots,pa.heading,pa.tackling,pa.marking,pa.aggression,pa.concentration,pa.reflexes,pa.handling,pa.aerial_reach FROM squad_membership sm JOIN player p ON p.person_id=sm.player_id JOIN person pe ON pe.id=p.person_id JOIN player_attribute pa ON pa.player_id=p.person_id LEFT JOIN player_condition pc ON pc.player_id=p.person_id WHERE sm.club_id=? AND COALESCE(pc.suspension_matches,0)=0 AND pc.injured_until IS NULL ORDER BY p.person_id`).all(clubId) as Player[];}
+function loadPositions(db:SqliteDatabase,clubId:number):Map<number,Map<string,number>>{const rows=db.prepare("SELECT pp.player_id,pp.position_code,pp.rating FROM player_position pp JOIN squad_membership sm ON sm.player_id=pp.player_id WHERE sm.club_id=?").all(clubId) as Array<{player_id:number;position_code:string;rating:number}>;const out=new Map<number,Map<string,number>>();for(const r of rows){if(!out.has(r.player_id))out.set(r.player_id,new Map());out.get(r.player_id)!.set(r.position_code,r.rating);}return out;}
+function bestPosition(id:number,positions:Map<number,Map<string,number>>):string{return [...(positions.get(id)?.entries()??[])].sort((a,b)=>b[1]-a[1])[0]?.[0]??"CM";}
+function skill(p:Player,role:string):number{return role==="GK"?mean([p.reflexes,p.handling,p.positioning,p.concentration,p.aerial_reach]):["CB","LB","RB","LWB","RWB"].includes(role)?mean([p.tackling,p.marking,p.positioning,p.strength,p.pace]):["DM","CM","AM"].includes(role)?mean([p.passing,p.vision,p.decisions,p.teamwork,p.stamina]):["LW","RW","LM","RM"].includes(role)?mean([p.pace,p.dribbling,p.crossing,p.composure]):mean([p.finishing,p.composure,p.positioning,p.heading,p.decisions]);}
+function selectLineup(db:SqliteDatabase,fixtureId:number,clubId:number,players:Player[],t:Tactic,persist=true):MatchPlayer[]{
+ const slots=db.prepare("SELECT slot_number,position_code FROM formation_slot WHERE formation_id=? ORDER BY slot_number").all(t.formation_id) as Array<{slot_number:number;position_code:string}>;
+ if(slots.length!==11)throw new Error(`Formation ${t.formation_id} must define exactly 11 slots; found ${slots.length}.`);
+ if(players.length<11)throw new Error(`Club ${clubId} has fewer than eleven available players.`);
+ const positions=loadPositions(db,clubId),byId=new Map(players.map(p=>[p.id,p]));
+ const saved=db.prepare("SELECT player_id AS id,slot_number AS slot,position_code AS role,is_starting AS isStarting FROM match_lineup WHERE fixture_id=? AND club_id=? ORDER BY slot_number").all(fixtureId,clubId) as Array<{id:number;slot:number;role:string;isStarting:number}>;
+ const existing=saved.filter(p=>p.isStarting===1);
+ let starters:MatchPlayer[]=[];
+ const valid=existing.length===11&&new Set(existing.map(p=>p.id)).size===11&&existing.every(p=>byId.has(p.id))&&existing.filter(p=>p.role==="GK"&&byId.get(p.id)?.goalkeeper===1).length===1&&slots.every(slot=>existing.some(p=>p.slot===slot.slot_number&&p.role===slot.position_code));
+ if(valid){
+  starters=existing.map(p=>({...byId.get(p.id)!,role:p.role,slot:p.slot,isStarting:true,positionRating:positions.get(p.id)?.get(p.role)??50}));
+ }else{
+  if(persist)db.prepare("DELETE FROM match_lineup WHERE fixture_id=? AND club_id=?").run(fixtureId,clubId);
+  const used=new Set<number>();
+  for(const slot of slots){
+   const options=players.filter(p=>!used.has(p.id)).sort((a,b)=>{
+    const score=(p:Player)=>{const rating=positions.get(p.id)?.get(slot.position_code)??50;return(rating*.48+skill(p,slot.position_code)*.32+p.energy*.08+p.morale*.06+p.sharpness*.06)*fit(bestPosition(p.id,positions),slot.position_code);};
+    return score(b)-score(a)||a.id-b.id;
+   });
+   const p=options[0]!;used.add(p.id);starters.push({...p,role:slot.position_code,slot:slot.slot_number,isStarting:true,positionRating:positions.get(p.id)?.get(slot.position_code)??50});
   }
-
-  const seed = fixture.random_seed ?? (fixture.id * 2654435761 >>> 0);
-  const random = seededRandom(seed);
-  const home = loadTeamStrength(db, fixture.home_club_id);
-  const away = loadTeamStrength(db, fixture.away_club_id);
-  let homeScore = 0;
-  let awayScore = 0;
-  const events: Array<{ minute: number; clubId: number | null; playerId: number | null; type: string; xg: number; description: string }> = [];
-
-  const tx = db.transaction(() => {
-    // Re-check under a write lock: two processes may have selected this fixture
-    // while it was SCHEDULED. Only one may commit a result.
-    const liveFixture = db.prepare("SELECT status FROM fixture WHERE id = ?").get(fixtureId) as { status: string } | undefined;
-    if (!liveFixture) throw new Error(`Fixture ${fixtureId} not found.`);
-    if (liveFixture.status !== "SCHEDULED") {
-      throw new Error(`Fixture ${fixtureId} is not scheduled (status: ${liveFixture.status}).`);
-    }
-
-    db.prepare("DELETE FROM match_event WHERE fixture_id = ?").run(fixtureId);
-    db.prepare("DELETE FROM match_momentum WHERE fixture_id = ?").run(fixtureId);
-    db.prepare("DELETE FROM match_simulation_state WHERE fixture_id = ?").run(fixtureId);
-    db.prepare("DELETE FROM match_player_state WHERE fixture_id = ?").run(fixtureId);
-
-    const homeScorers = db.prepare("SELECT sm.player_id FROM squad_membership sm WHERE sm.club_id = ? ORDER BY sm.player_id");
-    const awayScorers = db.prepare("SELECT sm.player_id FROM squad_membership sm WHERE sm.club_id = ? ORDER BY sm.player_id");
-    const homePlayers = homeScorers.all(fixture.home_club_id) as Array<{ player_id: number }>;
-    const awayPlayers = awayScorers.all(fixture.away_club_id) as Array<{ player_id: number }>;
-    const insertEvent = db.prepare(`
-      INSERT INTO match_event (fixture_id, minute, club_id, player_id, event_type, xg, description)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    const insertMomentum = db.prepare(`
-      INSERT INTO match_momentum (fixture_id, minute, home_pressure, away_pressure, home_score, away_score)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    const updateFixture = db.prepare(`
-      UPDATE fixture SET status = ?, current_minute = ?, home_score = ?, away_score = ?
-      WHERE id = ?
-    `);
-
-    insertEvent.run(fixtureId, 0, null, null, "KICK_OFF", 0, "Partida iniciada");
-    for (let minute = 1; minute <= 90; minute += 1) {
-      const homeFatigue = (100 - home.energy) * 0.12;
-      const awayFatigue = (100 - away.energy) * 0.12;
-      const homeChance = clamp(0.022 + (home.reputation - away.reputation) / 7000 +
-        (home.average_attribute - away.average_attribute) / 3500 + 0.012 - homeFatigue / 1000, 0.006, 0.055);
-      const awayChance = clamp(0.018 + (away.reputation - home.reputation) / 7000 +
-        (away.average_attribute - home.average_attribute) / 3500 - awayFatigue / 1000, 0.004, 0.05);
-      const homePressure = clamp((homeChance * 1000) + random() * 18, 0, 100);
-      const awayPressure = clamp((awayChance * 1000) + random() * 18, 0, 100);
-      insertMomentum.run(fixtureId, minute, homePressure, awayPressure, homeScore, awayScore);
-
-      for (const side of [
-        { strength: home, chance: homeChance, clubId: fixture.home_club_id, players: homePlayers },
-        { strength: away, chance: awayChance, clubId: fixture.away_club_id, players: awayPlayers },
-      ]) {
-        if (random() < side.chance) {
-          const shotOnTarget = random() < clamp(0.28 + side.strength.average_attribute / 250, 0.3, 0.68);
-          const scored = shotOnTarget && random() < clamp(0.1 + side.strength.average_attribute / 230, 0.15, 0.55);
-          const player = side.players.length ? side.players[Math.floor(random() * side.players.length)] : undefined;
-          if (scored) {
-            if (side.clubId === fixture.home_club_id) homeScore += 1;
-            else awayScore += 1;
-          }
-          const type = scored ? "GOAL" : shotOnTarget ? "SHOT_ON_TARGET" : "SHOT";
-          events.push({
-            minute,
-            clubId: side.clubId,
-            playerId: player?.player_id ?? null,
-            type,
-            xg: scored ? 0.25 : shotOnTarget ? 0.15 : 0.04,
-            description: scored ? "GOL!" : shotOnTarget ? "Finalização defendida" : "Finalização para fora",
-          });
-        }
-      }
-
-      // Each minute has its own momentum point; update score again after scoring events.
-      db.prepare(`
-        UPDATE match_momentum SET home_score = ?, away_score = ?
-        WHERE fixture_id = ? AND minute = ?
-      `).run(homeScore, awayScore, fixtureId, minute);
-    }
-    for (const event of events) {
-      insertEvent.run(fixtureId, event.minute, event.clubId, event.playerId, event.type, event.xg, event.description);
-    }
-    insertEvent.run(fixtureId, 90, null, null, "FULL_TIME", 0, "Fim de jogo");
-    updateFixture.run("COMPLETED", 90, homeScore, awayScore, fixtureId);
-
-    for (const clubId of [fixture.home_club_id, fixture.away_club_id]) {
-      db.prepare(`
-        UPDATE player_condition SET energy = MAX(0, energy - 12)
-        WHERE player_id IN (SELECT player_id FROM squad_membership WHERE club_id = ?)
-      `).run(clubId);
-    }
-    db.prepare("DELETE FROM match_simulation_state WHERE fixture_id = ?").run(fixtureId);
-  });
-  tx.immediate();
-
-  return {
-    fixtureId,
-    homeClubId: fixture.home_club_id,
-    awayClubId: fixture.away_club_id,
-    homeScore,
-    awayScore,
-    events: events.length + 2,
-    minutes: 90,
-  };
+  if(starters.filter(p=>p.role==="GK"&&p.goalkeeper===1).length!==1)throw new Error("Formation must assign exactly one goalkeeper to its GK slot.");
+  if(persist){const insert=db.prepare("INSERT INTO match_lineup(fixture_id,club_id,player_id,slot_number,is_starting,position_code) VALUES(?,?,?,?,1,?)");starters.forEach(p=>insert.run(fixtureId,clubId,p.id,p.slot,p.role));}
+ }
+ const startersIds=new Set(starters.map(p=>p.id));
+ const savedBench=saved.filter(p=>p.isStarting===0&&byId.has(p.id)&&!startersIds.has(p.id)).slice(0,7);
+ const bench:MatchPlayer[]=savedBench.length?savedBench.map(p=>({...byId.get(p.id)!,role:p.role,slot:p.slot,isStarting:false,positionRating:positions.get(p.id)?.get(p.role)??50})):
+  players.filter(p=>!startersIds.has(p.id)).sort((a,b)=>(skill(b,bestPosition(b.id,positions))+b.energy*.3+b.morale*.2)-(skill(a,bestPosition(a.id,positions))+a.energy*.3+a.morale*.2)).slice(0,7).map((p,i)=>({...p,role:bestPosition(p.id,positions),slot:12+i,isStarting:false,positionRating:positions.get(p.id)?.get(bestPosition(p.id,positions))??50}));
+ if(persist){const insert=db.prepare("INSERT INTO match_lineup(fixture_id,club_id,player_id,slot_number,is_starting,position_code) VALUES(?,?,?,?,0,?)");for(const p of bench)if(!saved.some(s=>s.id===p.id&&s.isStarting===0))insert.run(fixtureId,clubId,p.id,p.slot,p.role);}
+ return [...starters,...bench];
+}
+function loadTeam(db:SqliteDatabase,fixtureId:number,clubId:number,persistLineup=true):Team{const c=db.prepare("SELECT reputation FROM club WHERE id=?").get(clubId) as {reputation:number}|undefined;if(!c)throw new Error(`Club ${clubId} not found.`);const t=tactic(db,clubId),players=loadPlayers(db,clubId),lineup=selectLineup(db,fixtureId,clubId,players,t,persistLineup),s=lineup.filter(p=>p.isStarting);const posRating=mean(s.map(p=>p.positionRating*fit(bestPosition(p.id,loadPositions(db,clubId)),p.role)));const attacking=mean(s.map(p=>skill(p,p.role)*.72+p.positionRating*.28+p.energy*.18+p.morale*.08+p.sharpness*.08));const defending=mean(s.map(p=>mean([p.tackling,p.marking,p.positioning,p.concentration,p.strength])));const keeper=s.find(p=>p.role==="GK");return{clubId,reputation:c.reputation,tactic:t,lineup,attacking:attacking+(posRating-50)*.15,defending,goalkeeping:keeper?mean([keeper.reflexes,keeper.handling,keeper.aerial_reach,keeper.positioning]):45,energy:mean(s.map(p=>p.energy)),fitness:mean(s.map(p=>p.stamina))};}
+export function simulateMatchKernel(home:Team,away:Team,seed:number):SimulatedMatchResult{const random=rng(seed);let hs=0,as=0,hShots=0,aShots=0,hOn=0,aOn=0,hxg=0,axg=0;for(let minute=1;minute<=90;minute++){const late=minute>60?(minute-60)/30:0;const hf=clamp((100-home.energy)*.16+late*(100-home.fitness)*.20,0,35),af=clamp((100-away.energy)*.16+late*(100-away.fitness)*.20,0,35);const mentality=(x:string)=>({"VERY_DEFENSIVE":-.22,"DEFENSIVE":-.12,"BALANCED":0,"ATTACKING":.12,"VERY_ATTACKING":.21}[x]??0);const ho=mentality(home.tactic.mentality)+(home.tactic.tempo-50)*.0022+(home.tactic.passing_directness-50)*.0012+(home.tactic.width-50)*.0006+(home.tactic.counter_attack?.025:0)+(home.attacking-away.defending)*.006-hf*.003;const ao=mentality(away.tactic.mentality)+(away.tactic.tempo-50)*.0022+(away.tactic.passing_directness-50)*.0012+(away.tactic.width-50)*.0006+(away.tactic.counter_attack?.025:0)+(away.attacking-home.defending)*.006-af*.003;const hp=(home.tactic.pressing-50)*.0017-hf*.0012,ap=(away.tactic.pressing-50)*.0017-af*.0012;const hl=(home.tactic.defensive_line-50)*.0018,al=(away.tactic.defensive_line-50)*.0018;const hc=clamp(.105+ho+hp+(hl-al)*.22+(home.reputation-away.reputation)*.00028,.04,.205),ac=clamp(.088+ao+ap+(al-hl)*.22+(away.reputation-home.reputation)*.00028,.035,.19);for(const side of [{team:home,opponent:away,chance:hc,isHome:true},{team:away,opponent:home,chance:ac,isHome:false}])if(random()<side.chance){if(side.isHome)hShots++;else aShots++;const attackers=side.team.lineup.filter(p=>p.isStarting&&p.role!=="GK"),shooter=attackers[Math.floor(random()*attackers.length)]!,keeper=side.opponent.lineup.find(p=>p.isStarting&&p.role==="GK")!;const q=clamp(.28+(side.team.attacking-50)*.004+(shooter.finishing-50)*.0025+(side.team.tactic.tempo-50)*.0008+(random()-.5)*.12,.08,.68),on=random()<clamp(.31+q*.43,.30,.67),xg=clamp(q*(.34+side.team.tactic.passing_directness/100*.14),.025,.40);if(side.isHome)hxg+=xg;else axg+=xg;if(on){if(side.isHome)hOn++;else aOn++;const save=clamp(.35+(mean([keeper.reflexes,keeper.handling,keeper.positioning])-50)*.006,.12,.74);if(random()>save&&random()<clamp(xg*1.55,.04,.62)){if(side.isHome)hs++;else as++;}}} }return{homeScore:hs,awayScore:as,homeShots:hShots,awayShots:aShots,homeShotsOnTarget:hOn,awayShotsOnTarget:aOn,homeXg:hxg,awayXg:axg};}
+export function runMonteCarlo(home:Team,away:Team,simulations=5000,seed=73421):MonteCarloReport{if(!Number.isSafeInteger(simulations)||simulations<100)throw new Error("Monte Carlo simulations must be an integer >= 100.");let hw=0,d=0,aw=0,hg=0,ag=0,hs=0,as=0,diff=0;for(let i=0;i<simulations;i++){const r=simulateMatchKernel(home,away,seed+i*7919);if(r.homeScore>r.awayScore)hw++;else if(r.homeScore===r.awayScore)d++;else aw++;hg+=r.homeScore;ag+=r.awayScore;hs+=r.homeShots;as+=r.awayShots;diff+=Math.abs(r.homeScore-r.awayScore);}return{simulations,homeWinRate:hw/simulations,drawRate:d/simulations,awayWinRate:aw/simulations,averageHomeGoals:hg/simulations,averageAwayGoals:ag/simulations,averageTotalGoals:(hg+ag)/simulations,homeShotRate:hs/simulations,awayShotRate:as/simulations,meanAbsoluteGoalDifference:diff/simulations};}
+export function runMatchBalanceAnalysis(db:SqliteDatabase,clubA:number,clubB:number,simulations=5000,seed=73421):MonteCarloReport{
+ if(clubA===clubB)throw new Error("Balance analysis requires two different clubs.");
+ const fixture=db.prepare("SELECT id FROM fixture WHERE status=? AND ((home_club_id=? AND away_club_id=?) OR (home_club_id=? AND away_club_id=?)) ORDER BY id LIMIT 1").get("SCHEDULED",clubA,clubB,clubB,clubA) as {id:number}|undefined;
+ const fixtureId=fixture?.id??-1;
+ if(fixtureId<0){return runMonteCarlo(loadTeam(db,-1,clubA,false),loadTeam(db,-1,clubB,false),simulations,seed);}
+ return runMonteCarlo(loadTeam(db,fixtureId,clubA,false),loadTeam(db,fixtureId,clubB,false),simulations,seed);
+}
+export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
+ const f=db.prepare("SELECT id,home_club_id,away_club_id,random_seed,status FROM fixture WHERE id=?").get(fixtureId) as FixtureRow|undefined;
+ if(!f)throw new Error(`Fixture ${fixtureId} not found.`);
+ if(f.status==="COMPLETED")throw new Error(`Fixture ${fixtureId} is already completed.`);
+ if(f.status==="CANCELLED"||f.status==="POSTPONED")throw new Error(`Fixture ${fixtureId} is not playable (status: ${f.status}).`);
+ const seed=f.random_seed??(f.id*2654435761>>>0);
+ let result:SimulatedMatchResult={homeScore:0,awayScore:0,homeShots:0,awayShots:0,homeShotsOnTarget:0,awayShotsOnTarget:0,homeXg:0,awayXg:0};
+ const tx=db.transaction(()=>{
+  const live=db.prepare("SELECT status FROM fixture WHERE id=?").get(fixtureId) as {status:string}|undefined;
+  if(!live||live.status!=="SCHEDULED")throw new Error(`Fixture ${fixtureId} is not scheduled (status: ${live?.status??"MISSING"}).`);
+  db.prepare("DELETE FROM match_event WHERE fixture_id=?").run(fixtureId);
+  db.prepare("DELETE FROM match_momentum WHERE fixture_id=?").run(fixtureId);
+  db.prepare("DELETE FROM match_simulation_state WHERE fixture_id=?").run(fixtureId);
+  db.prepare("DELETE FROM match_player_state WHERE fixture_id=?").run(fixtureId);
+  const home=loadTeam(db,fixtureId,f.home_club_id),away=loadTeam(db,fixtureId,f.away_club_id);
+  result=simulateMatchKernel(home,away,seed);
+  const ins=db.prepare("INSERT INTO match_event(fixture_id,minute,club_id,player_id,secondary_player_id,event_type,xg,description) VALUES(?,?,?,?,?,?,?,?)");
+  const ev=(m:number,c:number|null,p:number|null,t:string,x:number,dsc:string,s:number|null=null)=>ins.run(fixtureId,m,c,p,s,t,x,dsc);
+  const momentum=db.prepare("INSERT INTO match_momentum(fixture_id,minute,home_pressure,away_pressure,home_score,away_score) VALUES(?,?,?,?,?,?)");
+  const state=db.prepare("INSERT INTO match_player_state(fixture_id,player_id,club_id,energy,rating,minutes_played) VALUES(?,?,?,?,?,?)");
+  ev(0,null,null,"KICK_OFF",0,"Partida iniciada");
+  const random=rng(seed^0x7f4a7c15);let ch=0,ca=0;
+  const events:Array<{minute:number;club:number;player:number;secondary:number|null;type:string;xg:number;desc:string}>=[];
+  for(let minute=1;minute<=90;minute++){
+   const hp=clamp(home.attacking*.58+home.tactic.pressing*.18+home.tactic.tempo*.12+random()*12,0,100);
+   const ap=clamp(away.attacking*.58+away.tactic.pressing*.18+away.tactic.tempo*.12+random()*12,0,100);
+   momentum.run(fixtureId,minute,hp,ap,ch,ca);
+   const chance=clamp((hp+ap)/200*.8,.08,.68);
+   if(random()<chance){
+    const isHome=random()<clamp(.5+(hp-ap)*.006,.22,.78),team=isHome?home:away,opp=isHome?away:home;
+    const shooters=team.lineup.filter(p=>p.isStarting&&p.role!=="GK"),shooter=shooters[Math.floor(random()*shooters.length)]!;
+    const keeper=opp.lineup.find(p=>p.isStarting&&p.role==="GK")!;
+    const q=clamp(.10+(team.attacking-50)*.006+(shooter.finishing-50)*.002+(random()-.5)*.10,.02,.58);
+    const on=random()<clamp(.25+q*.68,.25,.72);
+    const goal=on&&random()>clamp(.33+(mean([keeper.reflexes,keeper.handling,keeper.positioning])-50)*.006,.1,.78)&&random()<clamp(q*1.55,.04,.65);
+    events.push({minute,club:team.clubId,player:shooter.id,secondary:on?keeper.id:null,type:goal?"GOAL":on?"SAVE":"MISS",xg:q,desc:goal?`Gol de ${shooter.name}`:on?`Defesa de ${keeper.name} após finalização de ${shooter.name}`:`Finalização de ${shooter.name} para fora`});
+    if(goal){if(isHome)ch++;else ca++;}
+   }
+   const homeGoalsAtMinute=events.filter(e=>e.minute<=minute&&e.club===home.clubId&&e.type==="GOAL").length;
+   const awayGoalsAtMinute=events.filter(e=>e.minute<=minute&&e.club===away.clubId&&e.type==="GOAL").length;
+   db.prepare("UPDATE match_momentum SET home_score=?,away_score=? WHERE fixture_id=? AND minute=?").run(homeGoalsAtMinute,awayGoalsAtMinute,fixtureId,minute);
+  }
+  for(const e of events)ev(e.minute,e.club,e.player,e.type,e.xg,e.desc,e.secondary);
+  ev(90,null,null,"FULL_TIME",0,"Fim de jogo");
+  for(const team of [home,away])for(const p of team.lineup){
+   const loss=p.isStarting?14:2;
+   state.run(fixtureId,p.id,team.clubId,Math.max(0,p.energy-loss),p.isStarting?6.3:6,p.isStarting?90:0);
+   db.prepare("UPDATE player_condition SET energy=MAX(0,energy-?) WHERE player_id=?").run(loss,p.id);
+   if(p.isStarting){const delta=ch===ca?0:(team.clubId===home.clubId?(ch>ca?2:-2):(ca>ch?2:-2));db.prepare("UPDATE player_condition SET morale=MIN(100,MAX(0,morale+?)) WHERE player_id=?").run(delta,p.id);}
+  }
+  db.prepare("UPDATE fixture SET status='COMPLETED',current_minute=90,home_score=?,away_score=? WHERE id=?").run(ch,ca,fixtureId);
+  result={...result,homeScore:ch,awayScore:ca};
+ });
+ tx.immediate();
+ const count=(db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=?").get(fixtureId) as {count:number}).count;
+ const actual=db.prepare("SELECT club_id AS club,event_type AS type,COALESCE(SUM(xg),0) AS xg,COUNT(*) AS count FROM match_event WHERE fixture_id=? AND club_id IS NOT NULL AND event_type IN ('GOAL','SAVE','MISS') GROUP BY club_id,event_type").all(fixtureId) as Array<{club:number;type:string;xg:number;count:number}>;
+ const metric=(club:number,types:string[])=>actual.filter(e=>e.club===club&&types.includes(e.type)).reduce((n,e)=>n+e.count,0);
+ const xg=(club:number)=>actual.filter(e=>e.club===club).reduce((n,e)=>n+e.xg,0);
+ return{fixtureId,homeClubId:f.home_club_id,awayClubId:f.away_club_id,...result,
+   homeScore:metric(f.home_club_id,["GOAL"]),awayScore:metric(f.away_club_id,["GOAL"]),
+   homeShots:metric(f.home_club_id,["GOAL","SAVE","MISS"]),awayShots:metric(f.away_club_id,["GOAL","SAVE","MISS"]),
+   homeShotsOnTarget:metric(f.home_club_id,["GOAL","SAVE"]),awayShotsOnTarget:metric(f.away_club_id,["GOAL","SAVE"]),
+   homeXg:xg(f.home_club_id),awayXg:xg(f.away_club_id),events:count,minutes:90};
 }
