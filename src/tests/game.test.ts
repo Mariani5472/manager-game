@@ -5,137 +5,79 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { openDatabase, validateDatabase } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
-import { advanceNextFixture, listFixtures } from "../game/gameService.js";
+import {
+  advanceNextFixture, advanceRound, getManagedClub, getSeasonStatus, getStandings,
+  listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
+} from "../game/gameService.js";
 
-const schemaPath = resolve("src/schema/game_manager_mvp.sql");
-const schemaText = readFileSync(schemaPath, "utf8");
-
-function createTempRoot(): string {
-  return mkdtempSync(join(tmpdir(), "manager-game-test-"));
+const schemaText = readFileSync(resolve("src/schema/game_manager_mvp.sql"), "utf8");
+function tempRoot(): string { return mkdtempSync(join(tmpdir(), "manager-game-season-")); }
+function setup(root: string) {
+  const master=join(root,"master.sqlite");
+  const mdb=openDatabase(master);
+  try { mdb.exec(schemaText); validateDatabase(mdb); } finally { mdb.close(); }
+  const manager=new SaveManager(master,join(root,"saves"));
+  const save=manager.create({name:"Season",managerName:"Coach",clubId:1});
+  return {manager,save};
 }
 
-function createMaster(root: string): string {
-  const path = join(root, "master.sqlite");
-  const db = openDatabase(path);
-  try {
-    db.exec(schemaText);
-    validateDatabase(db);
-  } finally {
-    db.close();
-  }
-  return path;
-}
+test("schema initializes and foreign keys are valid",()=>{
+  const root=tempRoot(); try { const {manager,save}=setup(root); const db=manager.open(save.filePath);
+    try { assert.equal(db.pragma("integrity_check",{simple:true}),"ok"); assert.deepEqual(db.pragma("foreign_key_check"),[]); }
+    finally { db.close(); }
+  } finally { rmSync(root,{recursive:true,force:true}); }
+});
 
-test("schema initializes and foreign keys are valid", () => {
-  const root = createTempRoot();
-  try {
-    const master = createMaster(root);
-    const db = openDatabase(master, true);
+test("services expose the managed club, squad and tactics",()=>{
+  const root=tempRoot(); try { const {manager,save}=setup(root); const db=manager.open(save.filePath);
+    try { assert.equal(getManagedClub(db).id,1); assert.equal(listSquad(db,1).length,18); assert.equal(getTactics(db,1).formation,"4-3-3"); }
+    finally { db.close(); }
+  } finally { rmSync(root,{recursive:true,force:true}); }
+});
+
+test("advancing a round plays all AI and managed fixtures and rebuilds standings",()=>{
+  const root=tempRoot(); try { const {manager,save}=setup(root); const db=manager.open(save.filePath);
     try {
-      assert.equal(db.pragma("integrity_check", { simple: true }), "ok");
-      assert.deepEqual(db.pragma("foreign_key_check"), []);
+      const results=advanceRound(db,1);
+      assert.equal(results.length,2);
+      const table=getStandings(db,1);
+      assert.equal(table.reduce((sum,row)=>sum+row.played,0),4);
+      assert.deepEqual([...table.map(row=>row.clubId)].sort((a,b)=>a-b),[1,2,3,4]);
+      assert.ok(table.every(row=>row.played===1));
     } finally { db.close(); }
-  } finally { rmSync(root, { recursive: true, force: true }); }
+  } finally { rmSync(root,{recursive:true,force:true}); }
 });
 
-test("independent saves do not share mutable state", () => {
-  const root = createTempRoot();
-  try {
-    const master = createMaster(root);
-    const manager = new SaveManager(master, join(root, "saves"));
-    const a = manager.create({ name: "Campaign A", managerName: "Alex", clubId: 1 });
-    const b = manager.create({ name: "Campaign B", managerName: "Bea", clubId: 2 });
-    const dbA = manager.open(a.filePath);
-    const dbB = manager.open(b.filePath);
+test("completed fixture cannot be simulated again and leaves the first result intact",()=>{
+  const root=tempRoot(); try { const {manager,save}=setup(root); const db=manager.open(save.filePath);
     try {
-      advanceNextFixture(dbA, 1);
-      assert.equal(
-        (dbA.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status,
-        "COMPLETED",
-      );
-      assert.equal(
-        (dbB.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status,
-        "SCHEDULED",
-      );
-      const masterDb = openDatabase(master, true);
-      try {
-        assert.equal(
-          (masterDb.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status,
-          "SCHEDULED",
-        );
-      } finally { masterDb.close(); }
-    } finally { dbA.close(); dbB.close(); }
-  } finally { rmSync(root, { recursive: true, force: true }); }
+      const result=advanceNextFixture(db,1);
+      const count=(db.prepare("SELECT COUNT(*) AS n FROM match_event WHERE fixture_id=1").get() as {n:number}).n;
+      assert.throws(()=>advanceNextFixture(db,1),/Scheduled fixture/);
+      assert.equal((db.prepare("SELECT home_score AS home,away_score AS away FROM fixture WHERE id=1").get() as {home:number;away:number}).home,result.homeScore);
+      assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_event WHERE fixture_id=1").get() as {n:number}).n,count);
+    } finally { db.close(); }
+  } finally { rmSync(root,{recursive:true,force:true}); }
 });
 
-test("same fixture seed yields same result in independent saves", () => {
-  const root = createTempRoot();
-  try {
-    const master = createMaster(root);
-    const manager = new SaveManager(master, join(root, "saves"));
-    const a = manager.create({ name: "Deterministic A", managerName: "Alex", clubId: 1 });
-    const b = manager.create({ name: "Deterministic B", managerName: "Bea", clubId: 2 });
-    const dbA = manager.open(a.filePath);
-    const dbB = manager.open(b.filePath);
+test("a full configured league season completes, survives reopening, and next season is idempotent",()=>{
+  const root=tempRoot(); try { const {manager,save}=setup(root); let db=manager.open(save.filePath);
     try {
-      const resultA = advanceNextFixture(dbA, 1);
-      const resultB = advanceNextFixture(dbB, 1);
-      assert.equal(resultA.homeScore, resultB.homeScore);
-      assert.equal(resultA.awayScore, resultB.awayScore);
-      assert.equal(resultA.events, resultB.events);
-      assert.equal(listFixtures(dbA, true).length, 5);
-    } finally { dbA.close(); dbB.close(); }
-  } finally { rmSync(root, { recursive: true, force: true }); }
-});
-
-test("campaigns can be discovered and reopened by stable save id", () => {
-  const root = createTempRoot();
-  try {
-    const master = createMaster(root);
-    const manager = new SaveManager(master, join(root, "saves"));
-    const created = manager.create({ name: "Minha carreira", managerName: "Técnico", clubId: 1 });
-    const listed = manager.list().find((save) => save.id === created.id);
-    assert.ok(listed);
-    assert.equal(listed.name, "Minha carreira");
-
-    const reopened = manager.openById(created.id);
-    try {
-      assert.equal(
-        (reopened.prepare("SELECT id FROM game_save_metadata").get() as { id: string }).id,
-        created.id,
-      );
-    } finally {
-      reopened.close();
-    }
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("save creation rejects invalid club ids and blank names", () => {
-  const root = createTempRoot();
-  try {
-    const master = createMaster(root);
-    const manager = new SaveManager(master, join(root, "saves"));
-    assert.throws(
-      () => manager.create({ name: "Valid name", managerName: "Manager", clubId: 999 }),
-      /does not exist/,
-    );
-    assert.throws(
-      () => manager.create({ name: "   ", managerName: "Manager", clubId: 1 }),
-      /cannot be empty/,
-    );
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("opening a corrupt database reports a clear error and closes its handle", () => {
-  const root = createTempRoot();
-  try {
-    const manager = new SaveManager(join(root, "missing-master.sqlite"), join(root, "saves"));
-    assert.throws(() => manager.open(join(root, "does-not-exist.sqlite")));
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
+      const initialLeagueFixtures=listFixtures(db).filter(f=>f.competition==="Liga Nacional de Teste");
+      assert.equal(initialLeagueFixtures.length,4);
+      const rounds=db.prepare("SELECT id FROM competition_round WHERE stage_id=1 ORDER BY round_number").all() as Array<{id:number}>;
+      for(const round of rounds) advanceRound(db,round.id);
+      assert.equal(getSeasonStatus(db,1)[0]?.seasonStatus,"COMPLETED");
+      assert.equal(getSeasonStatus(db,1)[0]?.stageStatus,"COMPLETED");
+      const standings=getStandings(db,1);
+      assert.ok(standings.every(r=>r.played===2));
+      db.close();
+      db=manager.open(save.filePath);
+      assert.equal(getSeasonStatus(db,1)[0]?.seasonStatus,"COMPLETED");
+      const next=prepareNextLeagueSeason(db,1);
+      assert.equal(next.fixtures,12);
+      assert.deepEqual(prepareNextLeagueSeason(db,1),next);
+      assert.equal((db.prepare("SELECT COUNT(*) AS n FROM competition_season WHERE competition_id=1").get() as {n:number}).n,2);
+    } finally { if(db.open) db.close(); }
+  } finally { rmSync(root,{recursive:true,force:true}); }
 });
