@@ -49,8 +49,85 @@ function selectLineup(db:SqliteDatabase,fixtureId:number,clubId:number,players:P
  return [...starters,...bench];
 }
 function loadTeam(db:SqliteDatabase,fixtureId:number,clubId:number,persistLineup=true):Team{const c=db.prepare("SELECT reputation FROM club WHERE id=?").get(clubId) as {reputation:number}|undefined;if(!c)throw new Error(`Club ${clubId} not found.`);const t=tactic(db,clubId),players=loadPlayers(db,clubId),lineup=selectLineup(db,fixtureId,clubId,players,t,persistLineup),s=lineup.filter(p=>p.isStarting);const posRating=mean(s.map(p=>p.positionRating*fit(bestPosition(p.id,loadPositions(db,clubId)),p.role)));const attacking=mean(s.map(p=>skill(p,p.role)*.72+p.positionRating*.28+p.energy*.18+p.morale*.08+p.sharpness*.08));const defending=mean(s.map(p=>mean([p.tackling,p.marking,p.positioning,p.concentration,p.strength])));const keeper=s.find(p=>p.role==="GK");return{clubId,reputation:c.reputation,tactic:t,lineup,attacking:attacking+(posRating-50)*.15,defending,goalkeeping:keeper?mean([keeper.reflexes,keeper.handling,keeper.aerial_reach,keeper.positioning]):45,energy:mean(s.map(p=>p.energy)),fitness:mean(s.map(p=>p.stamina))};}
-export function simulateMatchKernel(home:Team,away:Team,seed:number):SimulatedMatchResult{const random=rng(seed);let hs=0,as=0,hShots=0,aShots=0,hOn=0,aOn=0,hxg=0,axg=0;for(let minute=1;minute<=90;minute++){const late=minute>60?(minute-60)/30:0;const hf=clamp((100-home.energy)*.16+late*(100-home.fitness)*.20,0,35),af=clamp((100-away.energy)*.16+late*(100-away.fitness)*.20,0,35);const mentality=(x:string)=>({"VERY_DEFENSIVE":-.22,"DEFENSIVE":-.12,"BALANCED":0,"ATTACKING":.12,"VERY_ATTACKING":.21}[x]??0);const ho=mentality(home.tactic.mentality)+(home.tactic.tempo-50)*.0022+(home.tactic.passing_directness-50)*.0012+(home.tactic.width-50)*.0006+(home.tactic.counter_attack?.025:0)+(home.attacking-away.defending)*.006-hf*.003;const ao=mentality(away.tactic.mentality)+(away.tactic.tempo-50)*.0022+(away.tactic.passing_directness-50)*.0012+(away.tactic.width-50)*.0006+(away.tactic.counter_attack?.025:0)+(away.attacking-home.defending)*.006-af*.003;const hp=(home.tactic.pressing-50)*.0017-hf*.0012,ap=(away.tactic.pressing-50)*.0017-af*.0012;const hl=(home.tactic.defensive_line-50)*.0018,al=(away.tactic.defensive_line-50)*.0018;const hc=clamp(.105+ho+hp+(hl-al)*.22+(home.reputation-away.reputation)*.00028,.04,.205),ac=clamp(.088+ao+ap+(al-hl)*.22+(away.reputation-home.reputation)*.00028,.035,.19);for(const side of [{team:home,opponent:away,chance:hc,isHome:true},{team:away,opponent:home,chance:ac,isHome:false}])if(random()<side.chance){if(side.isHome)hShots++;else aShots++;const attackers=side.team.lineup.filter(p=>p.isStarting&&p.role!=="GK"),shooter=attackers[Math.floor(random()*attackers.length)]!,keeper=side.opponent.lineup.find(p=>p.isStarting&&p.role==="GK")!;const q=clamp(.28+(side.team.attacking-50)*.004+(shooter.finishing-50)*.0025+(side.team.tactic.tempo-50)*.0008+(random()-.5)*.12,.08,.68),on=random()<clamp(.31+q*.43,.30,.67),xg=clamp(q*(.34+side.team.tactic.passing_directness/100*.14),.025,.40);if(side.isHome)hxg+=xg;else axg+=xg;if(on){if(side.isHome)hOn++;else aOn++;const save=clamp(.35+(mean([keeper.reflexes,keeper.handling,keeper.positioning])-50)*.006,.12,.74);if(random()>save&&random()<clamp(xg*1.55,.04,.62)){if(side.isHome)hs++;else as++;}}} }return{homeScore:hs,awayScore:as,homeShots:hShots,awayShots:aShots,homeShotsOnTarget:hOn,awayShotsOnTarget:aOn,homeXg:hxg,awayXg:axg};}
-export function runMonteCarlo(home:Team,away:Team,simulations=5000,seed=73421):MonteCarloReport{if(!Number.isSafeInteger(simulations)||simulations<100)throw new Error("Monte Carlo simulations must be an integer >= 100.");let hw=0,d=0,aw=0,hg=0,ag=0,hs=0,as=0,diff=0;for(let i=0;i<simulations;i++){const r=simulateMatchKernel(home,away,seed+i*7919);if(r.homeScore>r.awayScore)hw++;else if(r.homeScore===r.awayScore)d++;else aw++;hg+=r.homeScore;ag+=r.awayScore;hs+=r.homeShots;as+=r.awayShots;diff+=Math.abs(r.homeScore-r.awayScore);}return{simulations,homeWinRate:hw/simulations,drawRate:d/simulations,awayWinRate:aw/simulations,averageHomeGoals:hg/simulations,averageAwayGoals:ag/simulations,averageTotalGoals:(hg+ag)/simulations,homeShotRate:hs/simulations,awayShotRate:as/simulations,meanAbsoluteGoalDifference:diff/simulations};}
+interface KernelShotEvent {
+ minute:number; clubId:number; playerId:number; secondaryPlayerId:number|null;
+ eventType:"GOAL"|"SAVE"|"MISS"; xg:number; description:string;
+}
+interface KernelMinute {
+ minute:number; homePressure:number; awayPressure:number; homeScore:number; awayScore:number;
+ events:KernelShotEvent[];
+}
+interface KernelTimeline {result:SimulatedMatchResult; events:KernelShotEvent[]; minutes:KernelMinute[];}
+function mentalityShotModifier(value:string):number {
+ return ({"VERY_DEFENSIVE":-.018,"DEFENSIVE":-.009,"BALANCED":0,"ATTACKING":.009,"VERY_ATTACKING":.018}[value]??0);
+}
+function teamPressure(team:Team, random:()=>number):number {
+ const mentality={"VERY_DEFENSIVE":-5,"DEFENSIVE":-2,"BALANCED":0,"ATTACKING":3,"VERY_ATTACKING":5}[team.tactic.mentality]??0;
+ return clamp(team.attacking*.43+team.tactic.pressing*.16+team.tactic.tempo*.10+
+  team.tactic.defensive_line*.04+mentality+random()*8,0,100);
+}
+function simulateMatchTimeline(home:Team,away:Team,seed:number):KernelTimeline {
+ const random=rng(seed);
+ let hs=0,as=0,hShots=0,aShots=0,hOn=0,aOn=0,hxg=0,axg=0;
+ const events:KernelShotEvent[]=[];
+ const minutes:KernelMinute[]=[];
+ for(let minute=1;minute<=90;minute++){
+  const hp=teamPressure(home,random),ap=teamPressure(away,random);
+  const minuteEvents:KernelShotEvent[]=[];
+  for(const side of [{team:home,opponent:away,isHome:true,pressure:hp,opponentPressure:ap},
+                      {team:away,opponent:home,isHome:false,pressure:ap,opponentPressure:hp}]){
+   const tactic=side.team.tactic;
+   const chance=clamp(.115+(side.team.attacking-50)*.0011+
+    mentalityShotModifier(tactic.mentality)+(tactic.pressing-50)*.00012+
+    (tactic.tempo-50)*.00012+(side.pressure-side.opponentPressure)*.00012+
+    (tactic.counter_attack?.004:0),.055,.19);
+   if(random()>=chance)continue;
+   const attackers=side.team.lineup.filter(p=>p.isStarting&&p.role!=="GK");
+   if(!attackers.length)throw new Error(`Club ${side.team.clubId} has no available outfield starters.`);
+   const shooter=attackers[Math.floor(random()*attackers.length)]!;
+   const keeper=side.opponent.lineup.find(p=>p.isStarting&&p.role==="GK");
+   if(!keeper)throw new Error(`Club ${side.opponent.clubId} has no starting goalkeeper.`);
+   const keeperSkill=mean([keeper.reflexes,keeper.handling,keeper.positioning,keeper.concentration]);
+   const xg=clamp(.095+(side.team.attacking-50)*.0012+
+    (shooter.finishing-50)*.0007+(tactic.tempo-50)*.00012+
+    (random()-.5)*.07,.025,.28);
+   const onTargetChance=clamp(.29+xg*.5,.30,.48);
+   const onTarget=random()<onTargetChance;
+   const keeperFactor=clamp(1+(50-keeperSkill)*.006,.70,1.30);
+   const goal=onTarget&&random()<clamp((xg/onTargetChance)*keeperFactor,.015,.82);
+   const event:KernelShotEvent={
+    minute,clubId:side.team.clubId,playerId:shooter.id,secondaryPlayerId:onTarget?keeper.id:null,
+    eventType:goal?"GOAL":onTarget?"SAVE":"MISS",xg,
+    description:goal?`Gol de ${shooter.name}`:onTarget?`Defesa de ${keeper.name} após finalização de ${shooter.name}`:`Finalização de ${shooter.name} para fora`
+   };
+   minuteEvents.push(event);events.push(event);
+   if(side.isHome){hShots++;hxg+=xg;if(onTarget)hOn++;if(goal)hs++;}
+   else{aShots++;axg+=xg;if(onTarget)aOn++;if(goal)as++;}
+  }
+  minutes.push({minute,homePressure:hp,awayPressure:ap,homeScore:hs,awayScore:as,events:minuteEvents});
+ }
+ return {events,minutes,result:{homeScore:hs,awayScore:as,homeShots:hShots,awayShots:aShots,
+  homeShotsOnTarget:hOn,awayShotsOnTarget:aOn,homeXg:hxg,awayXg:axg}};
+}
+export function simulateMatchKernel(home:Team,away:Team,seed:number):SimulatedMatchResult {
+ return simulateMatchTimeline(home,away,seed).result;
+}
+export function runMonteCarlo(home:Team,away:Team,simulations=5000,seed=73421):MonteCarloReport {
+ if(!Number.isSafeInteger(simulations)||simulations<100)throw new Error("Monte Carlo simulations must be an integer >= 100.");
+ let hw=0,d=0,aw=0,hg=0,ag=0,hs=0,as=0,hon=0,aon=0,hxg=0,axg=0,diff=0;
+ for(let i=0;i<simulations;i++){
+  const r=simulateMatchTimeline(home,away,seed+i*7919).result;
+  if(r.homeScore>r.awayScore)hw++;else if(r.homeScore===r.awayScore)d++;else aw++;
+  hg+=r.homeScore;ag+=r.awayScore;hs+=r.homeShots;as+=r.awayShots;
+  hon+=r.homeShotsOnTarget;aon+=r.awayShotsOnTarget;hxg+=r.homeXg;axg+=r.awayXg;
+  diff+=Math.abs(r.homeScore-r.awayScore);
+ }
+ return {simulations,homeWinRate:hw/simulations,drawRate:d/simulations,awayWinRate:aw/simulations,
+  averageHomeGoals:hg/simulations,averageAwayGoals:ag/simulations,averageTotalGoals:(hg+ag)/simulations,
+  homeShotRate:hs/simulations,awayShotRate:as/simulations,
+  averageTotalShots:(hs+as)/simulations,averageTotalShotsOnTarget:(hon+aon)/simulations,
+  averageTotalXg:(hxg+axg)/simulations,meanAbsoluteGoalDifference:diff/simulations};
+}
 export function runMatchBalanceAnalysis(db:SqliteDatabase,clubA:number,clubB:number,simulations=5000,seed=73421):MonteCarloReport{
  if(clubA===clubB)throw new Error("Balance analysis requires two different clubs.");
  const fixture=db.prepare("SELECT id FROM fixture WHERE status=? AND ((home_club_id=? AND away_club_id=?) OR (home_club_id=? AND away_club_id=?)) ORDER BY id LIMIT 1").get("SCHEDULED",clubA,clubB,clubB,clubA) as {id:number}|undefined;
@@ -63,62 +140,80 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
  if(!f)throw new Error(`Fixture ${fixtureId} not found.`);
  if(f.status==="COMPLETED")throw new Error(`Fixture ${fixtureId} is already completed.`);
  if(f.status==="CANCELLED"||f.status==="POSTPONED")throw new Error(`Fixture ${fixtureId} is not playable (status: ${f.status}).`);
+ if(f.status!=="SCHEDULED"&&f.status!=="IN_PROGRESS")throw new Error(`Fixture ${fixtureId} cannot be played from status ${f.status}.`);
  const seed=f.random_seed??(f.id*2654435761>>>0);
- let result:SimulatedMatchResult={homeScore:0,awayScore:0,homeShots:0,awayShots:0,homeShotsOnTarget:0,awayShotsOnTarget:0,homeXg:0,awayXg:0};
- const tx=db.transaction(()=>{
-  const live=db.prepare("SELECT status FROM fixture WHERE id=?").get(fixtureId) as {status:string}|undefined;
-  if(!live||live.status!=="SCHEDULED")throw new Error(`Fixture ${fixtureId} is not scheduled (status: ${live?.status??"MISSING"}).`);
-  db.prepare("DELETE FROM match_event WHERE fixture_id=?").run(fixtureId);
-  db.prepare("DELETE FROM match_momentum WHERE fixture_id=?").run(fixtureId);
-  db.prepare("DELETE FROM match_simulation_state WHERE fixture_id=?").run(fixtureId);
+ const home=loadTeam(db,fixtureId,f.home_club_id),away=loadTeam(db,fixtureId,f.away_club_id);
+ const timeline=simulateMatchTimeline(home,away,seed);
+ const existing=db.prepare("SELECT simulation_minute,state_json FROM match_simulation_state WHERE fixture_id=?")
+  .get(fixtureId) as {simulation_minute:number;state_json:string}|undefined;
+ let startMinute=existing?.simulation_minute??0;
+ if(existing){
+  let checkpoint:{seed?:number;completed?:boolean};
+  try{checkpoint=JSON.parse(existing.state_json) as {seed?:number;completed?:boolean};}
+  catch{throw new Error(`Fixture ${fixtureId} has an invalid simulation checkpoint; refusing to overwrite it.`);}
+  if(checkpoint.seed!==seed)throw new Error(`Fixture ${fixtureId} checkpoint seed does not match its fixture seed.`);
+  if(startMinute<0||startMinute>90)throw new Error(`Fixture ${fixtureId} checkpoint minute is invalid.`);
+ }else if(f.status==="IN_PROGRESS"){
+  throw new Error(`Fixture ${fixtureId} is IN_PROGRESS but has no checkpoint; manual repair is required.`);
+ }
+ if(!existing){
+  const begin=db.transaction(()=>{
+   db.prepare("DELETE FROM match_event WHERE fixture_id=?").run(fixtureId);
+   db.prepare("DELETE FROM match_momentum WHERE fixture_id=?").run(fixtureId);
+   db.prepare("DELETE FROM match_player_state WHERE fixture_id=?").run(fixtureId);
+   db.prepare("INSERT INTO match_event(fixture_id,minute,event_type,xg,description) VALUES(?,0,'KICK_OFF',0,'Partida iniciada')").run(fixtureId);
+   db.prepare("INSERT INTO match_simulation_state(fixture_id,state_version,simulation_minute,state_json) VALUES(?,1,0,?)")
+    .run(fixtureId,JSON.stringify({seed,minute:0,homeScore:0,awayScore:0,completed:false}));
+   db.prepare("UPDATE fixture SET status='IN_PROGRESS',current_minute=0,home_score=0,away_score=0 WHERE id=?").run(fixtureId);
+  });
+  begin.immediate();
+ }
+ const insertEvent=db.prepare("INSERT INTO match_event(fixture_id,minute,club_id,player_id,secondary_player_id,event_type,xg,description) VALUES(?,?,?,?,?,?,?,?)");
+ const insertMomentum=db.prepare("INSERT INTO match_momentum(fixture_id,minute,home_pressure,away_pressure,home_score,away_score) VALUES(?,?,?,?,?,?)");
+ const checkpoint=db.prepare("UPDATE match_simulation_state SET simulation_minute=?,state_json=?,updated_at=CURRENT_TIMESTAMP WHERE fixture_id=?");
+ const minuteUpdate=db.transaction((m:KernelMinute)=>{
+  for(const e of m.events)insertEvent.run(fixtureId,e.minute,e.clubId,e.playerId,e.secondaryPlayerId,e.eventType,e.xg,e.description);
+  insertMomentum.run(fixtureId,m.minute,m.homePressure,m.awayPressure,m.homeScore,m.awayScore);
+  checkpoint.run(m.minute,JSON.stringify({seed,minute:m.minute,homeScore:m.homeScore,awayScore:m.awayScore,
+   homeShots:timeline.events.filter(e=>e.minute<=m.minute&&(e.clubId===f.home_club_id)).length,
+   awayShots:timeline.events.filter(e=>e.minute<=m.minute&&(e.clubId===f.away_club_id)).length,
+   homeXg:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id).reduce((n,e)=>n+e.xg,0),
+   awayXg:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.away_club_id).reduce((n,e)=>n+e.xg,0),
+   completed:false}),fixtureId);
+  db.prepare("UPDATE fixture SET status='IN_PROGRESS',current_minute=?,home_score=?,away_score=? WHERE id=?")
+   .run(m.minute,m.homeScore,m.awayScore,fixtureId);
+ });
+ for(const m of timeline.minutes)if(m.minute>startMinute)minuteUpdate.immediate(m);
+ const finalise=db.transaction(()=>{
+  const alreadyFullTime=db.prepare("SELECT 1 FROM match_event WHERE fixture_id=? AND event_type='FULL_TIME'").get(fixtureId);
+  if(!alreadyFullTime)insertEvent.run(fixtureId,90,null,null,null,"FULL_TIME",0,"Fim de jogo");
   db.prepare("DELETE FROM match_player_state WHERE fixture_id=?").run(fixtureId);
-  const home=loadTeam(db,fixtureId,f.home_club_id),away=loadTeam(db,fixtureId,f.away_club_id);
-  result=simulateMatchKernel(home,away,seed);
-  const ins=db.prepare("INSERT INTO match_event(fixture_id,minute,club_id,player_id,secondary_player_id,event_type,xg,description) VALUES(?,?,?,?,?,?,?,?)");
-  const ev=(m:number,c:number|null,p:number|null,t:string,x:number,dsc:string,s:number|null=null)=>ins.run(fixtureId,m,c,p,s,t,x,dsc);
-  const momentum=db.prepare("INSERT INTO match_momentum(fixture_id,minute,home_pressure,away_pressure,home_score,away_score) VALUES(?,?,?,?,?,?)");
   const state=db.prepare("INSERT INTO match_player_state(fixture_id,player_id,club_id,energy,rating,minutes_played) VALUES(?,?,?,?,?,?)");
-  ev(0,null,null,"KICK_OFF",0,"Partida iniciada");
-  const random=rng(seed^0x7f4a7c15);let ch=0,ca=0;
-  const events:Array<{minute:number;club:number;player:number;secondary:number|null;type:string;xg:number;desc:string}>=[];
-  for(let minute=1;minute<=90;minute++){
-   const hp=clamp(home.attacking*.58+home.tactic.pressing*.18+home.tactic.tempo*.12+random()*12,0,100);
-   const ap=clamp(away.attacking*.58+away.tactic.pressing*.18+away.tactic.tempo*.12+random()*12,0,100);
-   momentum.run(fixtureId,minute,hp,ap,ch,ca);
-   const chance=clamp((hp+ap)/200*.8,.08,.68);
-   if(random()<chance){
-    const isHome=random()<clamp(.5+(hp-ap)*.006,.22,.78),team=isHome?home:away,opp=isHome?away:home;
-    const shooters=team.lineup.filter(p=>p.isStarting&&p.role!=="GK"),shooter=shooters[Math.floor(random()*shooters.length)]!;
-    const keeper=opp.lineup.find(p=>p.isStarting&&p.role==="GK")!;
-    const q=clamp(.10+(team.attacking-50)*.006+(shooter.finishing-50)*.002+(random()-.5)*.10,.02,.58);
-    const on=random()<clamp(.25+q*.68,.25,.72);
-    const goal=on&&random()>clamp(.33+(mean([keeper.reflexes,keeper.handling,keeper.positioning])-50)*.006,.1,.78)&&random()<clamp(q*1.55,.04,.65);
-    events.push({minute,club:team.clubId,player:shooter.id,secondary:on?keeper.id:null,type:goal?"GOAL":on?"SAVE":"MISS",xg:q,desc:goal?`Gol de ${shooter.name}`:on?`Defesa de ${keeper.name} após finalização de ${shooter.name}`:`Finalização de ${shooter.name} para fora`});
-    if(goal){if(isHome)ch++;else ca++;}
-   }
-   const homeGoalsAtMinute=events.filter(e=>e.minute<=minute&&e.club===home.clubId&&e.type==="GOAL").length;
-   const awayGoalsAtMinute=events.filter(e=>e.minute<=minute&&e.club===away.clubId&&e.type==="GOAL").length;
-   db.prepare("UPDATE match_momentum SET home_score=?,away_score=? WHERE fixture_id=? AND minute=?").run(homeGoalsAtMinute,awayGoalsAtMinute,fixtureId,minute);
-  }
-  for(const e of events)ev(e.minute,e.club,e.player,e.type,e.xg,e.desc,e.secondary);
-  ev(90,null,null,"FULL_TIME",0,"Fim de jogo");
   for(const team of [home,away])for(const p of team.lineup){
    const loss=p.isStarting?14:2;
    state.run(fixtureId,p.id,team.clubId,Math.max(0,p.energy-loss),p.isStarting?6.3:6,p.isStarting?90:0);
    db.prepare("UPDATE player_condition SET energy=MAX(0,energy-?) WHERE player_id=?").run(loss,p.id);
-   if(p.isStarting){const delta=ch===ca?0:(team.clubId===home.clubId?(ch>ca?2:-2):(ca>ch?2:-2));db.prepare("UPDATE player_condition SET morale=MIN(100,MAX(0,morale+?)) WHERE player_id=?").run(delta,p.id);}
+   if(p.isStarting){
+    const delta=timeline.result.homeScore===timeline.result.awayScore?0:
+     (team.clubId===f.home_club_id?(timeline.result.homeScore>timeline.result.awayScore?2:-2):
+      (timeline.result.awayScore>timeline.result.homeScore?2:-2));
+    db.prepare("UPDATE player_condition SET morale=MIN(100,MAX(0,morale+?)) WHERE player_id=?").run(delta,p.id);
+   }
   }
-  db.prepare("UPDATE fixture SET status='COMPLETED',current_minute=90,home_score=?,away_score=? WHERE id=?").run(ch,ca,fixtureId);
-  result={...result,homeScore:ch,awayScore:ca};
+  db.prepare("UPDATE fixture SET status='COMPLETED',current_minute=90,home_score=?,away_score=? WHERE id=?")
+   .run(timeline.result.homeScore,timeline.result.awayScore,fixtureId);
+  checkpoint.run(90,JSON.stringify({seed,minute:90,homeScore:timeline.result.homeScore,
+   awayScore:timeline.result.awayScore,homeShots:timeline.result.homeShots,awayShots:timeline.result.awayShots,
+   homeXg:timeline.result.homeXg,awayXg:timeline.result.awayXg,completed:true}),fixtureId);
  });
- tx.immediate();
- const count=(db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=?").get(fixtureId) as {count:number}).count;
+ finalise.immediate();
  const actual=db.prepare("SELECT club_id AS club,event_type AS type,COALESCE(SUM(xg),0) AS xg,COUNT(*) AS count FROM match_event WHERE fixture_id=? AND club_id IS NOT NULL AND event_type IN ('GOAL','SAVE','MISS') GROUP BY club_id,event_type").all(fixtureId) as Array<{club:number;type:string;xg:number;count:number}>;
  const metric=(club:number,types:string[])=>actual.filter(e=>e.club===club&&types.includes(e.type)).reduce((n,e)=>n+e.count,0);
  const xg=(club:number)=>actual.filter(e=>e.club===club).reduce((n,e)=>n+e.xg,0);
- return{fixtureId,homeClubId:f.home_club_id,awayClubId:f.away_club_id,...result,
-   homeScore:metric(f.home_club_id,["GOAL"]),awayScore:metric(f.away_club_id,["GOAL"]),
-   homeShots:metric(f.home_club_id,["GOAL","SAVE","MISS"]),awayShots:metric(f.away_club_id,["GOAL","SAVE","MISS"]),
-   homeShotsOnTarget:metric(f.home_club_id,["GOAL","SAVE"]),awayShotsOnTarget:metric(f.away_club_id,["GOAL","SAVE"]),
-   homeXg:xg(f.home_club_id),awayXg:xg(f.away_club_id),events:count,minutes:90};
+ const count=(db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=?").get(fixtureId) as {count:number}).count;
+ return {fixtureId,homeClubId:f.home_club_id,awayClubId:f.away_club_id,
+  homeScore:metric(f.home_club_id,["GOAL"]),awayScore:metric(f.away_club_id,["GOAL"]),
+  homeShots:metric(f.home_club_id,["GOAL","SAVE","MISS"]),awayShots:metric(f.away_club_id,["GOAL","SAVE","MISS"]),
+  homeShotsOnTarget:metric(f.home_club_id,["GOAL","SAVE"]),awayShotsOnTarget:metric(f.away_club_id,["GOAL","SAVE"]),
+  homeXg:xg(f.home_club_id),awayXg:xg(f.away_club_id),events:count,minutes:90};
 }
