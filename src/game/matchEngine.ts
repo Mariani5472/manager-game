@@ -175,8 +175,11 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
   for(const e of m.events)insertEvent.run(fixtureId,e.minute,e.clubId,e.playerId,e.secondaryPlayerId,e.eventType,e.xg,e.description);
   insertMomentum.run(fixtureId,m.minute,m.homePressure,m.awayPressure,m.homeScore,m.awayScore);
   checkpoint.run(m.minute,JSON.stringify({seed,minute:m.minute,homeScore:m.homeScore,awayScore:m.awayScore,
-   homeShots:timeline.events.filter(e=>e.minute<=m.minute&&(e.clubId===f.home_club_id)).length,
-   awayShots:timeline.events.filter(e=>e.minute<=m.minute&&(e.clubId===f.away_club_id)).length,
+   homeShots:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id).length,
+   awayShots:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.away_club_id).length,
+   homeShotsOnTarget:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id&&(e.eventType==="GOAL"||e.eventType==="SAVE")).length,
+   awayShotsOnTarget:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.away_club_id&&(e.eventType==="GOAL"||e.eventType==="SAVE")).length,
+   homePressure:m.homePressure,awayPressure:m.awayPressure,
    homeXg:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id).reduce((n,e)=>n+e.xg,0),
    awayXg:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.away_club_id).reduce((n,e)=>n+e.xg,0),
    completed:false}),fixtureId);
