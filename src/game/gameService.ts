@@ -206,15 +206,20 @@ function finishSeasonIfComplete(db: SqliteDatabase, stageId: number): void {
 }
 
 export function advanceNextFixture(db: SqliteDatabase, fixtureId?: number): MatchSummary {
-  const row = fixtureId
-    ? db.prepare("SELECT id FROM fixture WHERE id=? AND status='SCHEDULED'").get(fixtureId) as {id:number}|undefined
-    : db.prepare("SELECT id FROM fixture WHERE status='SCHEDULED' ORDER BY scheduled_at,id LIMIT 1").get() as {id:number}|undefined;
-  if (!row) throw new Error(fixtureId ? `Scheduled fixture ${fixtureId} not found (it may already be completed).` : "No scheduled fixtures remain.");
-  const summary = simulateMatch(db,row.id);
-  const stageId = (db.prepare("SELECT r.stage_id AS id FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE f.id=?").get(row.id) as {id:number}).id;
-  const update = db.transaction(() => { rebuildStandings(db,stageId); finishSeasonIfComplete(db,stageId); });
-  update();
-  return summary;
+  const run = db.transaction(() => {
+    const row = fixtureId
+      ? db.prepare("SELECT id FROM fixture WHERE id=? AND status='SCHEDULED'").get(fixtureId) as {id:number}|undefined
+      : db.prepare("SELECT id FROM fixture WHERE status='SCHEDULED' ORDER BY scheduled_at,id LIMIT 1").get() as {id:number}|undefined;
+    if (!row) throw new Error(fixtureId ? `Scheduled fixture ${fixtureId} not found (it may already be completed).` : "No scheduled fixtures remain.");
+    const stage = db.prepare("SELECT r.stage_id AS id FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE f.id=?")
+      .get(row.id) as {id:number}|undefined;
+    if (!stage) throw new Error(`Fixture ${row.id} has no competition stage.`);
+    const summary = simulateMatch(db,row.id);
+    rebuildStandings(db,stage.id);
+    finishSeasonIfComplete(db,stage.id);
+    return summary;
+  });
+  return run.immediate();
 }
 
 export function advanceRound(db: SqliteDatabase, roundId: number): MatchSummary[] {
