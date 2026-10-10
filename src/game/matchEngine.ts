@@ -63,7 +63,6 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
    }
    const homeGoalsAtMinute=events.filter(e=>e.minute<=minute&&e.club===home.clubId&&e.type==="GOAL").length;
    const awayGoalsAtMinute=events.filter(e=>e.minute<=minute&&e.club===away.clubId&&e.type==="GOAL").length;
-   momentum.run;
    db.prepare("UPDATE match_momentum SET home_score=?,away_score=? WHERE fixture_id=? AND minute=?").run(homeGoalsAtMinute,awayGoalsAtMinute,fixtureId,minute);
   }
   for(const e of events)ev(e.minute,e.club,e.player,e.type,e.xg,e.desc,e.secondary);
