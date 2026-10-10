@@ -3,8 +3,8 @@ export interface MatchSummary {fixtureId:number;homeClubId:number;awayClubId:num
 interface FixtureRow{id:number;home_club_id:number;away_club_id:number;random_seed:number|null;status:string;}
 interface Player{id:number;name:string;goalkeeper:number;energy:number;morale:number;sharpness:number;pace:number;stamina:number;strength:number;positioning:number;decisions:number;composure:number;teamwork:number;work_rate:number;passing:number;vision:number;crossing:number;dribbling:number;finishing:number;long_shots:number;heading:number;tackling:number;marking:number;aggression:number;concentration:number;reflexes:number;handling:number;aerial_reach:number;}
 interface Tactic{formation_id:number;mentality:string;pressing:number;tempo:number;defensive_line:number;width:number;passing_directness:number;counter_attack:number;}
-interface MatchPlayer extends Player{role:string;slot:number;isStarting:boolean;positionRating:number;}
-interface Team{clubId:number;reputation:number;tactic:Tactic;lineup:MatchPlayer[];attacking:number;defending:number;goalkeeping:number;energy:number;fitness:number;}
+export interface MatchPlayer extends Player{role:string;slot:number;isStarting:boolean;positionRating:number;}
+export interface Team{clubId:number;reputation:number;tactic:Tactic;lineup:MatchPlayer[];attacking:number;defending:number;goalkeeping:number;energy:number;fitness:number;}
 export interface SimulatedMatchResult{homeScore:number;awayScore:number;homeShots:number;awayShots:number;homeShotsOnTarget:number;awayShotsOnTarget:number;homeXg:number;awayXg:number;}
 export interface MonteCarloReport{simulations:number;homeWinRate:number;drawRate:number;awayWinRate:number;averageHomeGoals:number;averageAwayGoals:number;averageTotalGoals:number;homeShotRate:number;awayShotRate:number;meanAbsoluteGoalDifference:number;}
 function rng(seed:number):()=>number{let s=seed>>>0;return()=>{s+=0x6D2B79F5;let v=s;v=Math.imul(v^(v>>>15),v|1);v^=v+Math.imul(v^(v>>>7),v|61);return((v^(v>>>14))>>>0)/4294967296;};}
