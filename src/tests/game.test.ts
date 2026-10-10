@@ -64,13 +64,15 @@ test("a full configured league season completes, survives reopening, and next se
   const root=tempRoot(); try { const {manager,save}=setup(root); let db=manager.open(save.filePath);
     try {
       const initialLeagueFixtures=listFixtures(db).filter(f=>f.competition==="Liga Nacional de Teste");
-      assert.equal(initialLeagueFixtures.length,4);
+      assert.equal(initialLeagueFixtures.length,12);
       const rounds=db.prepare("SELECT id FROM competition_round WHERE stage_id=1 ORDER BY round_number").all() as Array<{id:number}>;
+      assert.equal(rounds.length,6);
       for(const round of rounds) advanceRound(db,round.id);
       assert.equal(getSeasonStatus(db,1)[0]?.seasonStatus,"COMPLETED");
       assert.equal(getSeasonStatus(db,1)[0]?.stageStatus,"COMPLETED");
       const standings=getStandings(db,1);
-      assert.ok(standings.every(r=>r.played===2));
+      assert.ok(standings.every(r=>r.played===6));
+      assert.equal(standings.reduce((sum,row)=>sum+row.played,0),24);
       db.close();
       db=manager.open(save.filePath);
       assert.equal(getSeasonStatus(db,1)[0]?.seasonStatus,"COMPLETED");
