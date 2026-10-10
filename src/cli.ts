@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { openDatabase, validateDatabase } from "./db/database.js";
-import { runMatchBalanceAnalysis } from "./game/matchEngine.js";
+import { runEngineDiagnostics, runMatchBalanceAnalysis } from "./game/matchEngine.js";
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
 import {
@@ -115,6 +115,11 @@ async function main(): Promise<void> {
       });
       return;
     }
+    case "diagnostics": {
+      const simulations = parsePositiveId(parseOption(args, "--simulations") ?? "2000", "--simulations");
+      withSave(args, db => console.log(JSON.stringify(runEngineDiagnostics(db, simulations), null, 2)));
+      return;
+    }
     case "balance": {
       const homeId = parsePositiveId(parseOption(args, "--home"), "--home");
       const awayId = parsePositiveId(parseOption(args, "--away"), "--away");
@@ -145,7 +150,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
-      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, balance, fixtures, play, advance-round, standings, season-status, next-season");
+      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, balance, diagnostics, fixtures, play, advance-round, standings, season-status, next-season");
   }
 }
 
