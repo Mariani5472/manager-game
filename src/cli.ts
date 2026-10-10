@@ -15,7 +15,14 @@ const schemaPath = resolve(process.env.GMF_SCHEMA_SQL ?? joinPath(root, "src/sch
 function joinPath(a: string, b: string): string { return a.endsWith("/") ? a + b : a + "/" + b; }
 
 function initializeMaster(): void {
-  if (existsSync(masterPath)) { console.log(`Master DB already exists: ${masterPath}`); return; }
+  if (existsSync(masterPath)) {
+    const existing = openDatabase(masterPath, true);
+    try {
+      validateDatabase(existing);
+      console.log(`Master DB already exists and is valid: ${masterPath}`);
+    } finally { existing.close(); }
+    return;
+  }
   mkdirSync(dirname(masterPath), { recursive: true });
   const db = openDatabase(masterPath);
   try {
@@ -54,7 +61,7 @@ function parsePositiveId(raw: string | undefined, label: string): number {
   return value;
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
   switch (command) {
     case "init-master": initializeMaster(); return;
@@ -69,7 +76,7 @@ function main(): void {
       const managerName = parseOption(args, "--manager");
       const clubId = parsePositiveId(parseOption(args, "--club"), "--club");
       if (!name || !managerName) throw new Error("Required: --name, --manager and --club.");
-      console.log(JSON.stringify(new SaveManager(masterPath, savesDir).create({ name, managerName, clubId }), null, 2));
+      console.log(JSON.stringify(await new SaveManager(masterPath, savesDir).create({ name, managerName, clubId }), null, 2));
       return;
     }
     case "saves": console.table(new SaveManager(masterPath, savesDir).list()); return;
@@ -110,5 +117,5 @@ function main(): void {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  try { main(); } catch (error) { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; }
+  void main().catch(error => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
 }
