@@ -206,20 +206,19 @@ function finishSeasonIfComplete(db: SqliteDatabase, stageId: number): void {
 }
 
 export function advanceNextFixture(db: SqliteDatabase, fixtureId?: number): MatchSummary {
-  const run = db.transaction(() => {
-    const row = fixtureId
-      ? db.prepare("SELECT id FROM fixture WHERE id=? AND status IN ('SCHEDULED','IN_PROGRESS')").get(fixtureId) as {id:number}|undefined
-      : db.prepare("SELECT id FROM fixture WHERE status IN ('SCHEDULED','IN_PROGRESS') ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 ELSE 1 END,scheduled_at,id LIMIT 1").get() as {id:number}|undefined;
-    if (!row) throw new Error(fixtureId ? `Playable fixture ${fixtureId} not found (it may already be completed).` : "No playable fixtures remain.");
-    const stage = db.prepare("SELECT r.stage_id AS id FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE f.id=?")
-      .get(row.id) as {id:number}|undefined;
-    if (!stage) throw new Error(`Fixture ${row.id} has no competition stage.`);
-    const summary = simulateMatch(db,row.id);
-    rebuildStandings(db,stage.id);
-    finishSeasonIfComplete(db,stage.id);
-    return summary;
-  });
-  return run.immediate();
+  const row = fixtureId
+    ? db.prepare("SELECT id FROM fixture WHERE id=? AND status IN ('SCHEDULED','IN_PROGRESS')").get(fixtureId) as {id:number}|undefined
+    : db.prepare("SELECT id FROM fixture WHERE status IN ('SCHEDULED','IN_PROGRESS') ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 ELSE 1 END,scheduled_at,id LIMIT 1").get() as {id:number}|undefined;
+  if (!row) throw new Error(fixtureId ? `Playable fixture ${fixtureId} not found (it may already be completed).` : "No playable fixtures remain.");
+  const stage = db.prepare("SELECT r.stage_id AS id FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE f.id=?")
+    .get(row.id) as {id:number}|undefined;
+  if (!stage) throw new Error(`Fixture ${row.id} has no competition stage.`);
+  // simulateMatch commits a checkpoint after every minute. Do not wrap it in an
+  // outer transaction, otherwise SQLite would defer every checkpoint until FT.
+  const summary = simulateMatch(db,row.id);
+  rebuildStandings(db,stage.id);
+  finishSeasonIfComplete(db,stage.id);
+  return summary;
 }
 
 export function advanceRound(db: SqliteDatabase, roundId: number): MatchSummary[] {
