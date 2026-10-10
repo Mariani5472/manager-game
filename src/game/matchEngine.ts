@@ -6,7 +6,7 @@ export interface Tactic{formation_id:number;mentality:string;pressing:number;tem
 export interface MatchPlayer extends Player{role:string;slot:number;isStarting:boolean;positionRating:number;}
 export interface Team{clubId:number;reputation:number;tactic:Tactic;lineup:MatchPlayer[];attacking:number;defending:number;goalkeeping:number;energy:number;fitness:number;}
 export interface SimulatedMatchResult{homeScore:number;awayScore:number;homeShots:number;awayShots:number;homeShotsOnTarget:number;awayShotsOnTarget:number;homeXg:number;awayXg:number;}
-export interface MonteCarloReport{simulations:number;homeWinRate:number;drawRate:number;awayWinRate:number;averageHomeGoals:number;averageAwayGoals:number;averageTotalGoals:number;homeShotRate:number;awayShotRate:number;meanAbsoluteGoalDifference:number;}
+export interface MonteCarloReport{simulations:number;homeWinRate:number;drawRate:number;awayWinRate:number;averageHomeGoals:number;averageAwayGoals:number;averageTotalGoals:number;homeShotRate:number;awayShotRate:number;averageTotalShots:number;averageTotalShotsOnTarget:number;averageTotalXg:number;meanAbsoluteGoalDifference:number;}
 function rng(seed:number):()=>number{let s=seed>>>0;return()=>{s+=0x6D2B79F5;let v=s;v=Math.imul(v^(v>>>15),v|1);v^=v+Math.imul(v^(v>>>7),v|61);return((v^(v>>>14))>>>0)/4294967296;};}
 function clamp(n:number,a:number,b:number):number{return Math.max(a,Math.min(b,n));}
 function mean(xs:number[]):number{return xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:50;}
