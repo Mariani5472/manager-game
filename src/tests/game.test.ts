@@ -388,6 +388,118 @@ test("fair-play tie-break counts card penalties and ranks fewer penalties first"
   } finally { rmSync(root,{recursive:true,force:true}); }
 });
 
+test("season integration validates standings, persistence, replay safety and cup completion", async () => {
+  const root = tempRoot();
+  try {
+    const { manager, save } = await createSave(root);
+    let db = manager.open(save.filePath);
+    try {
+      // Finish the six-round league and derive an independent table from completed fixtures.
+      for (let round = 1; round <= 6; round++) {
+        assert.equal(advanceStageRound(db, 1, round).length, 2);
+      }
+      const matches = db.prepare(`
+        SELECT f.home_club_id AS home, f.away_club_id AS away,
+          f.home_score AS homeScore, f.away_score AS awayScore
+        FROM fixture f JOIN competition_round r ON r.id=f.round_id
+        WHERE r.stage_id=1 AND f.status='COMPLETED'
+      `).all() as Array<{home:number;away:number;homeScore:number;awayScore:number}>;
+      assert.equal(matches.length, 12);
+      const format = db.prepare("SELECT win_points AS winPoints,draw_points AS drawPoints,loss_points AS lossPoints FROM stage_format WHERE stage_id=1")
+        .get() as {winPoints:number;drawPoints:number;lossPoints:number};
+      const expected = new Map<number, {
+        clubId:number;played:number;wins:number;draws:number;losses:number;
+        goalsFor:number;goalsAgainst:number;goalDifference:number;points:number;fairPlayPoints:number;
+      }>();
+      for (const row of db.prepare("SELECT club_id AS clubId FROM stage_participant WHERE stage_id=1").all() as Array<{clubId:number}>) {
+        expected.set(row.clubId,{clubId:row.clubId,played:0,wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,goalDifference:0,points:0,fairPlayPoints:0});
+      }
+      for (const match of matches) {
+        const home = expected.get(match.home)!;
+        const away = expected.get(match.away)!;
+        home.played++; away.played++;
+        home.goalsFor += match.homeScore; home.goalsAgainst += match.awayScore;
+        away.goalsFor += match.awayScore; away.goalsAgainst += match.homeScore;
+        if (match.homeScore > match.awayScore) {
+          home.wins++; away.losses++; home.points += format.winPoints; away.points += format.lossPoints;
+        } else if (match.homeScore < match.awayScore) {
+          away.wins++; home.losses++; away.points += format.winPoints; home.points += format.lossPoints;
+        } else {
+          home.draws++; away.draws++; home.points += format.drawPoints; away.points += format.drawPoints;
+        }
+      }
+      for (const row of expected.values()) {
+        row.goalDifference = row.goalsFor - row.goalsAgainst;
+        row.fairPlayPoints = (db.prepare(`
+          SELECT COALESCE(SUM(CASE event_type WHEN 'YELLOW_CARD' THEN 1 WHEN 'RED_CARD' THEN 3 ELSE 0 END),0) AS points
+          FROM match_event e JOIN fixture f ON f.id=e.fixture_id
+          JOIN competition_round r ON r.id=f.round_id
+          WHERE r.stage_id=1 AND f.status='COMPLETED' AND e.club_id=?
+            AND e.event_type IN ('YELLOW_CARD','RED_CARD')
+        `).get(row.clubId) as {points:number}).points;
+      }
+      const normalize = (rows: Array<{
+        clubId:number;played:number;wins:number;draws:number;losses:number;
+        goalsFor:number;goalsAgainst:number;goalDifference:number;points:number;fairPlayPoints:number;
+      }>) => rows.map(row => ({
+        clubId:row.clubId,played:row.played,wins:row.wins,draws:row.draws,losses:row.losses,
+        goalsFor:row.goalsFor,goalsAgainst:row.goalsAgainst,goalDifference:row.goalDifference,
+        points:row.points,fairPlayPoints:row.fairPlayPoints,
+      })).sort((a,b)=>a.clubId-b.clubId);
+      const standingsBefore = getStandings(db,1);
+      assert.deepEqual(normalize(standingsBefore),normalize([...expected.values()]));
+      assert.ok(standingsBefore.every(row=>row.played===6));
+      assert.equal(standingsBefore.reduce((sum,row)=>sum+row.played,0),24);
+      assert.equal(getSeasonStatus(db,1)[0]?.stageStatus,"COMPLETED");
+      assert.equal(getSeasonStatus(db,1)[0]?.seasonStatus,"COMPLETED");
+
+      // A completed round must not create duplicate match events, momentum, or results.
+      const countsBefore = db.prepare(`
+        SELECT (SELECT COUNT(*) FROM match_event) AS events,
+          (SELECT COUNT(*) FROM match_momentum) AS momentum
+      `).get() as {events:number;momentum:number};
+      const scoresBefore = db.prepare(`
+        SELECT f.id,f.home_score AS homeScore,f.away_score AS awayScore
+        FROM fixture f JOIN competition_round r ON r.id=f.round_id
+        WHERE r.stage_id=1 ORDER BY f.id
+      `).all();
+      assert.throws(()=>advanceStageRound(db,1,1),/already completed; no matches were simulated/);
+      assert.deepEqual(db.prepare(`
+        SELECT (SELECT COUNT(*) FROM match_event) AS events,
+          (SELECT COUNT(*) FROM match_momentum) AS momentum
+      `).get(),countsBefore);
+      assert.deepEqual(db.prepare(`
+        SELECT f.id,f.home_score AS homeScore,f.away_score AS awayScore
+        FROM fixture f JOIN competition_round r ON r.id=f.round_id
+        WHERE r.stage_id=1 ORDER BY f.id
+      `).all(),scoresBefore);
+
+      // Finish the cup: the final must be generated from semifinal winners and close the season.
+      assert.equal(advanceStageRound(db,2,1).length,2);
+      assert.equal(getSeasonStatus(db,2)[0]?.stageStatus,"IN_PROGRESS");
+      assert.equal(advanceStageRound(db,2,2).length,1);
+      assert.equal(getSeasonStatus(db,2)[0]?.stageStatus,"COMPLETED");
+      assert.equal(getSeasonStatus(db,2)[0]?.seasonStatus,"COMPLETED");
+
+      db.close();
+      db = manager.open(save.filePath);
+      assert.deepEqual(normalize(getStandings(db,1)),normalize(standingsBefore));
+      assert.equal(getSeasonStatus(db,1)[0]?.seasonStatus,"COMPLETED");
+      assert.equal(getSeasonStatus(db,2)[0]?.seasonStatus,"COMPLETED");
+      const final = listFixtures(db).find(fixture=>fixture.competition==="Copa Nacional de Teste" && fixture.round==="Final");
+      assert.ok(final);
+      assert.equal(final.status,"COMPLETED");
+      assert.ok(final.winnerClub);
+      assert.equal((db.pragma("integrity_check",{simple:true}) as string),"ok");
+      assert.deepEqual(db.pragma("foreign_key_check"),[]);
+    } finally {
+      if (db.open) db.close();
+    }
+  } finally {
+    rmSync(root,{recursive:true,force:true});
+  }
+});
+
 test("CLI smoke test initializes a clean world, creates a save, lists it, and opens fixtures by save id", () => {
   const root = tempRoot();
   const master = join(root, "world", "master.sqlite");
