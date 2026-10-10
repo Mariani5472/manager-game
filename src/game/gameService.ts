@@ -3,7 +3,7 @@ import { simulateMatch, type MatchSummary } from "./matchEngine.js";
 
 export interface FixtureInfo {
   id: number; competition: string; stage: string; round: string; scheduledAt: string | null;
-  homeClub: string; awayClub: string; status: string; score: string | null;
+  homeClub: string; awayClub: string; status: string; score: string | null; winnerClub: string | null;
 }
 export interface ClubSummary { id: number; name: string; nation: string; isManaged: boolean; }
 export interface PlayerSummary {
@@ -83,7 +83,17 @@ export function listFixtures(db: SqliteDatabase, pendingOnly = false): FixtureIn
     SELECT f.id, co.name AS competition, st.name AS stage, r.name AS round,
       f.scheduled_at AS scheduledAt, home.name AS homeClub, away.name AS awayClub, f.status,
       CASE WHEN f.home_score IS NULL OR f.away_score IS NULL THEN NULL
-           ELSE f.home_score || ' - ' || f.away_score END AS score
+           WHEN f.home_score=f.away_score AND f.home_penalties IS NOT NULL AND f.away_penalties IS NOT NULL
+             THEN f.home_score || ' - ' || f.away_score || ' (Pênaltis ' || f.home_penalties || ' - ' || f.away_penalties || ')'
+           ELSE f.home_score || ' - ' || f.away_score END AS score,
+      CASE
+        WHEN f.home_score IS NULL OR f.away_score IS NULL THEN NULL
+        WHEN f.home_score>f.away_score THEN home.name
+        WHEN f.away_score>f.home_score THEN away.name
+        WHEN f.home_penalties>f.away_penalties THEN home.name
+        WHEN f.away_penalties>f.home_penalties THEN away.name
+        ELSE NULL
+      END AS winnerClub
     FROM fixture f JOIN competition_round r ON r.id=f.round_id
     JOIN competition_stage st ON st.id=r.stage_id
     JOIN competition_season cs ON cs.id=st.season_id JOIN competition co ON co.id=cs.competition_id
@@ -123,15 +133,23 @@ export function getSeasonStatus(db: SqliteDatabase, stageId?: number): SeasonSum
     if (stage.stage_kind === "KNOCKOUT") {
       const finalRound = db.prepare(`
         SELECT COUNT(f.id) AS total,
-          SUM(CASE WHEN f.status='COMPLETED' THEN 1 ELSE 0 END) AS completed
+          SUM(CASE WHEN f.status='COMPLETED' THEN 1 ELSE 0 END) AS completed,
+          SUM(CASE
+            WHEN f.home_score<>f.away_score THEN 1
+            WHEN f.home_score=f.away_score
+              AND f.home_penalties IS NOT NULL AND f.away_penalties IS NOT NULL
+              AND f.home_penalties<>f.away_penalties THEN 1
+            ELSE 0
+          END) AS decided
         FROM competition_round r LEFT JOIN fixture f ON f.round_id=r.id
         WHERE r.stage_id=? AND r.round_number=(
           SELECT MAX(round_number) FROM competition_round WHERE stage_id=?
         )
-      `).get(stage.stage_id, stage.stage_id) as {total:number;completed:number|null};
-      // A knockout bracket with several matches completed is not finished until
-      // the final round has exactly one completed fixture.
-      knockoutFinalComplete = finalRound.total === 1 && (finalRound.completed ?? 0) === 1;
+      `).get(stage.stage_id, stage.stage_id) as {total:number;completed:number|null;decided:number|null};
+      // A completed final is not decisive until a draw has persisted unequal
+      // penalty scores. A 0-0 without a shootout cannot complete the cup.
+      knockoutFinalComplete = finalRound.total === 1 &&
+        (finalRound.completed ?? 0) === 1 && (finalRound.decided ?? 0) === 1;
     }
     const stageComplete = pending === 0 && completed > 0 &&
       (stage.stage_kind !== "KNOCKOUT" || knockoutFinalComplete);
@@ -301,6 +319,68 @@ function finishSeasonIfComplete(db: SqliteDatabase, stageId: number): void {
     .run(canComplete ? "COMPLETED" : "ACTIVE", stage.season_id);
 }
 
+export interface KnockoutFixtureResult {
+  fixtureId: number;
+  winnerClubId: number;
+  homePenalties: number | null;
+  awayPenalties: number | null;
+}
+
+/** Resolve a completed knockout fixture; tied scores persist a deterministic shootout. */
+export function resolveKnockoutFixtureWinner(db: SqliteDatabase, fixtureId: number): KnockoutFixtureResult {
+  const fixture = db.prepare(`
+    SELECT f.id, f.home_club_id AS home, f.away_club_id AS away,
+      f.home_score AS homeScore, f.away_score AS awayScore,
+      f.home_penalties AS homePenalties, f.away_penalties AS awayPenalties,
+      f.random_seed AS seed, f.status, st.stage_kind AS stageKind
+    FROM fixture f JOIN competition_round r ON r.id=f.round_id
+    JOIN competition_stage st ON st.id=r.stage_id
+    WHERE f.id=?
+  `).get(fixtureId) as {
+    id:number;home:number;away:number;homeScore:number|null;awayScore:number|null;
+    homePenalties:number|null;awayPenalties:number|null;seed:number|null;status:string;stageKind:string;
+  }|undefined;
+  if (!fixture) throw new Error(`Fixture ${fixtureId} was not found.`);
+  if (fixture.stageKind !== "KNOCKOUT") throw new Error(`Fixture ${fixtureId} is not part of a knockout stage.`);
+  if (fixture.status !== "COMPLETED" || fixture.homeScore === null || fixture.awayScore === null) {
+    throw new Error(`Knockout fixture ${fixtureId} must be completed before its winner can be resolved.`);
+  }
+
+  let homePenalties = fixture.homePenalties;
+  let awayPenalties = fixture.awayPenalties;
+  let winnerClubId: number;
+  if (fixture.homeScore !== fixture.awayScore) {
+    winnerClubId = fixture.homeScore > fixture.awayScore ? fixture.home : fixture.away;
+  } else {
+    if (homePenalties === null || awayPenalties === null || homePenalties === awayPenalties) {
+      let state = ((fixture.seed ?? fixture.id) ^ (fixture.id * 2654435761)) >>> 0;
+      const next = () => {
+        state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+        return state / 0x100000000;
+      };
+      homePenalties = 0;
+      awayPenalties = 0;
+      for (let kick=0; kick<5; kick++) {
+        if (next() < 0.76) homePenalties++;
+        if (next() < 0.76) awayPenalties++;
+      }
+      let suddenDeath = 0;
+      while (homePenalties === awayPenalties && suddenDeath < 20) {
+        const homeScores = next() < 0.76;
+        const awayScores = next() < 0.76;
+        if (homeScores) homePenalties++;
+        if (awayScores) awayPenalties++;
+        suddenDeath++;
+      }
+      if (homePenalties === awayPenalties) homePenalties++;
+      db.prepare("UPDATE fixture SET home_penalties=?,away_penalties=? WHERE id=?")
+        .run(homePenalties,awayPenalties,fixture.id);
+    }
+    winnerClubId = homePenalties > awayPenalties ? fixture.home : fixture.away;
+  }
+  return {fixtureId:fixture.id,winnerClubId,homePenalties,awayPenalties};
+}
+
 /** Advance a completed knockout round by creating the next round from its winners. */
 function progressKnockoutStage(db: SqliteDatabase, stageId: number, roundId: number): void {
   const stage = getStage(db, stageId);
@@ -324,49 +404,13 @@ function progressKnockoutStage(db: SqliteDatabase, stageId: number, roundId: num
   if (laterRound) return;
 
   const matches = db.prepare(`
-    SELECT id, home_club_id AS home, away_club_id AS away,
-      home_score AS homeScore, away_score AS awayScore,
-      home_penalties AS homePenalties, away_penalties AS awayPenalties, random_seed AS seed,
-      scheduled_at AS scheduledAt
+    SELECT id, scheduled_at AS scheduledAt
     FROM fixture WHERE round_id=? ORDER BY scheduled_at, id
-  `).all(roundId) as Array<{
-    id:number;home:number;away:number;homeScore:number;awayScore:number;
-    homePenalties:number|null;awayPenalties:number|null;seed:number|null;scheduledAt:string|null;
-  }>;
+  `).all(roundId) as Array<{id:number;scheduledAt:string|null}>;
 
-  const winners: number[] = [];
-  for (const match of matches) {
-    let homeWins = match.homeScore > match.awayScore;
-    if (match.homeScore === match.awayScore) {
-      let homePenalties = match.homePenalties;
-      let awayPenalties = match.awayPenalties;
-      if (homePenalties === null || awayPenalties === null || homePenalties === awayPenalties) {
-        // Deterministic shootout so tied knockout matches always produce a winner.
-        let state = ((match.seed ?? match.id) ^ (match.id * 2654435761)) >>> 0;
-        const next = () => {
-          state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-          return state / 0x100000000;
-        };
-        homePenalties = 0;
-        awayPenalties = 0;
-        for (let kick=0; kick<5; kick++) {
-          if (next() < 0.76) homePenalties++;
-          if (next() < 0.76) awayPenalties++;
-        }
-        let suddenDeath = 0;
-        while (homePenalties === awayPenalties && suddenDeath < 20) {
-          if (next() < 0.76) homePenalties++;
-          if (next() < 0.76) awayPenalties++;
-          suddenDeath++;
-        }
-        if (homePenalties === awayPenalties) homePenalties++;
-        db.prepare("UPDATE fixture SET home_penalties=?,away_penalties=? WHERE id=?")
-          .run(homePenalties, awayPenalties, match.id);
-      }
-      homeWins = homePenalties > awayPenalties;
-    }
-    winners.push(homeWins ? match.home : match.away);
-  }
+  // Winner selection is based on persisted regulation scores and, for a draw,
+  // persisted penalty scores. Re-running this resolver never changes a decided tie.
+  const winners = matches.map(match => resolveKnockoutFixtureWinner(db,match.id).winnerClubId);
 
   if (winners.length === 1) return;
   if (winners.length < 2 || winners.length % 2 !== 0) {
@@ -446,9 +490,22 @@ export function advanceStageRound(db: SqliteDatabase, stageId: number, roundNumb
 }
 
 function advanceRoundById(db: SqliteDatabase, roundId: number, stageId: number): MatchSummary[] {
+  const round = db.prepare("SELECT round_number AS roundNumber,name FROM competition_round WHERE id=? AND stage_id=?")
+    .get(roundId,stageId) as {roundNumber:number;name:string}|undefined;
+  if (!round) throw new Error(`Round ID ${roundId} was not found in stage ${stageId}.`);
+  const state = db.prepare(`
+    SELECT COUNT(*) AS total,
+      SUM(CASE WHEN status='COMPLETED' THEN 1 ELSE 0 END) AS completed
+    FROM fixture WHERE round_id=?
+  `).get(roundId) as {total:number;completed:number|null};
   const fixtures = db.prepare("SELECT id FROM fixture WHERE round_id=? AND status IN ('SCHEDULED','IN_PROGRESS') ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 ELSE 1 END,scheduled_at,id")
     .all(roundId) as Array<{id:number}>;
-  if (!fixtures.length) throw new Error(`Round ID ${roundId} has no playable fixtures.`);
+  if (!fixtures.length) {
+    if (state.total > 0 && (state.completed ?? 0) === state.total) {
+      throw new Error(`Round ${round.roundNumber} (${round.name}) is already completed; no matches were simulated.`);
+    }
+    throw new Error(`Round ${round.roundNumber} (${round.name}) has no playable fixtures.`);
+  }
   // Each match owns its per-minute transactions so a process interruption does not
   // roll back checkpoints for the entire round.
   const results = fixtures.map(f => simulateMatch(db,f.id));
@@ -483,6 +540,76 @@ function roundRobin(teams: ParticipantRow[], legs: number): Array<Array<{home:nu
   const all=[...first];
   for (let leg=1;leg<legs;leg++) all.push(...first.map(matches=>matches.map(m=>({home:m.away,away:m.home}))));
   return all;
+}
+
+export interface FactoryCalendarRepair {
+  repaired: boolean;
+  rounds: number;
+  fixtures: number;
+}
+
+/** Reconcile only the shipped four-club example league in the master database. */
+export function ensureFactoryLeagueCalendar(db: SqliteDatabase): FactoryCalendarRepair {
+  const stage = db.prepare(`
+    SELECT st.id AS stageId, cs.season_year AS year, cs.start_date AS startDate, sf.legs AS legs
+    FROM competition_stage st
+    JOIN competition_season cs ON cs.id=st.season_id
+    JOIN competition co ON co.id=cs.competition_id
+    JOIN stage_format sf ON sf.stage_id=st.id
+    WHERE co.name='Liga Nacional de Teste' AND cs.season_year=2026 AND st.stage_kind='LEAGUE'
+    ORDER BY st.id LIMIT 1
+  `).get() as {stageId:number;year:number;startDate:string|null;legs:number}|undefined;
+  if (!stage || stage.legs !== 2) return {repaired:false,rounds:0,fixtures:0};
+
+  const participants = db.prepare("SELECT club_id,group_id,seed FROM stage_participant WHERE stage_id=? ORDER BY seed,club_id")
+    .all(stage.stageId) as ParticipantRow[];
+  if (participants.length !== 4) return {repaired:false,rounds:0,fixtures:0};
+
+  const rounds = roundRobin(participants,stage.legs);
+  const currentRounds = db.prepare("SELECT id,round_number AS roundNumber FROM competition_round WHERE stage_id=? ORDER BY round_number")
+    .all(stage.stageId) as Array<{id:number;roundNumber:number}>;
+  const currentFixtures = db.prepare(`
+    SELECT f.id,f.status FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=?
+  `).all(stage.stageId) as Array<{id:number;status:string}>;
+  const roundCounts = db.prepare(`
+    SELECT COUNT(f.id) AS fixtures FROM competition_round r
+    LEFT JOIN fixture f ON f.round_id=r.id WHERE r.stage_id=? GROUP BY r.id
+  `).all(stage.stageId) as Array<{fixtures:number}>;
+  const expectedFixtures = rounds.reduce((sum,round)=>sum+round.length,0);
+  const isCorrect = currentRounds.length===rounds.length &&
+    currentRounds.every((round,index)=>round.roundNumber===index+1) &&
+    currentFixtures.length===expectedFixtures &&
+    roundCounts.length===rounds.length && roundCounts.every(row=>row.fixtures===2);
+  if (isCorrect) return {repaired:false,rounds:currentRounds.length,fixtures:currentFixtures.length};
+
+  if (currentFixtures.some(fixture=>fixture.status!=="SCHEDULED")) {
+    throw new Error("The factory league calendar is incomplete but contains played or non-scheduled fixtures. It was not changed; back up the master database before any manual repair.");
+  }
+
+  const create = db.transaction(() => {
+    db.prepare("DELETE FROM competition_round WHERE stage_id=?").run(stage.stageId);
+    const insertRound = db.prepare("INSERT INTO competition_round(stage_id,round_number,name,start_date,end_date) VALUES (?,?,?,?,?)");
+    const insertFixture = db.prepare(`
+      INSERT INTO fixture(round_id,home_club_id,away_club_id,stadium_id,scheduled_at,random_seed)
+      VALUES (?,?,?,?,?,?)
+    `);
+    const start = stage.startDate ? new Date(`${stage.startDate}T00:00:00Z`) : new Date("2026-01-10T00:00:00Z");
+    rounds.forEach((matches,roundIndex)=>{
+      const roundNumber=roundIndex+1;
+      const dateValue=new Date(start);
+      dateValue.setUTCDate(dateValue.getUTCDate()+roundIndex*7);
+      const date=dateValue.toISOString().slice(0,10);
+      const roundId=Number(insertRound.run(stage.stageId,roundNumber,`Rodada ${roundNumber}`,date,date).lastInsertRowid);
+      matches.forEach((match,matchIndex)=>{
+        const stadium=db.prepare("SELECT id FROM stadium WHERE club_id=? ORDER BY id LIMIT 1").get(match.home) as {id:number}|undefined;
+        const scheduledAt=`${date}T${String(16+matchIndex*2).padStart(2,"0")}:00:00`;
+        const seed=((stage.year*100000)+(roundNumber*100)+matchIndex+1)>>>0;
+        insertFixture.run(roundId,match.home,match.away,stadium?.id??null,scheduledAt,seed);
+      });
+    });
+  });
+  create();
+  return {repaired:true,rounds:rounds.length,fixtures:expectedFixtures};
 }
 
 export function prepareNextLeagueSeason(db: SqliteDatabase, stageId: number): {seasonId:number;year:number;fixtures:number} {
