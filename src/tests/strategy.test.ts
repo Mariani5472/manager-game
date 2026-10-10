@@ -28,3 +28,22 @@ test("engine diagnostics report xG distribution, side-swap, strength gap, and pe
 test("xG diagnostics include clear chances and side-swapped simulations use paired club RNG streams",async()=>{const x=await campaign();try{const r=runEngineDiagnostics(x.db,1000,912);assert.ok(r.xgBands.find(b=>b.band==="0.20+")!.shots>0,"expected high-xG shots in diagnostics");assert.ok(r.xgBands.every(b=>Math.abs(b.goalRate+b.saveRate+b.missRate-1)<1e-9));assert.equal(r.homeAdvantage.shotChanceBonus,0.004,"home advantage is an explicit calibrated modifier");assert.ok(Math.abs(r.homeAdvantage.homeAdvantageDelta)<=0.10,"paired home/away estimate should remain within a plausible Monte Carlo range");assert.ok(r.strengthGap.strengthDifference>=0);assert.equal(r.strengthGap.hasMeaningfulGap,r.strengthGap.strengthDifference>=8);}finally{x.db.close();rmSync(x.root,{recursive:true,force:true});}});
 
 test("tactical impact scenarios are seeded, comparable, and do not mutate saved tactics",async()=>{const x=await campaign();try{const before=x.db.prepare("SELECT mentality,pressing,tempo,defensive_line FROM team_tactic WHERE club_id=1").get() as {mentality:string;pressing:number;tempo:number;defensive_line:number};const a=runTacticalImpactAnalysis(x.db,1,2,1500,5541);const b=runTacticalImpactAnalysis(x.db,1,2,1500,5541);assert.deepEqual(a,b,"identical seeds and saved tactics must produce identical reports");assert.deepEqual(a.scenarios.map(s=>s.name),["baseline","home_attacking","home_defensive","away_high_press"]);const aggressive=a.scenarios.find(s=>s.name==="home_attacking")!;assert.ok(aggressive.homeShotsDelta>0||aggressive.averageHomeGoalsDelta>0,"attacking tactic should measurably increase shot volume or goals");assert.ok(a.scenarios.some(s=>s.name!=="baseline"&&(s.homeWinRateDelta!==0||s.averageTotalXgDelta!==0)));const after=x.db.prepare("SELECT mentality,pressing,tempo,defensive_line FROM team_tactic WHERE club_id=1").get();assert.deepEqual(after,before,"analysis must not persist scenario overrides");}finally{x.db.close();rmSync(x.root,{recursive:true,force:true});}});
+
+test("controlled favorite-underdog matchup validates an 8+ strength gap and tactical impact without changing global balance",async()=>{const x=await campaign();try{
+ const attributes=["pace","acceleration","stamina","strength","agility","positioning","anticipation","decisions","composure","teamwork","work_rate","passing","vision","crossing","dribbling","finishing","long_shots","heading","tackling","marking","aggression","concentration","reflexes","handling","aerial_reach"];
+ const setClubLevel=(clubId:number,level:number)=>{const assignments=attributes.map(name=>name+"=?").join(",");x.db.prepare("UPDATE player_attribute SET "+assignments+" WHERE player_id IN (SELECT player_id FROM squad_membership WHERE club_id=?)").run(...attributes.map(()=>level),clubId);x.db.prepare("UPDATE player_position SET rating=? WHERE player_id IN (SELECT player_id FROM squad_membership WHERE club_id=?)").run(level,clubId);};
+ // Synthetic test data lives only in this disposable campaign DB; no factory data or global coefficients are changed.
+ for(const row of x.db.prepare("SELECT id FROM club").all() as Array<{id:number}>)setClubLevel(row.id,row.id===1?90:15);
+ const diagnostics=runEngineDiagnostics(x.db,5000,73421);
+ assert.equal(diagnostics.strengthGap.hasMeaningfulGap,true,JSON.stringify(diagnostics.strengthGap));
+ assert.ok(diagnostics.strengthGap.strengthDifference>=8,JSON.stringify(diagnostics.strengthGap));
+ const favoriteId=diagnostics.strengthGap.strongClubId,underdogId=diagnostics.strengthGap.weakClubId;
+ const report=runTacticalImpactAnalysis(x.db,favoriteId,underdogId,5000,73421);
+ const baseline=report.scenarios.find(s=>s.name==="baseline")!.result;
+ assert.ok(baseline.homeWinRate>baseline.awayWinRate,JSON.stringify({favoriteId,underdogId,baseline,strengthGap:diagnostics.strengthGap}));
+ assert.ok(baseline.awayWinRate>0,"underdog must retain a non-zero upset probability");
+ assert.equal(report.scenarios.length,4);
+ assert.ok(report.scenarios.some(s=>s.name!=="baseline"&&(s.homeWinRateDelta!==0||s.averageTotalXgDelta!==0)),"tactical overrides should alter the controlled matchup");
+ const repeat=runTacticalImpactAnalysis(x.db,favoriteId,underdogId,5000,73421);
+ assert.deepEqual(repeat,report,"fixed matchup and seed must be reproducible");
+}finally{x.db.close();rmSync(x.root,{recursive:true,force:true});}});
