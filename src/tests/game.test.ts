@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -21,7 +21,6 @@ function createMaster(root: string): string {
   const masterPath = join(root, "master.sqlite");
   const db = openDatabase(masterPath);
   try {
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
     db.exec(readFileSync(schemaPath, "utf8"));
     validateDatabase(db);
   } finally {
