@@ -224,16 +224,15 @@ export function advanceNextFixture(db: SqliteDatabase, fixtureId?: number): Matc
 export function advanceRound(db: SqliteDatabase, roundId: number): MatchSummary[] {
   const round = db.prepare("SELECT id,stage_id AS stageId FROM competition_round WHERE id=?").get(roundId) as {id:number;stageId:number}|undefined;
   if (!round) throw new Error(`Round ${roundId} was not found.`);
-  const fixtures = db.prepare("SELECT id FROM fixture WHERE round_id=? AND status='SCHEDULED' ORDER BY scheduled_at,id")
+  const fixtures = db.prepare("SELECT id FROM fixture WHERE round_id=? AND status IN ('SCHEDULED','IN_PROGRESS') ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 ELSE 1 END,scheduled_at,id")
     .all(roundId) as Array<{id:number}>;
-  if (!fixtures.length) throw new Error(`Round ${roundId} has no scheduled fixtures.`);
-  const run = db.transaction(() => {
-    const results = fixtures.map(f => simulateMatch(db,f.id));
-    rebuildStandings(db,round.stageId);
-    finishSeasonIfComplete(db,round.stageId);
-    return results;
-  });
-  return run.immediate();
+  if (!fixtures.length) throw new Error(`Round ${roundId} has no playable fixtures.`);
+  // Each match owns its per-minute transactions so a process interruption does not
+  // roll back checkpoints for the entire round.
+  const results = fixtures.map(f => simulateMatch(db,f.id));
+  rebuildStandings(db,round.stageId);
+  finishSeasonIfComplete(db,round.stageId);
+  return results;
 }
 
 function roundRobin(teams: ParticipantRow[], legs: number): Array<Array<{home:number;away:number}>> {
