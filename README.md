@@ -77,7 +77,7 @@ O mando de campo tem um modificador explícito e isolado de **+0,004 na probabil
 
 A análise Monte Carlo também registra partidas 0–0, jogos em que um time marca pelo menos cinco gols, partidas com seis ou mais gols no total, vitórias por três ou mais gols e o maior placar observado.
 
-Compare quatro cenários táticos sem alterar o save. Todos usam o mesmo confronto e a mesma seed, e os overrides são aplicados somente em memória:
+Compare quatro cenários táticos sem alterar o save. Todos usam o mesmo confronto e a mesma seed, e os overrides são aplicados somente em memória. A suíte automatizada também cria um confronto sintético em uma campanha temporária: eleva os atributos de um clube, reduz os dos demais, exige diferença de força de pelo menos 8 pontos, confirma que o favorito vence mais vezes sem eliminar a chance de surpresa e verifica a reprodutibilidade do relatório tático. Esse cenário de teste não altera os dados de fábrica nem os coeficientes globais:
 
 ```bash
 npm run dev -- tactics-impact --home 1 --away 3 --simulations 5000 --seed 73421 --save-id <save-id>
