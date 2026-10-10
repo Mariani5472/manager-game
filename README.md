@@ -61,12 +61,12 @@ Run a read-only diagnostic report against a save to inspect shot-level xG, conve
 npm run dev -- diagnostics --simulations 5000 --save-id <save-id>
 ```
 
-The report groups simulated shots into xG bands and counts goals, saves, and misses in each band. It compares the strongest and weakest available clubs, then reverses their home/away roles to expose any side-assignment effect. This is a diagnostic comparison, not a home-advantage mechanic: it does not itself add a home bonus. Finally, it audits up to 100 completed fixtures for agreement between goals and score, 90 momentum rows, and a completed minute-90 checkpoint. Review `persistedMatches.issues` first when investigating an existing save.
+The report groups simulated shots into xG bands and counts goals, saves, and misses in each band. It compares the strongest and weakest available clubs, then reverses their home/away roles to expose any side-assignment effect. This is a diagnostic comparison, not itself a home-advantage mechanic. The match engine applies an explicit +0.004 absolute modifier to the home side's per-minute shot-creation probability; the diagnostic estimates the resulting home/away effect using paired simulations. Finally, it audits up to 100 completed fixtures for agreement between goals and score, 90 momentum rows, and a completed minute-90 checkpoint. Review `persistedMatches.issues` first when investigating an existing save.
 
 
 ### Interpreting match diagnostics
 
-The xG report samples low-, medium-, and high-quality chance profiles, so higher xG bands should be populated in a sufficiently large run. Side-swapped simulations use random streams tied to club identity, making the comparison paired and reproducible; because the engine currently has no explicit home bonus, the expected home-advantage delta is zero. The report also flags when the available clubs do not have enough rating separation for a meaningful favorite-versus-underdog test. Missing checkpoints on completed matches are warnings (potentially legacy data); malformed or incomplete checkpoints that exist remain errors.
+The xG report samples low-, medium-, and high-quality chance profiles, so higher xG bands should be populated in a sufficiently large run. Side-swapped simulations use random streams tied to club identity, making the comparison paired and reproducible. Because the engine includes a +0.004 absolute per-minute shot-creation modifier for the home side, the estimated home-advantage delta should be small and positive on average, but any finite Monte Carlo sample can vary. The report also flags when the available clubs do not have enough rating separation for a meaningful favorite-versus-underdog test. Missing checkpoints on completed matches are warnings (potentially legacy data); malformed or incomplete checkpoints that exist remain errors.
 
 
 ## Validação avançada do motor
