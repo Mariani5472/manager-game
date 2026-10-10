@@ -260,7 +260,7 @@ test("CLI smoke test initializes a clean world, creates a save, lists it, and op
     assert.match(result.stdout, /Aurora Futebol Clube/);
     result = run("new-save", "--name", "CLI career", "--manager", "CLI manager", "--club", "1");
     assert.equal(result.status, 0, result.stderr);
-    const created = JSON.parse(result.stdout) as {id:string};
+    const created = JSON.parse(result.stdout) as {id:string; filePath:string};
     assert.ok(created.id);
     result = run("saves");
     assert.equal(result.status, 0, result.stderr);
