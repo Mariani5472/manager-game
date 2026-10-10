@@ -35,6 +35,21 @@ npm run dev -- balance --home 1 --away 2 --simulations 5000 --save-id <save-id>
 
 Os IDs em `--starters` seguem a ordem dos slots da formação; o ID na posição do slot `GK` precisa ser goleiro. A análise Monte Carlo é somente leitura e usa seeds determinísticas.
 
+## Calendário e processamento de rodadas
+
+`advance-round` recebe o **número da rodada dentro de uma etapa**, não o ID global de `competition_round`. A etapa padrão é a liga (ID 1); use `--stage` para outra etapa:
+
+```bash
+# Rodadas 1 a 6 da liga (etapa 1)
+npm run dev -- advance-round 1 --stage 1 --save-id <save-id>
+
+# Primeira rodada da copa (etapa 2), seguida automaticamente da final
+npm run dev -- advance-round 1 --stage 2 --save-id <save-id>
+npm run dev -- advance-round 2 --stage 2 --save-id <save-id>
+```
+
+Em etapas eliminatórias, quando todos os jogos de uma rodada terminam, os vencedores avançam automaticamente para a próxima rodada. Empates são decididos em disputa de pênaltis determinística e os placares ficam persistidos em `home_penalties`/`away_penalties`. A competição só termina depois de uma final concluída.
+
 ## API de escalação
 
 `previewLineup(db, clubId, fixtureId)` sugere 11 titulares e até sete reservas. `saveLineup(db, fixtureId, clubId, starterIds, benchIds)` grava a escolha antes do kickoff, após validações.
