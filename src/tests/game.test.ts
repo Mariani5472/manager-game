@@ -251,7 +251,7 @@ test("head-to-head mini-table resolves a tie before overall goal difference", as
     try {
       db.prepare("DELETE FROM stage_standing_rule WHERE stage_id=1").run();
       db.prepare("INSERT INTO stage_standing_rule(stage_id,rule_order,rule_key) VALUES (1,1,'POINTS'),(1,2,'HEAD_TO_HEAD'),(1,3,'GOAL_DIFFERENCE')").run();
-      // Club 1 beats club 2; club 1 then loses to club 3, while club 2 beats club 3.
+      // Club 1 beats club 2; club 1 then loses to club 3, while club 2 beats club 4.
       // Clubs 1 and 2 finish on identical overall points, goal difference and goals for.
       db.prepare("UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=1").run();
       db.prepare("UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=8").run();
