@@ -67,3 +67,20 @@ The report groups simulated shots into xG bands and counts goals, saves, and mis
 ### Interpreting match diagnostics
 
 The xG report samples low-, medium-, and high-quality chance profiles, so higher xG bands should be populated in a sufficiently large run. Side-swapped simulations use random streams tied to club identity, making the comparison paired and reproducible; because the engine currently has no explicit home bonus, the expected home-advantage delta is zero. The report also flags when the available clubs do not have enough rating separation for a meaningful favorite-versus-underdog test. Missing checkpoints on completed matches are warnings (potentially legacy data); malformed or incomplete checkpoints that exist remain errors.
+
+
+## Validação avançada do motor
+
+O comando `diagnostics` usa a diferença de força entre o clube mais forte e o mais fraco; o teste de favorito/azarão só é considerado significativo quando a diferença é de pelo menos 8 pontos. A taxa de vitórias do clube mais fraco ajuda a quantificar surpresas.
+
+O mando de campo tem um modificador explícito e isolado de **+0,004 na probabilidade de criar uma finalização por minuto** para o mandante. Isso é um ajuste pequeno na criação de chances, não um bônus direto de gols. O relatório apresenta o modificador e a diferença de vitórias estimada por simulação pareada; essa diferença é uma estimativa, não uma garantia.
+
+A análise Monte Carlo também registra partidas 0–0, jogos em que um time marca pelo menos cinco gols, partidas com seis ou mais gols no total, vitórias por três ou mais gols e o maior placar observado.
+
+Compare quatro cenários táticos sem alterar o save. Todos usam o mesmo confronto e a mesma seed, e os overrides são aplicados somente em memória:
+
+```bash
+npm run dev -- tactics-impact --home 1 --away 3 --simulations 5000 --seed 73421 --save-id <save-id>
+```
+
+O relatório compara as táticas atuais com o mandante muito ofensivo, o mandante defensivo e o visitante com pressão alta. Cada cenário mostra diferenças em taxa de vitória do mandante, gols, finalizações e xG contra a linha de base.
