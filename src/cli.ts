@@ -6,7 +6,7 @@ import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysi
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
 import {
-  advanceNextFixture, advanceStageRound, getManagedClub, getSeasonStatus, getStandings,
+  advanceNextFixture, advanceStageRound, ensureFactoryLeagueCalendar, getManagedClub, getSeasonStatus, getStandings,
   listClubs, listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
 } from "./game/gameService.js";
 
@@ -18,10 +18,13 @@ function joinPath(a: string, b: string): string { return a.endsWith("/") ? a + b
 
 function initializeMaster(): void {
   if (existsSync(masterPath)) {
-    const existing = openDatabase(masterPath, true);
+    const existing = openDatabase(masterPath);
     try {
       validateDatabase(existing);
-      console.log(`Master DB already exists and is valid: ${masterPath}`);
+      const repair = ensureFactoryLeagueCalendar(existing);
+      validateDatabase(existing);
+      if (repair.repaired) console.log(`Factory league calendar repaired: ${repair.rounds} rounds, ${repair.fixtures} fixtures.`);
+      else console.log(`Master DB already exists and is valid: ${masterPath}`);
     } finally { existing.close(); }
     return;
   }
@@ -30,6 +33,9 @@ function initializeMaster(): void {
   try {
     db.exec(readFileSync(schemaPath, "utf8"));
     validateDatabase(db);
+    const repair = ensureFactoryLeagueCalendar(db);
+    validateDatabase(db);
+    if (repair.repaired) console.log(`Factory league calendar repaired: ${repair.rounds} rounds, ${repair.fixtures} fixtures.`);
     console.log(`Master DB created: ${masterPath}`);
   } catch (error) {
     db.close();
