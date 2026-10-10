@@ -77,7 +77,7 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number):KernelTimeline {
   for(const side of [{team:home,opponent:away,isHome:true,pressure:hp,opponentPressure:ap},
                       {team:away,opponent:home,isHome:false,pressure:ap,opponentPressure:hp}]){
    const tactic=side.team.tactic;
-   const chance=clamp(.115+(side.team.attacking-50)*.0011+(50-side.opponent.defending)*.00045+
+   const chance=clamp(.095+(side.team.attacking-50)*.0011+(50-side.opponent.defending)*.00045+
     mentalityShotModifier(tactic.mentality)+(tactic.pressing-50)*.00012+
     (tactic.tempo-50)*.00012+(side.pressure-side.opponentPressure)*.00012+
     (tactic.counter_attack?.004:0),.055,.19);
