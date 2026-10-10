@@ -243,6 +243,55 @@ test("a full league season completes, survives reopening, and creates next seaso
   }
 });
 
+test("head-to-head mini-table resolves a tie before overall goal difference", async () => {
+  const root = tempRoot();
+  try {
+    const { manager, save } = await createSave(root);
+    const db = manager.open(save.filePath);
+    try {
+      db.prepare("DELETE FROM stage_standing_rule WHERE stage_id=1").run();
+      db.prepare("INSERT INTO stage_standing_rule(stage_id,rule_order,rule_key) VALUES (1,1,'POINTS'),(1,2,'HEAD_TO_HEAD'),(1,3,'GOAL_DIFFERENCE')").run();
+      // Club 1 beats club 2; club 1 then loses to club 3, while club 2 beats club 3.
+      // Clubs 1 and 2 finish on identical overall points, goal difference and goals for.
+      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=1").run();
+      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=6").run();
+      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=0,away_score=1 WHERE id=7").run();
+      const table = getStandings(db,1);
+      const first = table.findIndex(row=>row.clubId===1);
+      const second = table.findIndex(row=>row.clubId===2);
+      const a = table.find(row=>row.clubId===1)!;
+      const b = table.find(row=>row.clubId===2)!;
+      assert.equal(a.points,b.points);
+      assert.equal(a.goalDifference,b.goalDifference);
+      assert.equal(a.goalsFor,b.goalsFor);
+      assert.ok(first<second,JSON.stringify(table.map(row=>({clubId:row.clubId,points:row.points,gd:row.goalDifference,gf:row.goalsFor}))));
+    } finally { db.close(); }
+  } finally { rmSync(root,{recursive:true,force:true}); }
+});
+
+test("fair-play tie-break counts card penalties and ranks fewer penalties first", async () => {
+  const root = tempRoot();
+  try {
+    const { manager, save } = await createSave(root);
+    const db = manager.open(save.filePath);
+    try {
+      db.prepare("DELETE FROM stage_standing_rule WHERE stage_id=1").run();
+      db.prepare("INSERT INTO stage_standing_rule(stage_id,rule_order,rule_key) VALUES (1,1,'POINTS'),(1,2,'FAIR_PLAY')").run();
+      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=1").run();
+      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=6").run();
+      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=0,away_score=1 WHERE id=7").run();
+      db.prepare("INSERT INTO match_event(fixture_id,minute,event_type,club_id,description) VALUES (1,35,'YELLOW_CARD',2,'Cartão amarelo de teste'),(1,70,'RED_CARD',2,'Cartão vermelho de teste')").run();
+      const table = getStandings(db,1);
+      const a = table.find(row=>row.clubId===1)!;
+      const b = table.find(row=>row.clubId===2)!;
+      assert.equal(a.points,b.points);
+      assert.equal(a.fairPlayPoints,0);
+      assert.equal(b.fairPlayPoints,4);
+      assert.ok(table.findIndex(row=>row.clubId===1)<table.findIndex(row=>row.clubId===2));
+    } finally { db.close(); }
+  } finally { rmSync(root,{recursive:true,force:true}); }
+});
+
 test("CLI smoke test initializes a clean world, creates a save, lists it, and opens fixtures by save id", () => {
   const root = tempRoot();
   const master = join(root, "world", "master.sqlite");
