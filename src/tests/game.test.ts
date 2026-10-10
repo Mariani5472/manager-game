@@ -7,7 +7,8 @@ import { spawnSync } from "node:child_process";
 import { openDatabase, validateDatabase } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
 import {
-  advanceNextFixture, advanceRound, advanceStageRound, getManagedClub, getSeasonStatus, getStandings,
+  advanceNextFixture, advanceRound, advanceStageRound, ensureFactoryLeagueCalendar,
+  resolveKnockoutFixtureWinner, getManagedClub, getSeasonStatus, getStandings,
   listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
 } from "../game/gameService.js";
 
@@ -51,6 +52,31 @@ test("complete schema executes and passes SQLite integrity and foreign-key check
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("init-master repair restores six factory league rounds without touching the cup", () => {
+  const root = tempRoot();
+  try {
+    const masterPath = createMaster(root);
+    const db = openDatabase(masterPath);
+    try {
+      db.prepare("DELETE FROM competition_round WHERE stage_id=1 AND round_number>2").run();
+      assert.equal((db.prepare("SELECT COUNT(*) AS count FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=1").get() as {count:number}).count,4);
+      assert.deepEqual(ensureFactoryLeagueCalendar(db),{repaired:true,rounds:6,fixtures:12});
+      assert.equal((db.prepare("SELECT COUNT(*) AS count FROM competition_round WHERE stage_id=1").get() as {count:number}).count,6);
+      assert.equal((db.prepare("SELECT COUNT(*) AS count FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=1").get() as {count:number}).count,12);
+      assert.equal((db.prepare("SELECT COUNT(*) AS count FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=2").get() as {count:number}).count,2);
+      const clubGames=db.prepare(`
+        SELECT club_id AS clubId,COUNT(*) AS played FROM (
+          SELECT home_club_id AS club_id FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=1
+          UNION ALL
+          SELECT away_club_id AS club_id FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=1
+        ) GROUP BY club_id ORDER BY club_id
+      `).all() as Array<{clubId:number;played:number}>;
+      assert.deepEqual(clubGames.map(row=>row.played),[6,6,6,6]);
+      assert.equal(ensureFactoryLeagueCalendar(db).repaired,false);
+    } finally { db.close(); }
+  } finally { rmSync(root,{recursive:true,force:true}); }
 });
 
 test("online backup captures master WAL state and a played save does not mutate master or another save", async () => {
@@ -176,6 +202,10 @@ test("round numbers are scoped to a stage and knockout winners generate a final"
       // Global round IDs can be interleaved between competitions; stage-scoped
       // round numbers keep "round 1" unambiguous for the player.
       assert.equal(advanceStageRound(db, 1, 1).length, 2);
+      assert.throws(
+        () => advanceStageRound(db,1,1),
+        /Round 1 \(Turno 1\) is already completed; no matches were simulated\./,
+      );
       assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
       assert.equal((db.prepare("SELECT status FROM fixture WHERE id=5").get() as {status:string}).status, "SCHEDULED");
 
@@ -200,6 +230,33 @@ test("round numbers are scoped to a stage and knockout winners generate a final"
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("a tied knockout final persists a deterministic winner and cannot complete without penalties", async () => {
+  const root = tempRoot();
+  try {
+    const { manager, save } = await createSave(root);
+    const db = manager.open(save.filePath);
+    try {
+      advanceStageRound(db,2,1);
+      const final = db.prepare(`
+        SELECT f.id FROM fixture f JOIN competition_round r ON r.id=f.round_id
+        WHERE r.stage_id=2 AND r.name='Final'
+      `).get() as {id:number};
+      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=0,away_score=0,home_penalties=NULL,away_penalties=NULL WHERE id=?").run(final.id);
+      assert.equal(getSeasonStatus(db,2)[0]?.stageStatus,"IN_PROGRESS");
+      const result = resolveKnockoutFixtureWinner(db,final.id);
+      assert.ok(result.winnerClubId > 0);
+      assert.ok(result.homePenalties !== null && result.awayPenalties !== null);
+      assert.notEqual(result.homePenalties,result.awayPenalties);
+      assert.deepEqual(
+        db.prepare("SELECT home_penalties AS homePenalties,away_penalties AS awayPenalties FROM fixture WHERE id=?").get(final.id),
+        {homePenalties:result.homePenalties,awayPenalties:result.awayPenalties},
+      );
+      assert.equal(getSeasonStatus(db,2)[0]?.stageStatus,"COMPLETED");
+      assert.deepEqual(resolveKnockoutFixtureWinner(db,final.id),result);
+    } finally { db.close(); }
+  } finally { rmSync(root,{recursive:true,force:true}); }
 });
 
 test("a completed fixture cannot be played again and its result/events remain unchanged", async () => {
