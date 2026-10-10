@@ -25,7 +25,7 @@ function selectLineup(db:SqliteDatabase,fixtureId:number,clubId:number,players:P
  const saved=db.prepare("SELECT player_id AS id,slot_number AS slot,position_code AS role,is_starting AS isStarting FROM match_lineup WHERE fixture_id=? AND club_id=? ORDER BY slot_number").all(fixtureId,clubId) as Array<{id:number;slot:number;role:string;isStarting:number}>;
  const existing=saved.filter(p=>p.isStarting===1);
  let starters:MatchPlayer[]=[];
- const valid=existing.length===11&&new Set(existing.map(p=>p.id)).size===11&&existing.every(p=>byId.has(p.id))&&existing.filter(p=>p.role==="GK"&&byId.get(p.id)?.goalkeeper===1).length===1;
+ const valid=existing.length===11&&new Set(existing.map(p=>p.id)).size===11&&existing.every(p=>byId.has(p.id))&&existing.filter(p=>p.role==="GK"&&byId.get(p.id)?.goalkeeper===1).length===1&&slots.every(slot=>existing.some(p=>p.slot===slot.slot_number&&p.role===slot.position_code));
  if(valid){
   starters=existing.map(p=>({...byId.get(p.id)!,role:p.role,slot:p.slot,isStarting:true,positionRating:positions.get(p.id)?.get(p.role)??50}));
  }else{
