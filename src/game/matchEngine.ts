@@ -6,7 +6,7 @@ export interface Tactic{formation_id:number;mentality:string;pressing:number;tem
 export interface MatchPlayer extends Player{role:string;slot:number;isStarting:boolean;positionRating:number;}
 export interface Team{clubId:number;reputation:number;tactic:Tactic;lineup:MatchPlayer[];attacking:number;defending:number;goalkeeping:number;energy:number;fitness:number;}
 export interface SimulatedMatchResult{homeScore:number;awayScore:number;homeShots:number;awayShots:number;homeShotsOnTarget:number;awayShotsOnTarget:number;homeXg:number;awayXg:number;}
-export interface MonteCarloReport{simulations:number;homeWinRate:number;drawRate:number;awayWinRate:number;averageHomeGoals:number;averageAwayGoals:number;averageTotalGoals:number;homeShotRate:number;awayShotRate:number;averageTotalShots:number;averageTotalShotsOnTarget:number;averageTotalXg:number;meanAbsoluteGoalDifference:number;}
+export interface MonteCarloReport{simulations:number;homeWinRate:number;drawRate:number;awayWinRate:number;averageHomeGoals:number;averageAwayGoals:number;averageTotalGoals:number;homeShotRate:number;awayShotRate:number;averageTotalShots:number;averageTotalShotsOnTarget:number;averageTotalXg:number;meanAbsoluteGoalDifference:number;goallessRate:number;anyTeamFivePlusGoalsRate:number;sixPlusTotalGoalsRate:number;homeWinByThreePlusRate:number;awayWinByThreePlusRate:number;maxTeamGoals:number;maxTotalGoals:number;}
 function rng(seed:number):()=>number{let s=seed>>>0;return()=>{s+=0x6D2B79F5;let v=s;v=Math.imul(v^(v>>>15),v|1);v^=v+Math.imul(v^(v>>>7),v|61);return((v^(v>>>14))>>>0)/4294967296;};}
 function clamp(n:number,a:number,b:number):number{return Math.max(a,Math.min(b,n));}
 function mean(xs:number[]):number{return xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:50;}
@@ -58,6 +58,7 @@ interface KernelMinute {
  events:KernelShotEvent[];
 }
 interface KernelTimeline {result:SimulatedMatchResult; events:KernelShotEvent[]; minutes:KernelMinute[];}
+const HOME_SHOT_CHANCE_BONUS=0.004; // +0.4 percentage points per minute: modest, isolated home advantage.
 function mentalityShotModifier(value:string):number {
  return ({"VERY_DEFENSIVE":-.018,"DEFENSIVE":-.009,"BALANCED":0,"ATTACKING":.009,"VERY_ATTACKING":.018}[value]??0);
 }
@@ -83,7 +84,7 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number):KernelTimeline {
    const chance=clamp(.095+(side.team.attacking-50)*.0011+(50-side.opponent.defending)*.00045+
     mentalityShotModifier(tactic.mentality)+(tactic.pressing-50)*.00012+
     (tactic.tempo-50)*.00012+(side.pressure-side.opponentPressure)*.00012+
-    (tactic.counter_attack?.004:0),.055,.19);
+    (tactic.counter_attack?.004:0)+(side.isHome?HOME_SHOT_CHANCE_BONUS:0),.055,.19);
    if(side.random()>=chance)continue;
    const attackers=side.team.lineup.filter(p=>p.isStarting&&p.role!=="GK");
    if(!attackers.length)throw new Error(`Club ${side.team.clubId} has no available outfield starters.`);
@@ -122,18 +123,30 @@ export function simulateMatchKernel(home:Team,away:Team,seed:number):SimulatedMa
 export function runMonteCarlo(home:Team,away:Team,simulations=5000,seed=73421):MonteCarloReport {
  if(!Number.isSafeInteger(simulations)||simulations<100)throw new Error("Monte Carlo simulations must be an integer >= 100.");
  let hw=0,d=0,aw=0,hg=0,ag=0,hs=0,as=0,hon=0,aon=0,hxg=0,axg=0,diff=0;
+ let goalless=0,anyFivePlus=0,sixPlusTotal=0,homeByThree=0,awayByThree=0,maxTeamGoals=0,maxTotalGoals=0;
  for(let i=0;i<simulations;i++){
   const r=simulateMatchTimeline(home,away,seed+i*7919).result;
   if(r.homeScore>r.awayScore)hw++;else if(r.homeScore===r.awayScore)d++;else aw++;
   hg+=r.homeScore;ag+=r.awayScore;hs+=r.homeShots;as+=r.awayShots;
   hon+=r.homeShotsOnTarget;aon+=r.awayShotsOnTarget;hxg+=r.homeXg;axg+=r.awayXg;
   diff+=Math.abs(r.homeScore-r.awayScore);
+  const total=r.homeScore+r.awayScore;
+  if(total===0)goalless++;
+  if(Math.max(r.homeScore,r.awayScore)>=5)anyFivePlus++;
+  if(total>=6)sixPlusTotal++;
+  if(r.homeScore-r.awayScore>=3)homeByThree++;
+  if(r.awayScore-r.homeScore>=3)awayByThree++;
+  maxTeamGoals=Math.max(maxTeamGoals,r.homeScore,r.awayScore);
+  maxTotalGoals=Math.max(maxTotalGoals,total);
  }
  return {simulations,homeWinRate:hw/simulations,drawRate:d/simulations,awayWinRate:aw/simulations,
   averageHomeGoals:hg/simulations,averageAwayGoals:ag/simulations,averageTotalGoals:(hg+ag)/simulations,
   homeShotRate:hs/simulations,awayShotRate:as/simulations,
   averageTotalShots:(hs+as)/simulations,averageTotalShotsOnTarget:(hon+aon)/simulations,
-  averageTotalXg:(hxg+axg)/simulations,meanAbsoluteGoalDifference:diff/simulations};
+  averageTotalXg:(hxg+axg)/simulations,meanAbsoluteGoalDifference:diff/simulations,
+  goallessRate:goalless/simulations,anyTeamFivePlusGoalsRate:anyFivePlus/simulations,
+  sixPlusTotalGoalsRate:sixPlusTotal/simulations,homeWinByThreePlusRate:homeByThree/simulations,
+  awayWinByThreePlusRate:awayByThree/simulations,maxTeamGoals,maxTotalGoals};
 }
 export function runMatchBalanceAnalysis(db:SqliteDatabase,clubA:number,clubB:number,simulations=5000,seed=73421):MonteCarloReport{
  if(clubA===clubB)throw new Error("Balance analysis requires two different clubs.");
@@ -143,6 +156,31 @@ export function runMatchBalanceAnalysis(db:SqliteDatabase,clubA:number,clubB:num
  return runMonteCarlo(loadTeam(db,fixtureId,clubA,false),loadTeam(db,fixtureId,clubB,false),simulations,seed);
 }
 
+export interface TacticalImpactScenario {name:string;description:string;result:MonteCarloReport;homeWinRateDelta:number;averageHomeGoalsDelta:number;homeShotsDelta:number;averageTotalXgDelta:number;}
+export interface TacticalImpactReport {homeClubId:number;awayClubId:number;simulations:number;seed:number;scenarios:TacticalImpactScenario[];}
+export function runTacticalImpactAnalysis(db:SqliteDatabase,homeClubId:number,awayClubId:number,simulations=5000,seed=73421):TacticalImpactReport {
+ if(homeClubId===awayClubId)throw new Error("Tactical impact analysis requires two different clubs.");
+ if(!Number.isSafeInteger(simulations)||simulations<100)throw new Error("Tactical impact simulations must be an integer >= 100.");
+ const home=loadTeam(db,-1,homeClubId,false),away=loadTeam(db,-1,awayClubId,false);
+ const cases=[
+  {name:"baseline",description:"Táticas atuais dos dois clubes.",homePatch:{},awayPatch:{}},
+  {name:"home_attacking",description:"Mandante com mentalidade muito ofensiva, pressão e ritmo altos.",homePatch:{mentality:"VERY_ATTACKING",pressing:85,tempo:80,defensive_line:65},awayPatch:{}},
+  {name:"home_defensive",description:"Mandante defensivo, com pressão e ritmo baixos.",homePatch:{mentality:"DEFENSIVE",pressing:35,tempo:35,defensive_line:35},awayPatch:{}},
+  {name:"away_high_press",description:"Visitante muito ofensivo, com pressão alta.",homePatch:{},awayPatch:{mentality:"VERY_ATTACKING",pressing:90,tempo:80,defensive_line:65}},
+ ] as const;
+ const base=runMonteCarlo(home,away,simulations,seed);
+ const scenarios:TacticalImpactScenario[]=cases.map(c=>{
+  const h:Team={...home,tactic:{...home.tactic,...c.homePatch}};
+  const a:Team={...away,tactic:{...away.tactic,...c.awayPatch}};
+  const result=c.name==="baseline"?base:runMonteCarlo(h,a,simulations,seed);
+  return {name:c.name,description:c.description,result,homeWinRateDelta:result.homeWinRate-base.homeWinRate,
+   averageHomeGoalsDelta:result.averageHomeGoals-base.averageHomeGoals,
+   homeShotsDelta:result.homeShotRate-base.homeShotRate,
+   averageTotalXgDelta:result.averageTotalXg-base.averageTotalXg};
+ });
+ return {homeClubId,awayClubId,simulations,seed,scenarios};
+}
+
 export interface XgBandDiagnostic {
  band:string;shots:number;averageXg:number;onTargetRate:number;goalRate:number;saveRate:number;missRate:number;goals:number;saves:number;misses:number;
 }
@@ -150,7 +188,7 @@ export interface MatchEngineDiagnostics {
  simulations:number;
  baseline:MonteCarloReport;
  xgBands:XgBandDiagnostic[];
- homeAdvantage:{clubA:number;clubB:number;clubAWinRateAtHome:number;clubAWinRateAway:number;homeAdvantageDelta:number;note:string};
+ homeAdvantage:{clubA:number;clubB:number;clubAWinRateAtHome:number;clubAWinRateAway:number;homeAdvantageDelta:number;shotChanceBonus:number;note:string};
  strengthGap:{weakClubId:number;strongClubId:number;weakStrength:number;strongStrength:number;strengthDifference:number;hasMeaningfulGap:boolean;note:string;strongWinRate:number;drawRate:number;weakWinRate:number;strongAverageGoals:number;weakAverageGoals:number};
  persistedMatches:{checked:number;issues:string[];warnings:string[]};
 }
@@ -201,7 +239,7 @@ export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=884
  }
  return {
   simulations,baseline,xgBands,
-  homeAdvantage:{clubA:strong.team.clubId,clubB:weak.team.clubId,clubAWinRateAtHome:ab.homeWinRate,clubAWinRateAway:ba.awayWinRate,homeAdvantageDelta:ab.homeWinRate-ba.awayWinRate,note:"Compares side assignment only; this report does not apply a separate home-advantage modifier."},
+  homeAdvantage:{clubA:strong.team.clubId,clubB:weak.team.clubId,clubAWinRateAtHome:ab.homeWinRate,clubAWinRateAway:ba.awayWinRate,homeAdvantageDelta:ab.homeWinRate-ba.awayWinRate,shotChanceBonus:HOME_SHOT_CHANCE_BONUS,note:"Explicit home advantage: +0.004 absolute shot-creation probability per minute for the home side. The win-rate delta is a seeded Monte Carlo estimate, not a guarantee."},
   strengthGap:{weakClubId:weak.team.clubId,strongClubId:strong.team.clubId,weakStrength:weak.value,strongStrength:strong.value,strengthDifference:strong.value-weak.value,hasMeaningfulGap:strong.value-weak.value>=8,note:strong.value-weak.value>=8?"Club ratings provide a useful strength contrast.":"Available clubs are too similar for a meaningful favorite-versus-underdog test; use a save with a larger ratings spread.",strongWinRate:baseline.homeWinRate,drawRate:baseline.drawRate,weakWinRate:baseline.awayWinRate,strongAverageGoals:baseline.averageHomeGoals,weakAverageGoals:baseline.averageAwayGoals},
   persistedMatches:{checked:persistedRows.length,issues,warnings}
  };
