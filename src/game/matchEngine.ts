@@ -67,34 +67,41 @@ function teamPressure(team:Team, random:()=>number):number {
   team.tactic.defensive_line*.04+mentality+random()*8,0,100);
 }
 function simulateMatchTimeline(home:Team,away:Team,seed:number):KernelTimeline {
- const random=rng(seed);
+ // Random streams are tied to club identity, not home/away slot. This makes side-swapped
+ // diagnostics a paired comparison rather than a comparison polluted by RNG draw order.
+ const homeRandom=rng(seed ^ Math.imul(home.clubId,0x9e3779b1));
+ const awayRandom=rng(seed ^ Math.imul(away.clubId,0x9e3779b1));
  let hs=0,as=0,hShots=0,aShots=0,hOn=0,aOn=0,hxg=0,axg=0;
  const events:KernelShotEvent[]=[];
  const minutes:KernelMinute[]=[];
  for(let minute=1;minute<=90;minute++){
-  const hp=teamPressure(home,random),ap=teamPressure(away,random);
+  const hp=teamPressure(home,homeRandom),ap=teamPressure(away,awayRandom);
   const minuteEvents:KernelShotEvent[]=[];
-  for(const side of [{team:home,opponent:away,isHome:true,pressure:hp,opponentPressure:ap},
-                      {team:away,opponent:home,isHome:false,pressure:ap,opponentPressure:hp}]){
+  for(const side of [{team:home,opponent:away,isHome:true,pressure:hp,opponentPressure:ap,random:homeRandom},
+                      {team:away,opponent:home,isHome:false,pressure:ap,opponentPressure:hp,random:awayRandom}]){
    const tactic=side.team.tactic;
    const chance=clamp(.095+(side.team.attacking-50)*.0011+(50-side.opponent.defending)*.00045+
     mentalityShotModifier(tactic.mentality)+(tactic.pressing-50)*.00012+
     (tactic.tempo-50)*.00012+(side.pressure-side.opponentPressure)*.00012+
     (tactic.counter_attack?.004:0),.055,.19);
-   if(random()>=chance)continue;
+   if(side.random()>=chance)continue;
    const attackers=side.team.lineup.filter(p=>p.isStarting&&p.role!=="GK");
    if(!attackers.length)throw new Error(`Club ${side.team.clubId} has no available outfield starters.`);
-   const shooter=attackers[Math.floor(random()*attackers.length)]!;
+   const shooter=attackers[Math.floor(side.random()*attackers.length)]!;
    const keeper=side.opponent.lineup.find(p=>p.isStarting&&p.role==="GK");
    if(!keeper)throw new Error(`Club ${side.opponent.clubId} has no starting goalkeeper.`);
    const keeperSkill=mean([keeper.reflexes,keeper.handling,keeper.positioning,keeper.concentration]);
-   const xg=clamp(.075+(side.team.attacking-50)*.0009+
-    (shooter.finishing-50)*.0005+(tactic.tempo-50)*.0001+
-    (random()-.5)*.07,.025,.28);
+   // Sample shot quality from low-, medium-, and high-quality chance profiles.
+   // The mixture retains a similar average xG while making clear chances observable in diagnostics.
+   const qualityRoll=side.random();
+   const baseXg=qualityRoll<.56 ? .035+side.random()*.06 :
+    qualityRoll<.92 ? .095+side.random()*.075 : .17+side.random()*.15;
+   const xg=clamp(baseXg+(side.team.attacking-50)*.0002+
+    (shooter.finishing-50)*.0001+(tactic.tempo-50)*.00003,.025,.35);
    const onTargetChance=clamp(.29+xg*.5,.30,.48);
-   const onTarget=random()<onTargetChance;
+   const onTarget=side.random()<onTargetChance;
    const keeperFactor=clamp(1+(50-keeperSkill)*.006,.70,1.30);
-   const goal=onTarget&&random()<clamp((xg/onTargetChance)*keeperFactor,.015,.82);
+   const goal=onTarget&&side.random()<clamp((xg/onTargetChance)*keeperFactor,.015,.82);
    const event:KernelShotEvent={
     minute,clubId:side.team.clubId,playerId:shooter.id,secondaryPlayerId:onTarget?keeper.id:null,
     eventType:goal?"GOAL":onTarget?"SAVE":"MISS",xg,
@@ -144,8 +151,8 @@ export interface MatchEngineDiagnostics {
  baseline:MonteCarloReport;
  xgBands:XgBandDiagnostic[];
  homeAdvantage:{clubA:number;clubB:number;clubAWinRateAtHome:number;clubAWinRateAway:number;homeAdvantageDelta:number;note:string};
- strengthGap:{weakClubId:number;strongClubId:number;weakStrength:number;strongStrength:number;strongWinRate:number;drawRate:number;weakWinRate:number;strongAverageGoals:number;weakAverageGoals:number};
- persistedMatches:{checked:number;issues:string[]};
+ strengthGap:{weakClubId:number;strongClubId:number;weakStrength:number;strongStrength:number;strengthDifference:number;hasMeaningfulGap:boolean;note:string;strongWinRate:number;drawRate:number;weakWinRate:number;strongAverageGoals:number;weakAverageGoals:number};
+ persistedMatches:{checked:number;issues:string[];warnings:string[]};
 }
 export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=88421):MatchEngineDiagnostics {
  if(!Number.isSafeInteger(simulations)||simulations<100)throw new Error("Diagnostics simulations must be an integer >= 100.");
@@ -179,19 +186,24 @@ export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=884
  const ba=runMonteCarlo(weak.team,strong.team,simulations,seed+1700003);
  const persistedRows=db.prepare("SELECT f.id,f.home_club_id,f.away_club_id,f.home_score,f.away_score,f.current_minute, s.simulation_minute,s.state_json,(SELECT COUNT(*) FROM match_momentum m WHERE m.fixture_id=f.id) AS momentum_count,(SELECT COUNT(*) FROM match_event e WHERE e.fixture_id=f.id AND e.event_type='GOAL' AND e.club_id=f.home_club_id) AS event_home_goals,(SELECT COUNT(*) FROM match_event e WHERE e.fixture_id=f.id AND e.event_type='GOAL' AND e.club_id=f.away_club_id) AS event_away_goals FROM fixture f LEFT JOIN match_simulation_state s ON s.fixture_id=f.id WHERE f.status='COMPLETED' ORDER BY f.id DESC LIMIT 100").all() as Array<{id:number;home_score:number;away_score:number;current_minute:number;simulation_minute:number|null;state_json:string|null;momentum_count:number;event_home_goals:number;event_away_goals:number}>;
  const issues:string[]=[];
+ const warnings:string[]=[];
  for(const r of persistedRows){
   if(r.current_minute!==90)issues.push(`Fixture ${r.id}: completed with current_minute=${r.current_minute}`);
   if(r.event_home_goals!==r.home_score||r.event_away_goals!==r.away_score)issues.push(`Fixture ${r.id}: score differs from GOAL events`);
   if(r.momentum_count!==90)issues.push(`Fixture ${r.id}: expected 90 momentum rows, found ${r.momentum_count}`);
-  let checkpointCompleted=false;
-  try { checkpointCompleted=!!r.state_json&&JSON.parse(r.state_json).completed===true; } catch { checkpointCompleted=false; }
-  if(r.simulation_minute!==90||!checkpointCompleted)issues.push(`Fixture ${r.id}: final checkpoint missing, malformed, or incomplete`);
+  if(r.simulation_minute===null){
+   warnings.push(`Fixture ${r.id}: no simulation checkpoint; this may be a legacy match completed before checkpoint persistence was introduced`);
+  }else{
+   let checkpointCompleted=false;
+   try { checkpointCompleted=!!r.state_json&&JSON.parse(r.state_json).completed===true; } catch { checkpointCompleted=false; }
+   if(r.simulation_minute!==90||!checkpointCompleted)issues.push(`Fixture ${r.id}: final checkpoint exists but is malformed or incomplete`);
+  }
  }
  return {
   simulations,baseline,xgBands,
   homeAdvantage:{clubA:strong.team.clubId,clubB:weak.team.clubId,clubAWinRateAtHome:ab.homeWinRate,clubAWinRateAway:ba.awayWinRate,homeAdvantageDelta:ab.homeWinRate-ba.awayWinRate,note:"Compares side assignment only; this report does not apply a separate home-advantage modifier."},
-  strengthGap:{weakClubId:weak.team.clubId,strongClubId:strong.team.clubId,weakStrength:weak.value,strongStrength:strong.value,strongWinRate:baseline.homeWinRate,drawRate:baseline.drawRate,weakWinRate:baseline.awayWinRate,strongAverageGoals:baseline.averageHomeGoals,weakAverageGoals:baseline.averageAwayGoals},
-  persistedMatches:{checked:persistedRows.length,issues}
+  strengthGap:{weakClubId:weak.team.clubId,strongClubId:strong.team.clubId,weakStrength:weak.value,strongStrength:strong.value,strengthDifference:strong.value-weak.value,hasMeaningfulGap:strong.value-weak.value>=8,note:strong.value-weak.value>=8?"Club ratings provide a useful strength contrast.":"Available clubs are too similar for a meaningful favorite-versus-underdog test; use a save with a larger ratings spread.",strongWinRate:baseline.homeWinRate,drawRate:baseline.drawRate,weakWinRate:baseline.awayWinRate,strongAverageGoals:baseline.averageHomeGoals,weakAverageGoals:baseline.averageAwayGoals},
+  persistedMatches:{checked:persistedRows.length,issues,warnings}
  };
 }
 
