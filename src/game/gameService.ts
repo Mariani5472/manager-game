@@ -130,8 +130,10 @@ export function getSeasonStatus(db: SqliteDatabase, stageId?: number): SeasonSum
 
 const standingFields: Record<string, keyof StandingRow> = {
   POINTS:"points", WINS:"wins", GOAL_DIFFERENCE:"goalDifference", GOALS_FOR:"goalsFor",
-  FAIR_PLAY:"fairPlayPoints",
+  FAIR_PLAY:"fairPlayPoints", DRAW:"draws",
 };
+
+type StandingTieBreak = { points: number; goalDifference: number; goalsFor: number };
 
 export function getStandings(db: SqliteDatabase, stageId: number): StandingRow[] {
   rebuildStandings(db, stageId);
@@ -144,13 +146,77 @@ export function getStandings(db: SqliteDatabase, stageId: number): StandingRow[]
       ss.points, ss.fair_play_points AS fairPlayPoints
     FROM stage_standing ss JOIN club c ON c.id=ss.club_id WHERE ss.stage_id=?
   `).all(stageId) as StandingRow[];
-  return rows.sort((a,b) => {
-    for (const {rule_key} of rules) {
+
+  // Refine tied groups rule-by-rule. HEAD_TO_HEAD is a mini-table limited to the
+  // clubs tied by all earlier rules, avoiding a non-transitive pairwise comparator.
+  let groups: StandingRow[][] = [rows];
+  for (const {rule_key} of rules) {
+    const refined: StandingRow[][] = [];
+    for (const group of groups) {
+      if (group.length < 2) { refined.push(group); continue; }
+      if (rule_key === "HEAD_TO_HEAD") {
+        const ids = group.map(row => row.clubId);
+        const stats = new Map<number, StandingTieBreak>(ids.map(id => [id, {points:0,goalDifference:0,goalsFor:0}]));
+        const fixtures = db.prepare(`
+          SELECT f.home_club_id AS home, f.away_club_id AS away,
+            f.home_score AS homeScore, f.away_score AS awayScore,
+            sf.win_points AS winPoints, sf.draw_points AS drawPoints, sf.loss_points AS lossPoints
+          FROM fixture f JOIN competition_round r ON r.id=f.round_id
+          LEFT JOIN stage_format sf ON sf.stage_id=r.stage_id
+          WHERE r.stage_id=? AND f.status='COMPLETED'
+            AND f.home_club_id IN (${ids.map(()=>"?").join(",")})
+            AND f.away_club_id IN (${ids.map(()=>"?").join(",")})
+        `).all(stageId, ...ids, ...ids) as Array<{home:number;away:number;homeScore:number;awayScore:number;winPoints:number|null;drawPoints:number|null;lossPoints:number|null}>;
+        for (const fixture of fixtures) {
+          const home = stats.get(fixture.home)!;
+          const away = stats.get(fixture.away)!;
+          home.goalsFor += fixture.homeScore;
+          home.goalDifference += fixture.homeScore - fixture.awayScore;
+          away.goalsFor += fixture.awayScore;
+          away.goalDifference += fixture.awayScore - fixture.homeScore;
+          if (fixture.homeScore > fixture.awayScore) {
+            home.points += fixture.winPoints ?? 3; away.points += fixture.lossPoints ?? 0;
+          } else if (fixture.homeScore < fixture.awayScore) {
+            away.points += fixture.winPoints ?? 3; home.points += fixture.lossPoints ?? 0;
+          } else {
+            home.points += fixture.drawPoints ?? 1; away.points += fixture.drawPoints ?? 1;
+          }
+        }
+        const compare = (a: StandingRow,b: StandingRow) => {
+          const x=stats.get(a.clubId)!; const y=stats.get(b.clubId)!;
+          return y.points-x.points || y.goalDifference-x.goalDifference || y.goalsFor-x.goalsFor;
+        };
+        const sorted = [...group].sort(compare);
+        let tie: StandingRow[] = [];
+        let previous: StandingTieBreak | undefined;
+        for (const row of sorted) {
+          const value=stats.get(row.clubId)!;
+          if (previous && (value.points!==previous.points || value.goalDifference!==previous.goalDifference || value.goalsFor!==previous.goalsFor)) {
+            refined.push(tie); tie=[];
+          }
+          tie.push(row); previous=value;
+        }
+        if (tie.length) refined.push(tie);
+        continue;
+      }
       const field = standingFields[rule_key];
-      if (field && a[field] !== b[field]) return Number(b[field])-Number(a[field]);
+      if (!field) { refined.push(group); continue; }
+      const direction = rule_key === "FAIR_PLAY" ? 1 : -1;
+      const sorted = [...group].sort((a,b) => direction * (Number(a[field])-Number(b[field])));
+      let tie: StandingRow[] = [];
+      let previousValue: number | undefined;
+      for (const row of sorted) {
+        const value = Number(row[field]);
+        if (previousValue !== undefined && value !== previousValue) { refined.push(tie); tie=[]; }
+        tie.push(row); previousValue=value;
+      }
+      if (tie.length) refined.push(tie);
     }
-    return a.club.localeCompare(b.club,"pt-BR") || a.clubId-b.clubId;
-  });
+    groups = refined;
+  }
+  return groups.flatMap(group => group.length > 1
+    ? [...group].sort((a,b) => a.club.localeCompare(b.club,"pt-BR") || a.clubId-b.clubId)
+    : group);
 }
 
 function rebuildStandings(db: SqliteDatabase, stageId: number): void {
@@ -158,8 +224,8 @@ function rebuildStandings(db: SqliteDatabase, stageId: number): void {
   const rebuild = db.transaction(() => {
     db.prepare("DELETE FROM stage_standing WHERE stage_id=?").run(stageId);
     db.prepare(`
-      INSERT INTO stage_standing (stage_id,club_id,group_id,played,wins,draws,losses,goals_for,goals_against,points)
-      SELECT stage_id,club_id,group_id,0,0,0,0,0,0,0 FROM stage_participant WHERE stage_id=?
+      INSERT INTO stage_standing (stage_id,club_id,group_id,played,wins,draws,losses,goals_for,goals_against,points,fair_play_points)
+      SELECT stage_id,club_id,group_id,0,0,0,0,0,0,0,0 FROM stage_participant WHERE stage_id=?
     `).run(stageId);
     const fixtures = db.prepare(`
       SELECT f.home_club_id AS home,f.away_club_id AS away,f.home_score AS homeScore,
@@ -185,6 +251,20 @@ function rebuildStandings(db: SqliteDatabase, stageId: number): void {
       update.run(hw,hd,hl,f.homeScore,f.awayScore,hp,stageId,f.home);
       update.run(aw,ad,al,f.awayScore,f.homeScore,ap,stageId,f.away);
     }
+    // Fair-play points are penalty points: one per yellow card and three per red.
+    // Lower totals rank ahead. Completed match events are the source of truth.
+    db.prepare(`
+      UPDATE stage_standing
+      SET fair_play_points = COALESCE((
+        SELECT SUM(CASE e.event_type WHEN 'YELLOW_CARD' THEN 1 WHEN 'RED_CARD' THEN 3 ELSE 0 END)
+        FROM match_event e JOIN fixture f ON f.id=e.fixture_id
+        JOIN competition_round r ON r.id=f.round_id
+        WHERE r.stage_id=stage_standing.stage_id AND f.status='COMPLETED'
+          AND e.club_id=stage_standing.club_id
+          AND e.event_type IN ('YELLOW_CARD','RED_CARD')
+      ),0)
+      WHERE stage_id=?
+    `).run(stageId);
   });
   rebuild();
 }

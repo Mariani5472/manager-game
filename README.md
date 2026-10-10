@@ -39,6 +39,12 @@ Os IDs em `--starters` seguem a ordem dos slots da formação; o ID na posição
 
 `previewLineup(db, clubId, fixtureId)` sugere 11 titulares e até sete reservas. `saveLineup(db, fixtureId, clubId, starterIds, benchIds)` grava a escolha antes do kickoff, após validações.
 
+## Regras de classificação da liga
+
+As regras são aplicadas na ordem definida em `stage_standing_rule`. `HEAD_TO_HEAD` calcula uma mini-tabela apenas entre os clubes que continuam empatados após os critérios anteriores, usando pontos, saldo de gols e gols marcados nos confrontos diretos concluídos. Isso evita comparações par-a-par não transitivas em empates com três ou mais clubes.
+
+`FAIR_PLAY` é uma pontuação disciplinar de penalidade reconstruída a partir dos eventos de partidas concluídas: 1 ponto por cartão amarelo e 3 por cartão vermelho. **Menos pontos disciplinares é melhor**, então o critério é ordenado de forma crescente. A classificação é reconstruível a partir dos jogos e eventos persistidos.
+
 ## Limites conhecidos
 
 Substituições dinâmicas durante o jogo e a influência completa de clima e viagem ainda não estão conectadas ao kernel nesta fase. A prioridade é fazer as decisões pré-jogo terem efeito demonstrável mantendo o processamento rápido e orientado a eventos.
