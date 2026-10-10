@@ -206,35 +206,33 @@ function finishSeasonIfComplete(db: SqliteDatabase, stageId: number): void {
 }
 
 export function advanceNextFixture(db: SqliteDatabase, fixtureId?: number): MatchSummary {
-  const run = db.transaction(() => {
-    const row = fixtureId
-      ? db.prepare("SELECT id FROM fixture WHERE id=? AND status='SCHEDULED'").get(fixtureId) as {id:number}|undefined
-      : db.prepare("SELECT id FROM fixture WHERE status='SCHEDULED' ORDER BY scheduled_at,id LIMIT 1").get() as {id:number}|undefined;
-    if (!row) throw new Error(fixtureId ? `Scheduled fixture ${fixtureId} not found (it may already be completed).` : "No scheduled fixtures remain.");
-    const stage = db.prepare("SELECT r.stage_id AS id FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE f.id=?")
-      .get(row.id) as {id:number}|undefined;
-    if (!stage) throw new Error(`Fixture ${row.id} has no competition stage.`);
-    const summary = simulateMatch(db,row.id);
-    rebuildStandings(db,stage.id);
-    finishSeasonIfComplete(db,stage.id);
-    return summary;
-  });
-  return run.immediate();
+  const row = fixtureId
+    ? db.prepare("SELECT id FROM fixture WHERE id=? AND status IN ('SCHEDULED','IN_PROGRESS')").get(fixtureId) as {id:number}|undefined
+    : db.prepare("SELECT id FROM fixture WHERE status IN ('SCHEDULED','IN_PROGRESS') ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 ELSE 1 END,scheduled_at,id LIMIT 1").get() as {id:number}|undefined;
+  if (!row) throw new Error(fixtureId ? `Scheduled fixture ${fixtureId} not found (it may already be completed or is not playable).` : "No scheduled or in-progress fixtures remain.");
+  const stage = db.prepare("SELECT r.stage_id AS id FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE f.id=?")
+    .get(row.id) as {id:number}|undefined;
+  if (!stage) throw new Error(`Fixture ${row.id} has no competition stage.`);
+  // simulateMatch commits a checkpoint after every minute. Do not wrap it in an
+  // outer transaction, otherwise SQLite would defer every checkpoint until FT.
+  const summary = simulateMatch(db,row.id);
+  rebuildStandings(db,stage.id);
+  finishSeasonIfComplete(db,stage.id);
+  return summary;
 }
 
 export function advanceRound(db: SqliteDatabase, roundId: number): MatchSummary[] {
   const round = db.prepare("SELECT id,stage_id AS stageId FROM competition_round WHERE id=?").get(roundId) as {id:number;stageId:number}|undefined;
   if (!round) throw new Error(`Round ${roundId} was not found.`);
-  const fixtures = db.prepare("SELECT id FROM fixture WHERE round_id=? AND status='SCHEDULED' ORDER BY scheduled_at,id")
+  const fixtures = db.prepare("SELECT id FROM fixture WHERE round_id=? AND status IN ('SCHEDULED','IN_PROGRESS') ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 ELSE 1 END,scheduled_at,id")
     .all(roundId) as Array<{id:number}>;
-  if (!fixtures.length) throw new Error(`Round ${roundId} has no scheduled fixtures.`);
-  const run = db.transaction(() => {
-    const results = fixtures.map(f => simulateMatch(db,f.id));
-    rebuildStandings(db,round.stageId);
-    finishSeasonIfComplete(db,round.stageId);
-    return results;
-  });
-  return run.immediate();
+  if (!fixtures.length) throw new Error(`Round ${roundId} has no playable fixtures.`);
+  // Each match owns its per-minute transactions so a process interruption does not
+  // roll back checkpoints for the entire round.
+  const results = fixtures.map(f => simulateMatch(db,f.id));
+  rebuildStandings(db,round.stageId);
+  finishSeasonIfComplete(db,round.stageId);
+  return results;
 }
 
 function roundRobin(teams: ParticipantRow[], legs: number): Array<Array<{home:number;away:number}>> {
