@@ -1301,14 +1301,26 @@ INSERT INTO competition_entry (id, season_id, club_id, seed) VALUES
 INSERT INTO competition_round (id, stage_id, round_number, name, start_date, end_date) VALUES
     (1, 1, 1, 'Turno 1', '2026-01-10', '2026-01-10'),
     (2, 1, 2, 'Turno 2', '2026-01-17', '2026-01-17'),
-    (3, 2, 1, 'Semifinais', '2026-03-01', '2026-03-01');
+    (3, 2, 1, 'Semifinais', '2026-03-01', '2026-03-01'),
+    (4, 1, 3, 'Turno 3', '2026-01-24', '2026-01-24'),
+    (5, 1, 4, 'Turno 4', '2026-01-31', '2026-01-31'),
+    (6, 1, 5, 'Turno 5', '2026-02-07', '2026-02-07'),
+    (7, 1, 6, 'Turno 6', '2026-02-14', '2026-02-14');
 INSERT INTO fixture (id, round_id, home_club_id, away_club_id, stadium_id, scheduled_at, random_seed) VALUES
     (1, 1, 1, 2, 1, '2026-01-10T16:00:00', 11001),
     (2, 1, 3, 4, 3, '2026-01-10T18:00:00', 11002),
     (3, 2, 2, 1, 2, '2026-01-17T16:00:00', 11003),
     (4, 2, 4, 3, 4, '2026-01-17T18:00:00', 11004),
     (5, 3, 1, 4, 1, '2026-03-01T16:00:00', 22001),
-    (6, 3, 2, 3, 2, '2026-03-01T18:00:00', 22002);
+    (6, 3, 2, 3, 2, '2026-03-01T18:00:00', 22002),
+    (7, 4, 1, 3, 1, '2026-01-24T16:00:00', 11005),
+    (8, 4, 2, 4, 2, '2026-01-24T18:00:00', 11006),
+    (9, 5, 3, 1, 3, '2026-01-31T16:00:00', 11007),
+    (10, 5, 4, 2, 4, '2026-01-31T18:00:00', 11008),
+    (11, 6, 1, 4, 1, '2026-02-07T16:00:00', 11009),
+    (12, 6, 2, 3, 2, '2026-02-07T18:00:00', 11010),
+    (13, 7, 4, 1, 4, '2026-02-14T16:00:00', 11011),
+    (14, 7, 3, 2, 3, '2026-02-14T18:00:00', 11012);
 -- Example destination pool fed by more than one source stage.
 -- The seed is illustrative; this pool is not applied until the engine resolves its sources.
 INSERT INTO competition (id, nation_id, name, code, competition_kind) VALUES
