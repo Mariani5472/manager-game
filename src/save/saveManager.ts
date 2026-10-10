@@ -50,9 +50,17 @@ export class SaveManager {
   create(options: Omit<CreateSaveOptions, "masterPath" | "savesDirectory">): SaveInfo {
     const master = resolve(this.masterPath);
     if (!existsSync(master)) {
-      throw new Error(`Master database not found: ${master}. Create it by executing src/schema/game_manager_mvp.sql first.`);
+      throw new Error(`Master database not found: ${master}. Run "npm run dev -- init-master" first.`);
     }
     if (statSync(master).size === 0) throw new Error("Master database is empty.");
+
+    const saveName = options.name.trim();
+    const managerName = options.managerName.trim();
+    if (!saveName) throw new Error("Save name cannot be empty.");
+    if (!managerName) throw new Error("Manager name cannot be empty.");
+    if (!Number.isSafeInteger(options.clubId) || options.clubId <= 0) {
+      throw new Error("Club id must be a positive integer.");
+    }
 
     const db = openDatabase(master, true);
     try {
@@ -64,11 +72,6 @@ export class SaveManager {
     }
 
     const saveId = randomUUID();
-    const saveName = options.name.trim();
-    const managerName = options.managerName.trim();
-    if (!saveName) throw new Error("Save name cannot be empty.");
-    if (!managerName) throw new Error("Manager name cannot be empty.");
-
     const destinationDirectory = resolve(this.savesDirectory);
     mkdirSync(destinationDirectory, { recursive: true });
     const fileName = `${safeFileName(saveName)}-${saveId.slice(0, 8)}.sqlite`;
@@ -76,15 +79,17 @@ export class SaveManager {
     const temporary = join(destinationDirectory, `.${fileName}.tmp`);
 
     try {
-      // SQLite's backup API would be ideal for a live master DB, but a freshly initialized,
-      // immutable master is copied while no process should be writing to it.
+      // The master database is expected to be immutable after initialization.
+      // Use SQLite's online backup API if the master may be written concurrently.
       copyFileSync(master, temporary);
       renameSync(temporary, destination);
 
       const saveDb = openDatabase(destination);
       try {
         saveDb.exec(SAVE_METADATA_TABLE);
-        saveDb.prepare("INSERT OR IGNORE INTO schema_version (version, description) VALUES (1, ?)").run("Initial Game Manager schema");
+        saveDb.prepare("INSERT OR IGNORE INTO schema_version (version, description) VALUES (1, ?)")
+          .run("Initial Game Manager schema");
+
         const insertMetadata = saveDb.prepare(`
           INSERT INTO game_save_metadata (id, name, manager_name, selected_club_id, schema_version)
           VALUES (?, ?, ?, ?, 1)
@@ -95,11 +100,13 @@ export class SaveManager {
         });
         tx();
         validateDatabase(saveDb);
+
         const metadata = saveDb.prepare(`
           SELECT id, name, manager_name AS managerName, selected_club_id AS clubId,
                  created_at AS createdAt
           FROM game_save_metadata WHERE id = ?
         `).get(saveId) as Omit<SaveInfo, "filePath">;
+
         return { ...metadata, filePath: destination };
       } finally {
         saveDb.close();
@@ -125,10 +132,20 @@ export class SaveManager {
     }
   }
 
+  openById(saveId: string) {
+    const normalizedId = saveId.trim();
+    if (!normalizedId) throw new Error("Save id cannot be empty.");
+
+    const matches = this.list().filter((save) => save.id === normalizedId);
+    if (matches.length === 0) throw new Error(`Campaign save "${normalizedId}" was not found.`);
+    if (matches.length > 1) throw new Error(`Multiple saves use id "${normalizedId}".`);
+    return this.open(matches[0]!.filePath);
+  }
+
   list(): SaveInfo[] {
     const directory = resolve(this.savesDirectory);
     if (!existsSync(directory)) return [];
-    // Use explicit file lookup from the directory, opening each save read-only.
+
     return readdirSync(directory)
       .filter((name) => name.endsWith(".sqlite"))
       .flatMap((name) => {
@@ -149,7 +166,7 @@ export class SaveManager {
         } catch {
           return [];
         }
-      });
+      })
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.name.localeCompare(b.name));
   }
 }
-

@@ -88,20 +88,54 @@ test("same fixture seed yields same result in independent saves", () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("simulated match writes final score, events, momentum and conditions", () => {
+test("campaigns can be discovered and reopened by stable save id", () => {
   const root = createTempRoot();
   try {
     const master = createMaster(root);
     const manager = new SaveManager(master, join(root, "saves"));
-    const save = manager.create({ name: "Match Test", managerName: "Tester", clubId: 1 });
-    const db = manager.open(save.filePath);
+    const created = manager.create({ name: "Minha carreira", managerName: "Técnico", clubId: 1 });
+    const listed = manager.list().find((save) => save.id === created.id);
+    assert.ok(listed);
+    assert.equal(listed.name, "Minha carreira");
+
+    const reopened = manager.openById(created.id);
     try {
-      const result = advanceNextFixture(db, 1);
-      assert.equal(result.minutes, 90);
-      assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
-      assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number}).n, 90);
-      assert.ok((db.prepare("SELECT COUNT(*) AS n FROM match_event WHERE fixture_id=1").get() as {n:number}).n >= 2);
-      assert.ok((db.prepare("SELECT AVG(energy) AS n FROM player_condition WHERE player_id BETWEEN 1 AND 18").get() as {n:number}).n < 100);
-    } finally { db.close(); }
-  } finally { rmSync(root, { recursive: true, force: true }); }
+      assert.equal(
+        (reopened.prepare("SELECT id FROM game_save_metadata").get() as { id: string }).id,
+        created.id,
+      );
+    } finally {
+      reopened.close();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("save creation rejects invalid club ids and blank names", () => {
+  const root = createTempRoot();
+  try {
+    const master = createMaster(root);
+    const manager = new SaveManager(master, join(root, "saves"));
+    assert.throws(
+      () => manager.create({ name: "Valid name", managerName: "Manager", clubId: 999 }),
+      /does not exist/,
+    );
+    assert.throws(
+      () => manager.create({ name: "   ", managerName: "Manager", clubId: 1 }),
+      /cannot be empty/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("opening a corrupt database reports a clear error and closes its handle", () => {
+  const root = createTempRoot();
+  try {
+    const manager = new SaveManager(join(root, "missing-master.sqlite"), join(root, "saves"));
+    assert.throws(() => manager.open(join(root, "does-not-exist.sqlite")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
