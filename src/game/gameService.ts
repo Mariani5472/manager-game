@@ -234,7 +234,7 @@ export function advanceRound(db: SqliteDatabase, roundId: number): MatchSummary[
     finishSeasonIfComplete(db,round.stageId);
     return results;
   });
-  return run();
+  return run.immediate();
 }
 
 function roundRobin(teams: ParticipantRow[], legs: number): Array<Array<{home:number;away:number}>> {
