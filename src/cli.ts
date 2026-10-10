@@ -3,173 +3,67 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { openDatabase, validateDatabase } from "./db/database.js";
 import { SaveManager } from "./save/saveManager.js";
-import { advanceNextFixture, advanceRound, listClubs, listFixtures } from "./game/gameService.js";
+import {
+  advanceNextFixture, advanceRound, getManagedClub, getSeasonStatus, getStandings,
+  listClubs, listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
+} from "./game/gameService.js";
 
-const root = process.cwd();
-const masterPath = resolve(process.env.GMF_MASTER_DB ?? joinPath(root, "data/master.sqlite"));
-const savesDir = resolve(process.env.GMF_SAVES_DIR ?? joinPath(root, "data/saves"));
-const schemaPath = resolve(process.env.GMF_SCHEMA_SQL ?? joinPath(root, "src/schema/game_manager_mvp.sql"));
+const root=process.cwd();
+const masterPath=resolve(process.env.GMF_MASTER_DB ?? joinPath(root,"data/master.sqlite"));
+const savesDir=resolve(process.env.GMF_SAVES_DIR ?? joinPath(root,"data/saves"));
+const schemaPath=resolve(process.env.GMF_SCHEMA_SQL ?? joinPath(root,"src/schema/game_manager_mvp.sql"));
+function joinPath(a:string,b:string):string{return a.endsWith("/")?a+b:a+"/"+b;}
 
-function joinPath(a: string, b: string): string {
-  return a.endsWith("/") ? a + b : a + "/" + b;
+function initializeMaster():void{
+  if(existsSync(masterPath)){console.log(`Master DB already exists: ${masterPath}`);return;}
+  mkdirSync(dirname(masterPath),{recursive:true});
+  const db=openDatabase(masterPath);
+  try{db.exec(readFileSync(schemaPath,"utf8"));validateDatabase(db);console.log(`Master DB created: ${masterPath}`);}
+  catch(error){db.close();throw error;}
+  finally{if(db.open)db.close();}
 }
-
-function initializeMaster(): void {
-  if (existsSync(masterPath)) {
-    console.log(`Master DB already exists: ${masterPath}`);
-    return;
-  }
-
-  mkdirSync(dirname(masterPath), { recursive: true });
-  const schema = readFileSync(schemaPath, "utf8");
-  const db = openDatabase(masterPath);
-
-  try {
-    db.exec(schema);
-    validateDatabase(db);
-    console.log(`Master DB created: ${masterPath}`);
-  } catch (error) {
-    db.close();
-    throw error;
-  } finally {
-    if (db.open) db.close();
-  }
+function parseOption(args:string[],key:string):string|undefined{
+  const i=args.indexOf(key);if(i<0)return undefined;const value=args[i+1];
+  if(!value||value.startsWith("--"))throw new Error(`Option ${key} requires a value.`);return value;
 }
-
-function usage(): never {
-  console.log(`Game Manager Football CLI
-
-Commands:
-  init-master
-  clubs
-  new-save --name <save-name> --manager <manager-name> --club <club-id>
-  saves
-  fixtures [--pending] (--save-id <save-id> | --save <path>)
-  play [fixture-id] (--save-id <save-id> | --save <path>)
-  advance-round <round-id> (--save-id <save-id> | --save <path>)
-
-Environment:
-  GMF_MASTER_DB   master database (default: data/master.sqlite)
-  GMF_SAVES_DIR   campaign saves (default: data/saves)
-  GMF_SCHEMA_SQL  schema SQL path
-`);
-  process.exit(0);
+function withSave<T>(args:string[],fn:(db:ReturnType<typeof openDatabase>)=>T):T{
+  const id=parseOption(args,"--save-id"),path=parseOption(args,"--save");
+  if(id&&path)throw new Error("Use either --save-id or --save, not both.");
+  if(!id&&!path)throw new Error("Provide --save-id <save-id> or --save <path>.");
+  const manager=new SaveManager(masterPath,savesDir),db=id?manager.openById(id):manager.open(path!);
+  try{return fn(db);}finally{db.close();}
 }
-
-function parseOption(args: string[], key: string): string | undefined {
-  const index = args.indexOf(key);
-  if (index < 0) return undefined;
-
-  const value = args[index + 1];
-  if (!value || value.startsWith("--")) {
-    throw new Error(`Option ${key} requires a value.`);
-  }
-  return value;
+function main():void{
+ const [cmd,...args]=process.argv.slice(2);
+ switch(cmd){
+  case "init-master":initializeMaster();return;
+  case "clubs":{if(!existsSync(masterPath))throw new Error('Run "npm run dev -- init-master" first.');
+   const db=openDatabase(masterPath,true);try{validateDatabase(db);console.table(listClubs(db));}finally{db.close();}return;}
+  case "new-save":{
+   const name=parseOption(args,"--name"),manager=parseOption(args,"--manager"),raw=parseOption(args,"--club");
+   if(!name||!manager||!raw)throw new Error("Required: --name, --manager and --club.");
+   const clubId=Number(raw);if(!Number.isSafeInteger(clubId)||clubId<=0)throw new Error("--club must be a positive integer.");
+   console.log(JSON.stringify(new SaveManager(masterPath,savesDir).create({name,managerName:manager,clubId}),null,2));return;}
+  case "saves":console.table(new SaveManager(masterPath,savesDir).list());return;
+  case "club":withSave(args,db=>console.table([getManagedClub(db)]));return;
+  case "squad":withSave(args,db=>console.table(listSquad(db,Number(parseOption(args,"--club")??getManagedClub(db).id))));return;
+  case "tactics":withSave(args,db=>console.table([getTactics(db,Number(parseOption(args,"--club")??getManagedClub(db).id)]));return;
+  case "fixtures":withSave(args,db=>console.table(listFixtures(db,args.includes("--pending"))));return;
+  case "standings":withSave(args,db=>console.table(getStandings(db,Number(parseOption(args,"--stage")??"1"))));return;
+  case "season-status":withSave(args,db=>console.table(getSeasonStatus(db)));return;
+  case "play":{
+   const raw=args.find(v=>!v.startsWith("--"));const id=raw===undefined?undefined:Number(raw);
+   if(id!==undefined&&(!Number.isSafeInteger(id)||id<=0))throw new Error("Fixture ID must be a positive integer.");
+   withSave(args,db=>console.table([advanceNextFixture(db,id)]));return;}
+  case "advance-round":{
+   const raw=args.find(v=>!v.startsWith("--")),id=Number(raw);
+   if(!Number.isSafeInteger(id)||id<=0)throw new Error("Round ID must be a positive integer.");
+   withSave(args,db=>console.table(advanceRound(db,id)));return;}
+  case "next-season":{
+   const stage=Number(parseOption(args,"--stage")??"1");
+   if(!Number.isSafeInteger(stage)||stage<=0)throw new Error("Stage ID must be a positive integer.");
+   withSave(args,db=>console.table([prepareNextLeagueSeason(db,stage)]));return;}
+  default:console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, fixtures, play, advance-round, standings, season-status, next-season");
+ }
 }
-
-function withSave<T>(args: string[], callback: (db: ReturnType<typeof openDatabase>) => T): T {
-  const saveId = parseOption(args, "--save-id");
-  const savePath = parseOption(args, "--save");
-
-  if (saveId && savePath) {
-    throw new Error("Use either --save-id or --save, not both.");
-  }
-  if (!saveId && !savePath) {
-    throw new Error("Provide --save-id <save-id> (recommended) or --save <path>.");
-  }
-
-  const manager = new SaveManager(masterPath, savesDir);
-  const db = saveId ? manager.openById(saveId) : manager.open(savePath!);
-
-  try {
-    return callback(db);
-  } finally {
-    db.close();
-  }
-}
-
-function main(): void {
-  const [command, ...args] = process.argv.slice(2);
-
-  switch (command) {
-    case "init-master":
-      initializeMaster();
-      return;
-
-    case "clubs": {
-      if (!existsSync(masterPath)) {
-        throw new Error(`Master DB not found at ${masterPath}. Run "npm run dev -- init-master" first.`);
-      }
-      const db = openDatabase(masterPath, true);
-      try {
-        validateDatabase(db);
-        console.table(listClubs(db));
-      } finally {
-        db.close();
-      }
-      return;
-    }
-
-    case "new-save": {
-      const name = parseOption(args, "--name");
-      const managerName = parseOption(args, "--manager");
-      const clubIdRaw = parseOption(args, "--club");
-      if (!name || !managerName || !clubIdRaw) {
-        throw new Error("Required: --name, --manager and --club.");
-      }
-
-      const clubId = Number(clubIdRaw);
-      if (!Number.isSafeInteger(clubId) || clubId <= 0) {
-        throw new Error("--club must be a positive integer.");
-      }
-
-      const info = new SaveManager(masterPath, savesDir).create({
-        name,
-        managerName,
-        clubId,
-      });
-      console.log(JSON.stringify(info, null, 2));
-      return;
-    }
-
-    case "saves":
-      console.table(new SaveManager(masterPath, savesDir).list());
-      return;
-
-    case "fixtures":
-      withSave(args, (db) => console.table(listFixtures(db, args.includes("--pending"))));
-      return;
-
-    case "play": {
-      const fixtureArg = args.find((arg) => !arg.startsWith("--"));
-      const fixtureId = fixtureArg === undefined ? undefined : Number(fixtureArg);
-      if (fixtureId !== undefined && (!Number.isSafeInteger(fixtureId) || fixtureId <= 0)) {
-        throw new Error("Fixture id must be a positive integer.");
-      }
-      withSave(args, (db) => console.table([advanceNextFixture(db, fixtureId)]));
-      return;
-    }
-
-    case "advance-round": {
-      const roundArg = args.find((arg) => !arg.startsWith("--"));
-      const roundId = Number(roundArg);
-      if (!Number.isSafeInteger(roundId) || roundId <= 0) {
-        throw new Error("Round id must be a positive integer.");
-      }
-      withSave(args, (db) => console.table(advanceRound(db, roundId)));
-      return;
-    }
-
-    default:
-      usage();
-  }
-}
-
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  try {
-    main();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : error);
-    process.exitCode = 1;
-  }
-}
+if(import.meta.url===pathToFileURL(process.argv[1]??"").href){try{main();}catch(error){console.error(error instanceof Error?error.message:error);process.exitCode=1;}}
