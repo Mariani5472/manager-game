@@ -77,7 +77,7 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number):KernelTimeline {
   for(const side of [{team:home,opponent:away,isHome:true,pressure:hp,opponentPressure:ap},
                       {team:away,opponent:home,isHome:false,pressure:ap,opponentPressure:hp}]){
    const tactic=side.team.tactic;
-   const chance=clamp(.115+(side.team.attacking-50)*.0011+
+   const chance=clamp(.115+(side.team.attacking-50)*.0011+(50-side.opponent.defending)*.00045+
     mentalityShotModifier(tactic.mentality)+(tactic.pressing-50)*.00012+
     (tactic.tempo-50)*.00012+(side.pressure-side.opponentPressure)*.00012+
     (tactic.counter_attack?.004:0),.055,.19);
@@ -88,8 +88,8 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number):KernelTimeline {
    const keeper=side.opponent.lineup.find(p=>p.isStarting&&p.role==="GK");
    if(!keeper)throw new Error(`Club ${side.opponent.clubId} has no starting goalkeeper.`);
    const keeperSkill=mean([keeper.reflexes,keeper.handling,keeper.positioning,keeper.concentration]);
-   const xg=clamp(.095+(side.team.attacking-50)*.0012+
-    (shooter.finishing-50)*.0007+(tactic.tempo-50)*.00012+
+   const xg=clamp(.075+(side.team.attacking-50)*.0009+
+    (shooter.finishing-50)*.0005+(tactic.tempo-50)*.0001+
     (random()-.5)*.07,.025,.28);
    const onTargetChance=clamp(.29+xg*.5,.30,.48);
    const onTarget=random()<onTargetChance;
