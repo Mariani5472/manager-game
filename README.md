@@ -48,7 +48,9 @@ npm run dev -- advance-round 1 --stage 2 --save-id <save-id>
 npm run dev -- advance-round 2 --stage 2 --save-id <save-id>
 ```
 
-Em etapas eliminatórias, quando todos os jogos de uma rodada terminam, os vencedores avançam automaticamente para a próxima rodada. Empates são decididos em disputa de pênaltis determinística e os placares ficam persistidos em `home_penalties`/`away_penalties`. A competição só termina depois de uma final concluída.
+Em etapas eliminatórias, quando todos os jogos de uma rodada terminam, os vencedores avançam automaticamente para a próxima rodada. Empates são decididos em disputa de pênaltis determinística e os placares ficam persistidos em `home_penalties`/`away_penalties`; o vencedor é resolvido a partir do placar final e, em caso de empate, dos pênaltis persistidos. Reexecutar uma rodada concluída informa que ela já foi processada e não simula jogos novamente. A competição só termina depois de uma final concluída.
+
+Se o banco matriz já existia antes da correção do calendário, execute `npm run dev -- init-master`: o comando reconcilia **somente** o calendário da liga ficcional padrão quando todas as partidas ainda estão agendadas. Os saves existentes não são alterados; crie um save novo após a reparação para testar o calendário corrigido.
 
 ## API de escalação
 
