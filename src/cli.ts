@@ -19,20 +19,21 @@ function initializeMaster(): void {
     console.log(`Master DB already exists: ${masterPath}`);
     return;
   }
+
   mkdirSync(dirname(masterPath), { recursive: true });
-  const schema = readSchema(schemaPath);
+  const schema = readFileSync(schemaPath, "utf8");
   const db = openDatabase(masterPath);
+
   try {
     db.exec(schema);
     validateDatabase(db);
     console.log(`Master DB created: ${masterPath}`);
-  } finally {
+  } catch (error) {
     db.close();
+    throw error;
+  } finally {
+    if (db.open) db.close();
   }
-}
-
-function readSchema(path: string): string {
-  return readFileSync(path, "utf8");
 }
 
 function usage(): never {
@@ -43,9 +44,9 @@ Commands:
   clubs
   new-save --name <save-name> --manager <manager-name> --club <club-id>
   saves
-  fixtures [--pending]
-  play [fixture-id]
-  advance-round <round-id>
+  fixtures [--pending] (--save-id <save-id> | --save <path>)
+  play [fixture-id] (--save-id <save-id> | --save <path>)
+  advance-round <round-id> (--save-id <save-id> | --save <path>)
 
 Environment:
   GMF_MASTER_DB   master database (default: data/master.sqlite)
@@ -57,14 +58,29 @@ Environment:
 
 function parseOption(args: string[], key: string): string | undefined {
   const index = args.indexOf(key);
-  return index >= 0 ? args[index + 1] : undefined;
+  if (index < 0) return undefined;
+
+  const value = args[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`Option ${key} requires a value.`);
+  }
+  return value;
 }
 
 function withSave<T>(args: string[], callback: (db: ReturnType<typeof openDatabase>) => T): T {
-  const path = parseOption(args, "--save");
-  if (!path) throw new Error("Provide --save <path> for a campaign command.");
+  const saveId = parseOption(args, "--save-id");
+  const savePath = parseOption(args, "--save");
+
+  if (saveId && savePath) {
+    throw new Error("Use either --save-id or --save, not both.");
+  }
+  if (!saveId && !savePath) {
+    throw new Error("Provide --save-id <save-id> (recommended) or --save <path>.");
+  }
+
   const manager = new SaveManager(masterPath, savesDir);
-  const db = manager.open(path);
+  const db = saveId ? manager.openById(saveId) : manager.open(savePath!);
+
   try {
     return callback(db);
   } finally {
@@ -74,44 +90,76 @@ function withSave<T>(args: string[], callback: (db: ReturnType<typeof openDataba
 
 function main(): void {
   const [command, ...args] = process.argv.slice(2);
+
   switch (command) {
     case "init-master":
       initializeMaster();
       return;
+
     case "clubs": {
+      if (!existsSync(masterPath)) {
+        throw new Error(`Master DB not found at ${masterPath}. Run "npm run dev -- init-master" first.`);
+      }
       const db = openDatabase(masterPath, true);
-      try { validateDatabase(db); console.table(listClubs(db)); }
-      finally { db.close(); }
+      try {
+        validateDatabase(db);
+        console.table(listClubs(db));
+      } finally {
+        db.close();
+      }
       return;
     }
+
     case "new-save": {
       const name = parseOption(args, "--name");
       const managerName = parseOption(args, "--manager");
       const clubIdRaw = parseOption(args, "--club");
-      if (!name || !managerName || !clubIdRaw) throw new Error("Required: --name, --manager and --club.");
+      if (!name || !managerName || !clubIdRaw) {
+        throw new Error("Required: --name, --manager and --club.");
+      }
+
+      const clubId = Number(clubIdRaw);
+      if (!Number.isSafeInteger(clubId) || clubId <= 0) {
+        throw new Error("--club must be a positive integer.");
+      }
+
       const info = new SaveManager(masterPath, savesDir).create({
-        name, managerName, clubId: Number(clubIdRaw),
+        name,
+        managerName,
+        clubId,
       });
       console.log(JSON.stringify(info, null, 2));
       return;
     }
+
     case "saves":
       console.table(new SaveManager(masterPath, savesDir).list());
       return;
+
     case "fixtures":
       withSave(args, (db) => console.table(listFixtures(db, args.includes("--pending"))));
       return;
+
     case "play": {
-      const fixtureId = args[0] ? Number(args[0]) : undefined;
+      const fixtureArg = args.find((arg) => !arg.startsWith("--"));
+      const fixtureId = fixtureArg === undefined ? undefined : Number(fixtureArg);
+      if (fixtureId !== undefined && (!Number.isSafeInteger(fixtureId) || fixtureId <= 0)) {
+        throw new Error("Fixture id must be a positive integer.");
+      }
       withSave(args, (db) => console.table([advanceNextFixture(db, fixtureId)]));
       return;
     }
+
     case "advance-round": {
-      const roundId = Number(args[0]);
-      if (!Number.isInteger(roundId) || roundId <= 0) throw new Error("Provide a valid round id.");
+      const roundArg = args.find((arg) => !arg.startsWith("--"));
+      const roundId = Number(roundArg);
+      if (!Number.isSafeInteger(roundId) || roundId <= 0) {
+        throw new Error("Round id must be a positive integer.");
+      }
       withSave(args, (db) => console.table(advanceRound(db, roundId)));
       return;
     }
+
     default:
       usage();
   }
