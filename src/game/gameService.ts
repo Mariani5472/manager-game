@@ -119,10 +119,26 @@ export function getSeasonStatus(db: SqliteDatabase, stageId?: number): SeasonSum
       FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=?
     `).get(stage.stage_id) as {completed:number|null;pending:number|null};
     const completed = counts.completed ?? 0; const pending = counts.pending ?? 0;
+    let knockoutFinalComplete = true;
+    if (stage.stage_kind === "KNOCKOUT") {
+      const finalRound = db.prepare(`
+        SELECT COUNT(f.id) AS total,
+          SUM(CASE WHEN f.status='COMPLETED' THEN 1 ELSE 0 END) AS completed
+        FROM competition_round r LEFT JOIN fixture f ON f.round_id=r.id
+        WHERE r.stage_id=? AND r.round_number=(
+          SELECT MAX(round_number) FROM competition_round WHERE stage_id=?
+        )
+      `).get(stage.stage_id, stage.stage_id) as {total:number;completed:number|null};
+      // A knockout bracket with several matches completed is not finished until
+      // the final round has exactly one completed fixture.
+      knockoutFinalComplete = finalRound.total === 1 && (finalRound.completed ?? 0) === 1;
+    }
+    const stageComplete = pending === 0 && completed > 0 &&
+      (stage.stage_kind !== "KNOCKOUT" || knockoutFinalComplete);
     return {
       seasonId:stage.season_id, competition:stage.competition, seasonYear:stage.season_year,
       seasonStatus:stage.season_status, stageId:stage.stage_id, stage:stage.stage,
-      stageKind:stage.stage_kind, stageStatus:pending === 0 && completed > 0 ? "COMPLETED" : "IN_PROGRESS",
+      stageKind:stage.stage_kind, stageStatus:stageComplete ? "COMPLETED" : "IN_PROGRESS",
       pendingFixtures:pending, completedFixtures:completed,
     };
   });
@@ -271,18 +287,125 @@ function rebuildStandings(db: SqliteDatabase, stageId: number): void {
 
 function finishSeasonIfComplete(db: SqliteDatabase, stageId: number): void {
   const stage = getStage(db,stageId);
-  if (stage.stage_kind !== "LEAGUE") return;
+  if (stage.stage_kind !== "LEAGUE" && stage.stage_kind !== "KNOCKOUT") return;
   const counts = db.prepare(`
     SELECT COUNT(*) AS total,
       SUM(CASE WHEN status='COMPLETED' THEN 1 ELSE 0 END) AS completed,
       SUM(CASE WHEN status IN ('SCHEDULED','IN_PROGRESS','POSTPONED') THEN 1 ELSE 0 END) AS pending
     FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=?
   `).get(stageId) as {total:number;completed:number|null;pending:number|null};
-  if (counts.total > 0 && (counts.pending ?? 0) === 0) {
-    db.prepare("UPDATE competition_season SET status='COMPLETED' WHERE id=?").run(stage.season_id);
-  } else {
-    db.prepare("UPDATE competition_season SET status='ACTIVE' WHERE id=? AND status='PLANNED'").run(stage.season_id);
+  const status = getSeasonStatus(db, stageId)[0];
+  const canComplete = counts.total > 0 && (counts.pending ?? 0) === 0 &&
+    (stage.stage_kind !== "KNOCKOUT" || status?.stageStatus === "COMPLETED");
+  db.prepare("UPDATE competition_season SET status=? WHERE id=?")
+    .run(canComplete ? "COMPLETED" : "ACTIVE", stage.season_id);
+}
+
+/** Advance a completed knockout round by creating the next round from its winners. */
+function progressKnockoutStage(db: SqliteDatabase, stageId: number, roundId: number): void {
+  const stage = getStage(db, stageId);
+  if (stage.stage_kind !== "KNOCKOUT") return;
+
+  const round = db.prepare(`
+    SELECT id, round_number AS roundNumber, name FROM competition_round WHERE id=? AND stage_id=?
+  `).get(roundId, stageId) as {id:number;roundNumber:number;name:string}|undefined;
+  if (!round) throw new Error(`Round ${roundId} does not belong to knockout stage ${stageId}.`);
+
+  const roundState = db.prepare(`
+    SELECT COUNT(*) AS total,
+      SUM(CASE WHEN status='COMPLETED' THEN 1 ELSE 0 END) AS completed
+    FROM fixture WHERE round_id=?
+  `).get(roundId) as {total:number;completed:number|null};
+  if (roundState.total === 0 || (roundState.completed ?? 0) !== roundState.total) return;
+
+  const laterRound = db.prepare(`
+    SELECT id FROM competition_round WHERE stage_id=? AND round_number>? LIMIT 1
+  `).get(stageId, round.roundNumber);
+  if (laterRound) return;
+
+  const matches = db.prepare(`
+    SELECT id, home_club_id AS home, away_club_id AS away,
+      home_score AS homeScore, away_score AS awayScore,
+      home_penalties AS homePenalties, away_penalties AS awayPenalties, random_seed AS seed,
+      scheduled_at AS scheduledAt
+    FROM fixture WHERE round_id=? ORDER BY scheduled_at, id
+  `).all(roundId) as Array<{
+    id:number;home:number;away:number;homeScore:number;awayScore:number;
+    homePenalties:number|null;awayPenalties:number|null;seed:number|null;scheduledAt:string|null;
+  }>;
+
+  const winners: number[] = [];
+  for (const match of matches) {
+    let homeWins = match.homeScore > match.awayScore;
+    if (match.homeScore === match.awayScore) {
+      let homePenalties = match.homePenalties;
+      let awayPenalties = match.awayPenalties;
+      if (homePenalties === null || awayPenalties === null || homePenalties === awayPenalties) {
+        // Deterministic shootout so tied knockout matches always produce a winner.
+        let state = ((match.seed ?? match.id) ^ (match.id * 2654435761)) >>> 0;
+        const next = () => {
+          state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+          return state / 0x100000000;
+        };
+        homePenalties = 0;
+        awayPenalties = 0;
+        for (let kick=0; kick<5; kick++) {
+          if (next() < 0.76) homePenalties++;
+          if (next() < 0.76) awayPenalties++;
+        }
+        let suddenDeath = 0;
+        while (homePenalties === awayPenalties && suddenDeath < 20) {
+          if (next() < 0.76) homePenalties++;
+          if (next() < 0.76) awayPenalties++;
+          suddenDeath++;
+        }
+        if (homePenalties === awayPenalties) homePenalties++;
+        db.prepare("UPDATE fixture SET home_penalties=?,away_penalties=? WHERE id=?")
+          .run(homePenalties, awayPenalties, match.id);
+      }
+      homeWins = homePenalties > awayPenalties;
+    }
+    winners.push(homeWins ? match.home : match.away);
   }
+
+  if (winners.length === 1) return;
+  if (winners.length < 2 || winners.length % 2 !== 0) {
+    throw new Error(`Knockout stage ${stageId} produced ${winners.length} winners; an even number is required to create the next round.`);
+  }
+
+  const nextRoundNumber = round.roundNumber + 1;
+  const roundName = winners.length === 2 ? "Final"
+    : winners.length === 4 ? "Semifinais"
+    : winners.length === 8 ? "Quartas de final"
+    : `Rodada eliminatória ${nextRoundNumber}`;
+  const scheduledDates = matches.map(match => match.scheduledAt).filter((value): value is string => Boolean(value));
+  scheduledDates.sort();
+  const lastDate = scheduledDates.length ? scheduledDates[scheduledDates.length - 1] : undefined;
+  const baseDate = lastDate ? new Date(lastDate) : new Date();
+  baseDate.setUTCDate(baseDate.getUTCDate() + 7);
+  const date = baseDate.toISOString().slice(0,10);
+
+  const createNextRound = db.transaction(() => {
+    const nextRoundId = db.prepare(`
+      INSERT INTO competition_round (stage_id,round_number,name,start_date,end_date) VALUES (?,?,?,?,?)
+    `).run(stageId,nextRoundNumber,roundName,date,date).lastInsertRowid as number;
+    const insertFixture = db.prepare(`
+      INSERT INTO fixture (round_id,home_club_id,away_club_id,stadium_id,scheduled_at,random_seed)
+      VALUES (?,?,?,?,?,?)
+    `);
+    winners.forEach((winner, index) => {
+      if (index % 2 !== 0) return;
+      const home = winner;
+      const away = winners[index+1]!;
+      const stadium = db.prepare("SELECT id FROM stadium WHERE club_id=? ORDER BY id LIMIT 1")
+        .get(home) as {id:number}|undefined;
+      const time = `${date}T${String(16+(index/2%2)*2).padStart(2,"0")}:00:00`;
+      const seed = ((stage.season_year * 100000) + (nextRoundNumber * 100) + index + 1) >>> 0;
+      insertFixture.run(nextRoundId,home,away,stadium?.id??null,time,seed);
+    });
+    db.prepare("UPDATE competition_season SET status='ACTIVE' WHERE id=?").run(stage.season_id);
+  });
+  createNextRound();
 }
 
 export function advanceNextFixture(db: SqliteDatabase, fixtureId?: number): MatchSummary {
@@ -290,12 +413,13 @@ export function advanceNextFixture(db: SqliteDatabase, fixtureId?: number): Matc
     ? db.prepare("SELECT id FROM fixture WHERE id=? AND status IN ('SCHEDULED','IN_PROGRESS')").get(fixtureId) as {id:number}|undefined
     : db.prepare("SELECT id FROM fixture WHERE status IN ('SCHEDULED','IN_PROGRESS') ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 ELSE 1 END,scheduled_at,id LIMIT 1").get() as {id:number}|undefined;
   if (!row) throw new Error(fixtureId ? `Scheduled fixture ${fixtureId} not found (it may already be completed or is not playable).` : "No scheduled or in-progress fixtures remain.");
-  const stage = db.prepare("SELECT r.stage_id AS id FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE f.id=?")
-    .get(row.id) as {id:number}|undefined;
+  const stage = db.prepare("SELECT r.stage_id AS id, r.id AS roundId FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE f.id=?")
+    .get(row.id) as {id:number;roundId:number}|undefined;
   if (!stage) throw new Error(`Fixture ${row.id} has no competition stage.`);
   // simulateMatch commits a checkpoint after every minute. Do not wrap it in an
   // outer transaction, otherwise SQLite would defer every checkpoint until FT.
   const summary = simulateMatch(db,row.id);
+  progressKnockoutStage(db, stage.id, stage.roundId);
   rebuildStandings(db,stage.id);
   finishSeasonIfComplete(db,stage.id);
   return summary;
@@ -303,15 +427,34 @@ export function advanceNextFixture(db: SqliteDatabase, fixtureId?: number): Matc
 
 export function advanceRound(db: SqliteDatabase, roundId: number): MatchSummary[] {
   const round = db.prepare("SELECT id,stage_id AS stageId FROM competition_round WHERE id=?").get(roundId) as {id:number;stageId:number}|undefined;
-  if (!round) throw new Error(`Round ${roundId} was not found.`);
+  if (!round) throw new Error(`Round ID ${roundId} was not found.`);
+  return advanceRoundById(db, round.id, round.stageId);
+}
+
+/** Resolve a round by its sequence within a stage, never by a global database ID. */
+export function advanceStageRound(db: SqliteDatabase, stageId: number, roundNumber: number): MatchSummary[] {
+  const round = db.prepare(`
+    SELECT id,stage_id AS stageId FROM competition_round WHERE stage_id=? AND round_number=?
+  `).get(stageId, roundNumber) as {id:number;stageId:number}|undefined;
+  if (!round) {
+    const available = db.prepare("SELECT round_number AS roundNumber,name FROM competition_round WHERE stage_id=? ORDER BY round_number")
+      .all(stageId) as Array<{roundNumber:number;name:string}>;
+    const description = available.map(item => `${item.roundNumber} (${item.name})`).join(", ");
+    throw new Error(`Round number ${roundNumber} was not found in stage ${stageId}. Available rounds: ${description || "none"}.`);
+  }
+  return advanceRoundById(db, round.id, round.stageId);
+}
+
+function advanceRoundById(db: SqliteDatabase, roundId: number, stageId: number): MatchSummary[] {
   const fixtures = db.prepare("SELECT id FROM fixture WHERE round_id=? AND status IN ('SCHEDULED','IN_PROGRESS') ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 ELSE 1 END,scheduled_at,id")
     .all(roundId) as Array<{id:number}>;
-  if (!fixtures.length) throw new Error(`Round ${roundId} has no playable fixtures.`);
+  if (!fixtures.length) throw new Error(`Round ID ${roundId} has no playable fixtures.`);
   // Each match owns its per-minute transactions so a process interruption does not
   // roll back checkpoints for the entire round.
   const results = fixtures.map(f => simulateMatch(db,f.id));
-  rebuildStandings(db,round.stageId);
-  finishSeasonIfComplete(db,round.stageId);
+  progressKnockoutStage(db, stageId, roundId);
+  rebuildStandings(db,stageId);
+  finishSeasonIfComplete(db,stageId);
   return results;
 }
 

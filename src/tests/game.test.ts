@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { openDatabase, validateDatabase } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
 import {
-  advanceNextFixture, advanceRound, getManagedClub, getSeasonStatus, getStandings,
+  advanceNextFixture, advanceRound, advanceStageRound, getManagedClub, getSeasonStatus, getStandings,
   listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
 } from "../game/gameService.js";
 
@@ -159,6 +159,41 @@ test("advancing a round plays managed and AI fixtures and rebuilds standings", a
       assert.equal(table.reduce((sum,row) => sum + row.played, 0), 4);
       assert.deepEqual(table.map(row => row.clubId).sort((a,b) => a-b), [1,2,3,4]);
       assert.ok(table.every(row => row.played === 1));
+    } finally {
+      db.close();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("round numbers are scoped to a stage and knockout winners generate a final", async () => {
+  const root = tempRoot();
+  try {
+    const { manager, save } = await createSave(root);
+    const db = manager.open(save.filePath);
+    try {
+      // Global round IDs can be interleaved between competitions; stage-scoped
+      // round numbers keep "round 1" unambiguous for the player.
+      assert.equal(advanceStageRound(db, 1, 1).length, 2);
+      assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
+      assert.equal((db.prepare("SELECT status FROM fixture WHERE id=5").get() as {status:string}).status, "SCHEDULED");
+
+      assert.equal(advanceStageRound(db, 2, 1).length, 2);
+      const final = db.prepare(`
+        SELECT r.id, r.round_number AS roundNumber, r.name, COUNT(f.id) AS fixtures
+        FROM competition_round r JOIN fixture f ON f.round_id=r.id
+        WHERE r.stage_id=2 GROUP BY r.id ORDER BY r.round_number DESC LIMIT 1
+      `).get() as {id:number;roundNumber:number;name:string;fixtures:number};
+      assert.equal(final.roundNumber, 2);
+      assert.equal(final.name, "Final");
+      assert.equal(final.fixtures, 1);
+      assert.equal(getSeasonStatus(db, 2)[0]?.stageStatus, "IN_PROGRESS");
+      assert.equal(getSeasonStatus(db, 2)[0]?.pendingFixtures, 1);
+
+      assert.equal(advanceStageRound(db, 2, 2).length, 1);
+      assert.equal(getSeasonStatus(db, 2)[0]?.stageStatus, "COMPLETED");
+      assert.equal(getSeasonStatus(db, 2)[0]?.seasonStatus, "COMPLETED");
     } finally {
       db.close();
     }
