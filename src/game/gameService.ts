@@ -214,10 +214,9 @@ export function getStandings(db: SqliteDatabase, stageId: number): StandingRow[]
     }
     groups = refined;
   }
-  return groups.flat().sort((a,b) => {
-    // Names/IDs are only deterministic fallbacks after all configured rules.
-    return a.club.localeCompare(b.club,"pt-BR") || a.clubId-b.clubId;
-  });
+  return groups.flatMap(group => group.length > 1
+    ? [...group].sort((a,b) => a.club.localeCompare(b.club,"pt-BR") || a.clubId-b.clubId)
+    : group);
 }
 
 function rebuildStandings(db: SqliteDatabase, stageId: number): void {
