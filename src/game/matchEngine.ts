@@ -143,7 +143,7 @@ export interface MatchEngineDiagnostics {
  simulations:number;
  baseline:MonteCarloReport;
  xgBands:XgBandDiagnostic[];
- homeAdvantage:{clubA:number;clubB:number;clubAWinRateAtHome:number;clubAWinRateAway:number;homeAdvantageDelta:number};
+ homeAdvantage:{clubA:number;clubB:number;clubAWinRateAtHome:number;clubAWinRateAway:number;homeAdvantageDelta:number;note:string};
  strengthGap:{weakClubId:number;strongClubId:number;weakStrength:number;strongStrength:number;strongWinRate:number;drawRate:number;weakWinRate:number;strongAverageGoals:number;weakAverageGoals:number};
  persistedMatches:{checked:number;issues:string[]};
 }
@@ -183,11 +183,13 @@ export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=884
   if(r.current_minute!==90)issues.push(`Fixture ${r.id}: completed with current_minute=${r.current_minute}`);
   if(r.event_home_goals!==r.home_score||r.event_away_goals!==r.away_score)issues.push(`Fixture ${r.id}: score differs from GOAL events`);
   if(r.momentum_count!==90)issues.push(`Fixture ${r.id}: expected 90 momentum rows, found ${r.momentum_count}`);
-  if(r.simulation_minute!==90||!r.state_json||JSON.parse(r.state_json).completed!==true)issues.push(`Fixture ${r.id}: final checkpoint missing or incomplete`);
+  let checkpointCompleted=false;
+  try { checkpointCompleted=!!r.state_json&&JSON.parse(r.state_json).completed===true; } catch { checkpointCompleted=false; }
+  if(r.simulation_minute!==90||!checkpointCompleted)issues.push(`Fixture ${r.id}: final checkpoint missing, malformed, or incomplete`);
  }
  return {
   simulations,baseline,xgBands,
-  homeAdvantage:{clubA:strong.team.clubId,clubB:weak.team.clubId,clubAWinRateAtHome:ab.homeWinRate,clubAWinRateAway:ba.awayWinRate,homeAdvantageDelta:ab.homeWinRate-ba.awayWinRate},
+  homeAdvantage:{clubA:strong.team.clubId,clubB:weak.team.clubId,clubAWinRateAtHome:ab.homeWinRate,clubAWinRateAway:ba.awayWinRate,homeAdvantageDelta:ab.homeWinRate-ba.awayWinRate,note:"Compares side assignment only; this report does not apply a separate home-advantage modifier."},
   strengthGap:{weakClubId:weak.team.clubId,strongClubId:strong.team.clubId,weakStrength:weak.value,strongStrength:strong.value,strongWinRate:baseline.homeWinRate,drawRate:baseline.drawRate,weakWinRate:baseline.awayWinRate,strongAverageGoals:baseline.averageHomeGoals,weakAverageGoals:baseline.averageAwayGoals},
   persistedMatches:{checked:persistedRows.length,issues}
  };
