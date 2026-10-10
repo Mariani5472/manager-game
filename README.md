@@ -51,3 +51,14 @@ Substituições dinâmicas durante o jogo e a influência completa de clima e vi
 - O motor persiste checkpoints por minuto em `match_simulation_state`, o minuto/placar atual em `fixture` e o momentum derivado dos mesmos eventos de gol.
 - Se o processo for interrompido durante uma partida, execute novamente `play <fixture-id> --save-id <save-id>` para retomar do último checkpoint. Partidas concluídas continuam protegidas contra execução duplicada.
 
+
+
+### Match engine diagnostics
+
+Run a read-only diagnostic report against a save to inspect shot-level xG, conversion outcomes, side-swapped results, strength differences, and persisted-match integrity:
+
+```bash
+npm run dev -- diagnostics --simulations 5000 --save-id <save-id>
+```
+
+The report groups simulated shots into xG bands and counts goals, saves, and misses in each band. It compares the strongest and weakest available clubs, then reverses their home/away roles to expose any side-assignment effect. This is a diagnostic comparison, not a home-advantage mechanic: it does not itself add a home bonus. Finally, it audits up to 100 completed fixtures for agreement between goals and score, 90 momentum rows, and a completed minute-90 checkpoint. Review `persistedMatches.issues` first when investigating an existing save.
