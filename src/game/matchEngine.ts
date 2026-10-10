@@ -78,5 +78,12 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
  });
  tx.immediate();
  const count=(db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=?").get(fixtureId) as {count:number}).count;
- return{fixtureId,homeClubId:f.home_club_id,awayClubId:f.away_club_id,...result,events:count,minutes:90};
+ const actual=db.prepare("SELECT club_id AS club,event_type AS type,COALESCE(SUM(xg),0) AS xg,COUNT(*) AS count FROM match_event WHERE fixture_id=? AND club_id IS NOT NULL AND event_type IN ('GOAL','SAVE','MISS') GROUP BY club_id,event_type").all(fixtureId) as Array<{club:number;type:string;xg:number;count:number}>;
+ const metric=(club:number,types:string[])=>actual.filter(e=>e.club===club&&types.includes(e.type)).reduce((n,e)=>n+e.count,0);
+ const xg=(club:number)=>actual.filter(e=>e.club===club).reduce((n,e)=>n+e.xg,0);
+ return{fixtureId,homeClubId:f.home_club_id,awayClubId:f.away_club_id,...result,
+   homeScore:metric(f.home_club_id,["GOAL"]),awayScore:metric(f.away_club_id,["GOAL"]),
+   homeShots:metric(f.home_club_id,["GOAL","SAVE","MISS"]),awayShots:metric(f.away_club_id,["GOAL","SAVE","MISS"]),
+   homeShotsOnTarget:metric(f.home_club_id,["GOAL","SAVE"]),awayShotsOnTarget:metric(f.away_club_id,["GOAL","SAVE"]),
+   homeXg:xg(f.home_club_id),awayXg:xg(f.away_club_id),events:count,minutes:90};
 }
