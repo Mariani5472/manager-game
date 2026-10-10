@@ -90,6 +90,14 @@ export function simulateMatch(db: SqliteDatabase, fixtureId: number): MatchSumma
   const events: Array<{ minute: number; clubId: number | null; playerId: number | null; type: string; xg: number; description: string }> = [];
 
   const tx = db.transaction(() => {
+    // Re-check under a write lock: two processes may have selected this fixture
+    // while it was SCHEDULED. Only one may commit a result.
+    const liveFixture = db.prepare("SELECT status FROM fixture WHERE id = ?").get(fixtureId) as { status: string } | undefined;
+    if (!liveFixture) throw new Error(`Fixture ${fixtureId} not found.`);
+    if (liveFixture.status !== "SCHEDULED") {
+      throw new Error(`Fixture ${fixtureId} is not scheduled (status: ${liveFixture.status}).`);
+    }
+
     db.prepare("DELETE FROM match_event WHERE fixture_id = ?").run(fixtureId);
     db.prepare("DELETE FROM match_momentum WHERE fixture_id = ?").run(fixtureId);
     db.prepare("DELETE FROM match_simulation_state WHERE fixture_id = ?").run(fixtureId);
@@ -168,7 +176,7 @@ export function simulateMatch(db: SqliteDatabase, fixtureId: number): MatchSumma
     }
     db.prepare("DELETE FROM match_simulation_state WHERE fixture_id = ?").run(fixtureId);
   });
-  tx();
+  tx.immediate();
 
   return {
     fixtureId,
