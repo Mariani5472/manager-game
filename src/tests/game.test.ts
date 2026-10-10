@@ -256,7 +256,8 @@ test("a tied knockout final persists a deterministic winner and cannot complete 
       assert.equal(getSeasonStatus(db,2)[0]?.stageStatus,"COMPLETED");
       const listedFinal=listFixtures(db).find(fixture=>fixture.id===final.id)!;
       assert.match(listedFinal.score ?? "",/Pênaltis \d+ - \d+/);
-      assert.equal(listedFinal.winnerClub,db.prepare("SELECT name FROM club WHERE id=?").get(result.winnerClubId)?.name);
+      const winnerName = db.prepare("SELECT name FROM club WHERE id=?").get(result.winnerClubId) as {name:string}|undefined;
+      assert.equal(listedFinal.winnerClub,winnerName?.name);
       assert.deepEqual(resolveKnockoutFixtureWinner(db,final.id),result);
     } finally { db.close(); }
   } finally { rmSync(root,{recursive:true,force:true}); }
