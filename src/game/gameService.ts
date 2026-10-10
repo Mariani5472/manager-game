@@ -209,7 +209,7 @@ export function advanceNextFixture(db: SqliteDatabase, fixtureId?: number): Matc
   const row = fixtureId
     ? db.prepare("SELECT id FROM fixture WHERE id=? AND status IN ('SCHEDULED','IN_PROGRESS')").get(fixtureId) as {id:number}|undefined
     : db.prepare("SELECT id FROM fixture WHERE status IN ('SCHEDULED','IN_PROGRESS') ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 ELSE 1 END,scheduled_at,id LIMIT 1").get() as {id:number}|undefined;
-  if (!row) throw new Error(fixtureId ? `Playable fixture ${fixtureId} not found (it may already be completed).` : "No playable fixtures remain.");
+  if (!row) throw new Error(fixtureId ? `Scheduled fixture ${fixtureId} not found (it may already be completed or is not playable).` : "No scheduled or in-progress fixtures remain.");
   const stage = db.prepare("SELECT r.stage_id AS id FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE f.id=?")
     .get(row.id) as {id:number}|undefined;
   if (!stage) throw new Error(`Fixture ${row.id} has no competition stage.`);
