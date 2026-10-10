@@ -50,13 +50,13 @@ export function getManagedClub(db: SqliteDatabase): ClubSummary {
 
 export function listSquad(db: SqliteDatabase, clubId: number): PlayerSummary[] {
   const rows = db.prepare(`
-    SELECT p.person_id AS id, p.full_name AS name, sm.shirt_number AS shirtNumber,
+    SELECT p.id AS id, p.full_name AS name, sm.shirt_number AS shirtNumber,
       sm.squad_status AS squadStatus,
-      COALESCE((SELECT json_group_array(pp.position_code) FROM player_position pp WHERE pp.player_id=p.person_id),'[]') AS positionsJson,
+      COALESCE((SELECT json_group_array(pp.position_code) FROM player_position pp WHERE pp.player_id=p.id),'[]') AS positionsJson,
       COALESCE(pc.energy,100) AS energy, COALESCE(pc.morale,50) AS morale,
       COALESCE(pc.sharpness,50) AS sharpness
-    FROM squad_membership sm JOIN person p ON p.person_id=sm.player_id
-    LEFT JOIN player_condition pc ON pc.player_id=p.person_id WHERE sm.club_id=?
+    FROM squad_membership sm JOIN person p ON p.id=sm.player_id
+    LEFT JOIN player_condition pc ON pc.player_id=p.id WHERE sm.club_id=?
     ORDER BY CASE sm.squad_status WHEN 'FIRST_TEAM' THEN 0 WHEN 'RESERVE' THEN 1 ELSE 2 END,
              sm.shirt_number, p.full_name
   `).all(clubId) as Array<{
