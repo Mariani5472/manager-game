@@ -135,6 +135,65 @@ export function runMatchBalanceAnalysis(db:SqliteDatabase,clubA:number,clubB:num
  if(fixtureId<0){return runMonteCarlo(loadTeam(db,-1,clubA,false),loadTeam(db,-1,clubB,false),simulations,seed);}
  return runMonteCarlo(loadTeam(db,fixtureId,clubA,false),loadTeam(db,fixtureId,clubB,false),simulations,seed);
 }
+
+export interface XgBandDiagnostic {
+ band:string;shots:number;averageXg:number;onTargetRate:number;goals:number;saves:number;misses:number;
+}
+export interface MatchEngineDiagnostics {
+ simulations:number;
+ baseline:MonteCarloReport;
+ xgBands:XgBandDiagnostic[];
+ homeAdvantage:{clubA:number;clubB:number;clubAWinRateAtHome:number;clubAWinRateAway:number;homeAdvantageDelta:number};
+ strengthGap:{weakClubId:number;strongClubId:number;weakStrength:number;strongStrength:number;strongWinRate:number;drawRate:number;weakWinRate:number;strongAverageGoals:number;weakAverageGoals:number};
+ persistedMatches:{checked:number;issues:string[]};
+}
+export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=88421):MatchEngineDiagnostics {
+ if(!Number.isSafeInteger(simulations)||simulations<100)throw new Error("Diagnostics simulations must be an integer >= 100.");
+ const ids=(db.prepare("SELECT id FROM club ORDER BY id").all() as Array<{id:number}>).map(r=>r.id);
+ if(ids.length<2)throw new Error("Diagnostics require at least two clubs.");
+ const teams=ids.map(id=>loadTeam(db,-1,id,false));
+ const strength=(t:Team)=>t.attacking*.4+t.defending*.35+t.goalkeeping*.25;
+ const ranked=teams.map(team=>({team,value:strength(team)})).sort((a,b)=>a.value-b.value||a.team.clubId-b.team.clubId);
+ const weak=ranked[0]!,strong=ranked[ranked.length-1]!;
+ const baseline=runMonteCarlo(strong.team,weak.team,simulations,seed);
+ const bands=[
+  {label:"0.00-0.05",min:0,max:.05,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.05-0.10",min:.05,max:.10,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.10-0.15",min:.10,max:.15,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.15-0.20",min:.15,max:.20,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.20+",min:.20,max:Infinity,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
+ ];
+ for(let i=0;i<simulations;i++){
+  const timeline=simulateMatchTimeline(strong.team,weak.team,seed+i*7919);
+  for(const e of timeline.events){
+   const b=bands.find(item=>e.xg>=item.min&&e.xg<item.max)!;
+   b.shots++;b.xg+=e.xg;
+   if(e.eventType==="GOAL"){b.goals++;b.onTarget++;}
+   else if(e.eventType==="SAVE"){b.saves++;b.onTarget++;}
+   else b.misses++;
+  }
+ }
+ 
+ const xgBands: XgBandDiagnostic[]=bands.map(b=>({band:b.label,shots:b.shots,averageXg:b.shots?b.xg/b.shots:0,onTargetRate:b.shots?(b.onTarget/b.shots):0,goals:b.goals,saves:b.saves,misses:b.misses}));
+ const ab=runMonteCarlo(strong.team,weak.team,simulations,seed+1700003);
+ const ba=runMonteCarlo(weak.team,strong.team,simulations,seed+1700003);
+ const persistedRows=db.prepare("SELECT f.id,f.home_club_id,f.away_club_id,f.home_score,f.away_score,f.current_minute, s.simulation_minute,s.state_json,(SELECT COUNT(*) FROM match_momentum m WHERE m.fixture_id=f.id) AS momentum_count,(SELECT COUNT(*) FROM match_event e WHERE e.fixture_id=f.id AND e.event_type='GOAL' AND e.club_id=f.home_club_id) AS event_home_goals,(SELECT COUNT(*) FROM match_event e WHERE e.fixture_id=f.id AND e.event_type='GOAL' AND e.club_id=f.away_club_id) AS event_away_goals FROM fixture f LEFT JOIN match_simulation_state s ON s.fixture_id=f.id WHERE f.status='COMPLETED' ORDER BY f.id DESC LIMIT 100").all() as Array<{id:number;home_score:number;away_score:number;current_minute:number;simulation_minute:number|null;state_json:string|null;momentum_count:number;event_home_goals:number;event_away_goals:number}>;
+ const issues:string[]=[];
+ for(const r of persistedRows){
+  if(r.current_minute!==90)issues.push(`Fixture ${r.id}: completed with current_minute=${r.current_minute}`);
+  if(r.event_home_goals!==r.home_score||r.event_away_goals!==r.away_score)issues.push(`Fixture ${r.id}: score differs from GOAL events`);
+  if(r.momentum_count!==90)issues.push(`Fixture ${r.id}: expected 90 momentum rows, found ${r.momentum_count}`);
+  if(r.simulation_minute!==90||!r.state_json||JSON.parse(r.state_json).completed!==true)issues.push(`Fixture ${r.id}: final checkpoint missing or incomplete`);
+ }
+ return {
+  simulations,baseline,xgBands,
+  homeAdvantage:{clubA:strong.team.clubId,clubB:weak.team.clubId,clubAWinRateAtHome:ab.homeWinRate,clubAWinRateAway:ba.awayWinRate,homeAdvantageDelta:ab.homeWinRate-ba.awayWinRate},
+  strengthGap:{weakClubId:weak.team.clubId,strongClubId:strong.team.clubId,weakStrength:weak.value,strongStrength:strong.value,strongWinRate:baseline.homeWinRate,drawRate:baseline.drawRate,weakWinRate:baseline.awayWinRate,strongAverageGoals:baseline.averageHomeGoals,weakAverageGoals:baseline.averageAwayGoals},
+  persistedMatches:{checked:persistedRows.length,issues}
+ };
+}
+
+
 export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
  const f=db.prepare("SELECT id,home_club_id,away_club_id,random_seed,status FROM fixture WHERE id=?").get(fixtureId) as FixtureRow|undefined;
  if(!f)throw new Error(`Fixture ${fixtureId} not found.`);
