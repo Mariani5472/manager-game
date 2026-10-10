@@ -19,6 +19,22 @@ npm test
 
 O kernel é pseudoaleatório e reproduzível por seed para facilitar comparações entre escalações/táticas. O motor continua sendo uma simulação probabilística compacta, não uma garantia de equilíbrio calibrado; os relatórios Monte Carlo devem orientar ajustes graduais nos parâmetros.
 
+
+## Comandos de escalação e equilíbrio
+
+```bash
+# Prévia automática para a partida 1, com o clube controlado
+npm run dev -- lineup 1 --save-id <save-id>
+
+# Persistir IDs na ordem dos slots da formação (11 titulares e até 7 reservas)
+npm run dev -- lineup 1 --club 1 --starters 1,3,4,5,6,9,10,11,15,16,17 --bench 2,7,8,12,13,14,18 --save-id <save-id>
+
+# Rodar 5.000 simulações sem alterar o estado do save
+npm run dev -- balance --home 1 --away 2 --simulations 5000 --save-id <save-id>
+```
+
+Os IDs em `--starters` seguem a ordem dos slots da formação; o ID na posição do slot `GK` precisa ser goleiro. A análise Monte Carlo é somente leitura e usa seeds determinísticas.
+
 ## API de escalação
 
 `previewLineup(db, clubId, fixtureId)` sugere 11 titulares e até sete reservas. `saveLineup(db, fixtureId, clubId, starterIds, benchIds)` grava a escolha antes do kickoff, após validações.
