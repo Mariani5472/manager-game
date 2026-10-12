@@ -35,6 +35,26 @@ Mudanças futuras no calendário, simulação, classificação, persistência ou
 O kernel é pseudoaleatório e reproduzível por seed para facilitar comparações entre escalações/táticas. O motor continua sendo uma simulação probabilística compacta, não uma garantia de equilíbrio calibrado; os relatórios Monte Carlo devem orientar ajustes graduais nos parâmetros.
 
 
+## Fase 5 — calibração da engine e mundo de 16 clubes
+
+O comando `npm run dev -- init-master` cria ou reconcilia o banco matriz. No banco de fábrica original, o comando amplia o mundo ficcional para **16 clubes**, preservando a independência dos saves existentes. A migração automática só é permitida no banco matriz com as partidas de fábrica ainda agendadas; se houver resultados ou estado parcial, ela falha de forma explícita em vez de apagar progresso.
+
+- **Liga Nacional de Teste:** 16 clubes, ida e volta, 30 rodadas e 240 partidas.
+- **Copa Nacional de Teste:** os mesmos 16 clubes em mata-mata, começando nas oitavas; 8 + 4 + 2 + 1 = 15 partidas no total.
+- **Elencos:** os 12 clubes adicionados recebem 18 jogadores, atributos, posições, condição, estádio e tática para poderem ser selecionados e simulados.
+- **Integridade:** o teste de integração valida 16 participantes, 240 partidas de liga, 15 jogos de copa, classificação final, encerramento das duas competições e verificações SQLite.
+
+A suíte de estratégia já compara cenários com seeds fixas e inclui favorito/azarão, impacto tático e goleiro excepcional. Um teste de benchmark imprime no log da CI o tempo de 5.000 simulações Monte Carlo, a média por partida real estimada a partir de uma rodada de oito jogos e o tempo total para completar a liga e a copa. Os valores variam conforme o runner; use-os como baseline comparativa, não como promessa universal de desempenho.
+
+Para inicializar/reconciliar o banco matriz:
+
+```bash
+npm run dev -- init-master
+npm run dev -- clubs
+```
+
+Crie uma campanha nova depois da migração para herdar os 16 clubes. Saves existentes não são alterados automaticamente.
+
 ## Comandos de escalação e equilíbrio
 
 ```bash
