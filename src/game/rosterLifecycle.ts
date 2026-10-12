@@ -217,7 +217,7 @@ export function applyRosterSeason(db:SqliteDatabase,seasonYear:number):RosterSea
         const potential=clamp(40+club.reputation*.35+random01(seed+41)*24,35,90);
         db.prepare("INSERT INTO player(person_id,potential,preferred_foot,goalkeeper) VALUES(?,?,?,?)").run(personId,potential,random01(seed+53)<.1?"LEFT":"RIGHT",random01(seed+67)<.1?1:0);
         const rating=clamp(25+club.reputation*.3+random01(seed+71)*18,20,65);
-        db.prepare("INSERT INTO player_attribute(player_id,"+ATTRIBUTE_COLUMNS.join(",")+") VALUES("+ATTRIBUTE_COLUMNS.map(()=>"?").join(",")+")").run(personId,...ATTRIBUTE_COLUMNS.map((_,index)=>clamp(rating+(random01(seed+index*19)-.5)*16,10,80)));
+        db.prepare("INSERT INTO player_attribute(player_id,"+ATTRIBUTE_COLUMNS.join(",")+") VALUES(?, "+ATTRIBUTE_COLUMNS.map(()=>"?").join(",")+")").run(personId,...ATTRIBUTE_COLUMNS.map((_,index)=>clamp(rating+(random01(seed+index*19)-.5)*16,10,80)));
         const primary=POSITION_CODES[Math.floor(random01(seed+79)*POSITION_CODES.length)]!;
         const secondary=POSITION_CODES[(POSITION_CODES.indexOf(primary)+3)%POSITION_CODES.length]!;
         db.prepare("INSERT INTO player_position(player_id,position_code,rating) VALUES(?,?,?),(?,?,?)").run(personId,primary,rating,personId,secondary,Math.max(20,rating-8));
