@@ -64,12 +64,15 @@ test("match context persists weather and pitch, applies substitutions as events,
       playerOutId: starter.playerId, playerInId: substitute.playerId
     });
     scheduleMatchTacticalChange(db, fixture.id, fixture.home, 70, "MENTALITY", { mentality: "ATTACKING" });
+    const formation = db.prepare("SELECT formation_id AS id FROM team_tactic WHERE club_id=?").get(fixture.home) as {id:number};
+    scheduleMatchTacticalChange(db, fixture.id, fixture.home, 80, "FORMATION", { formationId: formation.id });
 
     const result = simulateMatch(db, fixture.id);
     assert.equal(result.minutes, 90);
     assert.equal((db.prepare("SELECT weather FROM match_environment WHERE fixture_id=?").get(fixture.id) as {weather:string}).weather, "HEAVY_RAIN");
     assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=? AND event_type='SUBSTITUTION' AND minute=60").get(fixture.id) as {count:number}).count, 1);
     assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=? AND event_type='TACTIC_CHANGE' AND minute=70").get(fixture.id) as {count:number}).count, 1);
+    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=? AND event_type='TACTIC_CHANGE' AND minute=80").get(fixture.id) as {count:number}).count, 1);
     assert.equal((db.prepare("SELECT suspension_matches AS value FROM player_condition WHERE player_id=?").get(suspended.id) as {value:number}).value, 1);
     assert.equal((db.prepare("SELECT applied FROM match_tactical_change WHERE fixture_id=? AND minute=60").get(fixture.id) as {applied:number}).applied, 1);
     const subState = db.prepare("SELECT minutes_played AS minutes FROM match_player_state WHERE fixture_id=? AND player_id=?").get(fixture.id, substitute.playerId) as {minutes:number};
