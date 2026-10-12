@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { openDatabase } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
-import { advanceNextFixture, getManagedClub, getSeasonStatus, getStandings, listClubs, listFixtures, listSquad, getTactics } from "../game/gameService.js";
+import { advanceNextFixture, advanceRound, getManagedClub, getSeasonStatus, getStandings, listClubs, listFixtures, listSquad, getTactics } from "../game/gameService.js";
 import { saveLineup } from "../game/lineupService.js";
 
 const root = process.cwd();
@@ -103,12 +103,29 @@ export function startManagerWebServer(): void {
       }
       if (req.method === "POST" && url.pathname === "/api/play") {
         const input = await body(req);
-        const result = withDb(String(input.saveId ?? ""), db => advanceNextFixture(db, positiveInt(input.fixtureId,"fixtureId")));
+        const result = withDb(String(input.saveId ?? ""), db => {
+          const fixtureId = positiveInt(input.fixtureId,"fixtureId");
+          const fixture = db.prepare("SELECT round_id AS roundId FROM fixture WHERE id=? AND status IN ('SCHEDULED','IN_PROGRESS')").get(fixtureId) as {roundId:number}|undefined;
+          if (!fixture) throw new Error("Partida não encontrada ou já concluída.");
+          return { roundId: fixture.roundId, matches: advanceRound(db, fixture.roundId) };
+        });
         json(res, 200, result); return;
       }
       if (req.method === "POST" && url.pathname === "/api/play-next") {
         const input = await body(req);
-        const result = withDb(String(input.saveId ?? ""), db => advanceNextFixture(db));
+        const result = withDb(String(input.saveId ?? ""), db => {
+          const managed = getManagedClub(db);
+          const fixture = db.prepare(`
+            SELECT f.id, f.round_id AS roundId FROM fixture f
+            JOIN competition_round r ON r.id=f.round_id
+            WHERE f.status IN ('SCHEDULED','IN_PROGRESS')
+              AND (f.home_club_id=? OR f.away_club_id=?)
+            ORDER BY CASE f.status WHEN 'IN_PROGRESS' THEN 0 ELSE 1 END, f.scheduled_at, f.id
+            LIMIT 1
+          `).get(managed.id, managed.id) as {id:number;roundId:number}|undefined;
+          if (!fixture) throw new Error("Seu clube não tem partidas pendentes.");
+          return { roundId: fixture.roundId, managedFixtureId: fixture.id, matches: advanceRound(db, fixture.roundId) };
+        });
         json(res, 200, result); return;
       }
       json(res, 404, { error: "Rota não encontrada." });
