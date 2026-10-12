@@ -133,6 +133,6 @@ export function startManagerWebServer(): void {
       json(res, 400, { error: error instanceof Error ? error.message : "Erro inesperado." });
     }
   });
-  server.listen(port, "127.0.0.1", () => console.log("Manager UI: http://127.0.0.1:" + port));
+  server.listen(port, "0.0.0.0", () => console.log("Manager UI disponível na porta " + port));
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) startManagerWebServer();
