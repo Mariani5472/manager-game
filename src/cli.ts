@@ -82,7 +82,7 @@ function simulateSeason(db: ReturnType<typeof openDatabase>): void {
     JOIN competition co ON co.id=cs.competition_id
     WHERE EXISTS (
       SELECT 1 FROM competition_round r JOIN fixture f ON f.round_id=r.id
-      WHERE r.stage_id=st.id AND f.status IN ('SCHEDULED','IN_PROGRESS','POSTPONED')
+      WHERE r.stage_id=st.id AND f.status IN ('SCHEDULED','IN_PROGRESS')
     )
     ORDER BY cs.season_year,
       CASE st.stage_kind WHEN 'LEAGUE' THEN 0 ELSE 1 END,
@@ -106,7 +106,7 @@ function simulateSeason(db: ReturnType<typeof openDatabase>): void {
 
       const pending = (db.prepare(`
         SELECT COUNT(*) AS count FROM fixture
-        WHERE round_id=? AND status IN ('SCHEDULED','IN_PROGRESS','POSTPONED')
+        WHERE round_id=? AND status IN ('SCHEDULED','IN_PROGRESS')
       `).get(round.id) as {count:number}).count;
 
       if (pending > 0) {
