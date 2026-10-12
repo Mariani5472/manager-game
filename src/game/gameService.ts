@@ -557,7 +557,7 @@ export function ensureFactoryWorld16(db: SqliteDatabase): { upgraded:boolean; cl
   const leagueCount=(db.prepare("SELECT COUNT(*) AS count FROM stage_participant WHERE stage_id=?").get(league.stageId) as {count:number}).count;
   const cupCount=(db.prepare("SELECT COUNT(*) AS count FROM stage_participant WHERE stage_id=?").get(cup.stageId) as {count:number}).count;
   const leagueFixtures=(db.prepare("SELECT COUNT(*) AS count FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=?").get(league.stageId) as {count:number}).count;
-  if(clubCount===16&&leagueCount===16&&cupCount===16&&leagueFixtures===240) return {upgraded:false,clubs:16,leagueFixtures:240,cupEntrants:16};
+  if(clubCount===16&&leagueCount===16&&cupCount===16) return {upgraded:false,clubs:16,leagueFixtures,cupEntrants:16};
   if(clubCount!==4||leagueCount!==4||cupCount!==4) throw new Error("Factory world is neither the original four-club seed nor a complete 16-club world; no automatic upgrade was attempted.");
   const played=(db.prepare("SELECT COUNT(*) AS count FROM fixture WHERE status<>'SCHEDULED'").get() as {count:number}).count;
   if(played>0) throw new Error("The factory world contains played or non-scheduled fixtures. It was not upgraded; existing saves are not changed.");
