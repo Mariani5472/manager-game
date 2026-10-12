@@ -577,9 +577,9 @@ function ensureFactorySquadProfiles(db: SqliteDatabase): void {
   ];
   const selectPlayers = db.prepare(`
     SELECT p.person_id AS id, p.goalkeeper, sm.shirt_number AS shirtNumber,
-      pp.position_code AS position, pp.rating AS positionRating
+      (SELECT pp.position_code FROM player_position pp WHERE pp.player_id=p.person_id
+       ORDER BY pp.rating DESC, pp.position_code LIMIT 1) AS position
     FROM squad_membership sm JOIN player p ON p.person_id=sm.player_id
-    LEFT JOIN player_position pp ON pp.player_id=p.person_id
     WHERE sm.club_id=? ORDER BY sm.shirt_number, p.person_id
   `);
   const updateAttrs = db.prepare("UPDATE player_attribute SET " + attrs.map(a => a + "=?").join(",") + " WHERE player_id=?");
@@ -591,7 +591,7 @@ function ensureFactorySquadProfiles(db: SqliteDatabase): void {
       const base = [73, 66, 59, 52][tier]!;
       const identity = (club.id * 17) % 3;
       const players = selectPlayers.all(club.id) as Array<{
-        id:number;goalkeeper:number;shirtNumber:number|null;position:string|null;positionRating:number|null;
+        id:number;goalkeeper:number;shirtNumber:number|null;position:string|null;
       }>;
       for (const player of players) {
         const role = player.position ?? (player.goalkeeper ? "GK" : "CM");
