@@ -123,7 +123,7 @@ function ageAt(birthDate:string|null,year:number):number { return birthDate ? Ma
 function overallRating(db:SqliteDatabase,playerId:number):number {
   const row=db.prepare("SELECT "+ATTRIBUTE_COLUMNS.join(",")+" FROM player_attribute WHERE player_id=?").get(playerId) as Record<string,number>|undefined;
   if(!row)return 35;
-  const vals=ATTRIBUTE_COLUMNS.map(key=>row[key]);
+  const vals=ATTRIBUTE_COLUMNS.map(key=>Number(row[key] ?? 0));
   return Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
 }
 function marketValue(rating:number,potential:number,age:number):number {
