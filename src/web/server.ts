@@ -58,7 +58,7 @@ export function startManagerWebServer(): void {
             fixture: selectedFixture,
             momentum: db.prepare("SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,home_score AS homeScore,away_score AS awayScore FROM match_momentum WHERE fixture_id=? ORDER BY minute").all(selectedFixture.id),
             events: db.prepare("SELECT minute,event_type AS type,description,xg FROM match_event WHERE fixture_id=? ORDER BY minute,id").all(selectedFixture.id),
-            stats: db.prepare("SELECT club_id AS clubId, SUM(CASE WHEN event_type IN ('GOAL','SAVE','MISS') THEN 1 ELSE 0 END) AS shots, SUM(CASE WHEN event_type IN ('GOAL','SAVE') THEN 1 ELSE 0 END) AS shotsOnTarget, ROUND(COALESCE(SUM(xg),0),2) AS xg FROM match_event WHERE fixture_id=? GROUP BY club_id").all(selectedFixture.id)
+            stats: db.prepare("SELECT club_id AS clubId, SUM(CASE WHEN event_type IN ('GOAL','SAVE','MISS') THEN 1 ELSE 0 END) AS shots, SUM(CASE WHEN event_type IN ('GOAL','SAVE') THEN 1 ELSE 0 END) AS shotsOnTarget, ROUND(COALESCE(SUM(xg),0),2) AS xg FROM match_event WHERE fixture_id=? GROUP BY club_id ORDER BY CASE club_id WHEN (SELECT home_club_id FROM fixture WHERE id=?) THEN 0 ELSE 1 END").all(selectedFixture.id, selectedFixture.id)
           } : null;
           const formations = db.prepare("SELECT id,name FROM formation ORDER BY name").all();
           return { managed, fixtures, stages, selectedStage, standings, upcoming, recent, squad, tactics, formations, selectedFixture, matchDetails };
