@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test dist/tests/*.test.js",
     "dev": "tsx src/cli.ts",
-    "game": "node dist/cli.js"
+    "game": "node dist/cli.js",
+    "ui": "tsx src/web/server.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.10.0"
