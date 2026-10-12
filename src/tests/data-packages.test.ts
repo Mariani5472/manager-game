@@ -30,7 +30,7 @@ test("versioned data packages validate references, import generically and remain
     assert.equal(installed.fixtures,8);
     assert.equal(installDataPackage(db,pkg).fixtures,0,"same package version must be idempotent");
     assert.equal(listInstalledDataPackages(db).length,1);
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM club WHERE short_name IN ('NFC','PSC','AUR','VLO')").get() as {n:number}).n,4);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM data_package_entity WHERE package_id=? AND entity_type='club'").get(pkg.id) as {n:number}).n,4);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM player p JOIN person pe ON pe.id=p.person_id WHERE pe.full_name IN ('Davi Monteiro','Caio Ventura','Lucas Prado','Bruno Leme','Renan Vidal','Ícaro Reis','Mateus Serra','André Farias')").get() as {n:number}).n,8);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM fixture f JOIN competition_round r ON r.id=f.round_id JOIN competition_stage st ON st.id=r.stage_id JOIN competition_season cs ON cs.id=st.season_id WHERE cs.season_year=2026 AND f.status='SCHEDULED'").get() as {n:number}).n>=4,true);
     const invalid=parseDataPackage(readFileSync(packagePath,"utf8").replace('"clubCode": "NFC"','"clubCode": "MISSING-CLUB"'));
