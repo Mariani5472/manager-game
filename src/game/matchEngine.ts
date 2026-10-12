@@ -449,6 +449,7 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
     db.prepare("UPDATE player_condition SET morale=MIN(100,MAX(0,morale+?)) WHERE player_id=?").run(delta,p.id);
    }
   }
+  db.prepare("UPDATE player_condition SET suspension_matches=MAX(0,suspension_matches-1) WHERE player_id IN (SELECT player_id FROM squad_membership WHERE club_id IN (?,?)) AND suspension_matches>0").run(f.home_club_id,f.away_club_id);
   db.prepare("UPDATE fixture SET status='COMPLETED',current_minute=90,home_score=?,away_score=? WHERE id=?")
    .run(timeline.result.homeScore,timeline.result.awayScore,fixtureId);
   checkpoint.run(90,JSON.stringify({seed,minute:90,homeScore:timeline.result.homeScore,
