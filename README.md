@@ -87,6 +87,18 @@ Em etapas eliminatórias, quando todos os jogos de uma rodada terminam, os vence
 
 Se o banco matriz já existia antes da correção do calendário, execute `npm run dev -- init-master`: o comando reconcilia **somente** o calendário da liga ficcional padrão quando todas as partidas ainda estão agendadas. Os saves existentes não são alterados; crie um save novo após a reparação para testar o calendário corrigido.
 
+## Simular uma temporada inteira
+
+Para processar todas as rodadas pendentes da campanha, incluindo liga e copa, execute:
+
+```bash
+npm run dev -- simulate-season --save-id <save-id>
+```
+
+O comando usa o mesmo processamento de `advance-round`: simula todas as partidas pendentes de uma rodada, imprime os resultados e, antes de seguir para a próxima rodada, imprime a classificação com o mesmo cálculo de `standings`. Na copa, as rodadas seguintes são criadas automaticamente conforme os vencedores avançam. Rodadas já concluídas são ignoradas, e o comando não reinicia nem apaga resultados existentes. Ao final, mostra o status das competições.
+
+Também é possível abrir o save por caminho, usando `--save <caminho>` no lugar de `--save-id <save-id>`.
+
 ## API de escalação
 
 `previewLineup(db, clubId, fixtureId)` sugere 11 titulares e até sete reservas. `saveLineup(db, fixtureId, clubId, starterIds, benchIds)` grava a escolha antes do kickoff, após validações.
