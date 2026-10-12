@@ -36,6 +36,49 @@ O kernel é pseudoaleatório e reproduzível por seed para facilitar comparaçõ
 
 
 
+## Fase 7 — ciclo de vida do elenco
+
+A Fase 7 adiciona estado persistente de carreira e finanças ao save. As tabelas de gestão são criadas de forma idempotente na primeira utilização, preservando saves existentes sem exigir uma edição manual do schema base.
+
+- **Evolução de atributos e potencial:** ao processar uma nova temporada, os atributos evoluem ou declinam por idade, potencial, nível atual e energia. A variação é determinística por jogador/temporada para manter reprodutibilidade.
+- **Idade, aposentadoria e base:** idade é derivada de `person.birth_date`; jogadores veteranos podem se aposentar. Cada clube recebe uma geração anual de jovens com atributos, potencial, posições, condição e contrato inicial.
+- **Contratos e orçamento:** salários semanais, duração de contrato, balanço, verba de transferências e teto salarial são persistidos por save. A virada de temporada desconta a folha anual, expira contratos vencidos e libera jogadores sem contrato.
+- **Mercado e negociação:** ofertas validam verba e teto salarial. Uma negociação pode ser aceita, rejeitada ou receber contraproposta; ao aceitar, a transferência, o contrato, o movimento financeiro e o histórico são atualizados na mesma transação.
+- **Histórico:** snapshots por temporada guardam idade, overall, potencial, salário, jogos, minutos e gols; o histórico de transferências registra transferências, formação, expiração e aposentadoria.
+
+### Comandos de gestão
+
+```bash
+# Elenco com idade, overall, potencial, valor estimado e contrato
+npm run dev -- roster --save-id <save-id>
+npm run dev -- roster --club 1 --year 2028 --save-id <save-id>
+
+# Finanças de todos os clubes ou de um clube
+npm run dev -- finances --save-id <save-id>
+npm run dev -- finances --club 1 --save-id <save-id>
+
+# Renovar contrato (salário semanal, duração em temporadas)
+npm run dev -- renew-contract --player <player-id> --club 1 --wage 1800 --years 3 --save-id <save-id>
+
+# Enviar oferta por um jogador de outro clube ou agente livre
+npm run dev -- transfer-offer --player <player-id> --club 1 --fee 250000 --wage 2200 --years 4 --save-id <save-id>
+
+# Responder à oferta: aceitar, rejeitar ou fazer contraproposta
+npm run dev -- transfer-response --offer <offer-id> --action COUNTER --fee 300000 --wage 2300 --years 4 --save-id <save-id>
+npm run dev -- transfer-response --offer <offer-id> --action ACCEPT --save-id <save-id>
+npm run dev -- transfer-response --offer <offer-id> --action REJECT --save-id <save-id>
+
+# Histórico individual e histórico de transferências
+npm run dev -- player-history --player <player-id> --save-id <save-id>
+npm run dev -- transfer-history --player <player-id> --save-id <save-id>
+npm run dev -- transfer-history --save-id <save-id>
+
+# Processamento explícito e idempotente do ciclo de uma temporada
+npm run dev -- roster-season --year 2028 --save-id <save-id>
+```
+
+A criação da temporada seguinte pelo comando `next-season` processa automaticamente o ciclo de elenco do novo ano, uma única vez. `roster-season` é útil para testes e campanhas que precisem disparar o processamento manualmente. Os orçamentos e contratos são independentes em cada save.
+
 ## Fase 6 — contexto completo da partida
 
 O motor aplica o contexto de cada jogo por efeitos agregados no cálculo de pressão e de finalizações, sem simular física ou ações segundo a segundo:

@@ -1,5 +1,6 @@
 import type { SqliteDatabase } from "../db/database.js";
 import { simulateMatch, type MatchSummary } from "./matchEngine.js";
+import { applyRosterSeason } from "./rosterLifecycle.js";
 
 export interface FixtureInfo {
   id: number; competition: string; stage: string; round: string; scheduledAt: string | null;
@@ -807,7 +808,7 @@ export function prepareNextLeagueSeason(db: SqliteDatabase, stageId: number): {s
     LEFT JOIN competition_round r ON r.stage_id=st.id LEFT JOIN fixture f ON f.round_id=r.id
     WHERE cs.competition_id=? AND cs.season_year=? GROUP BY cs.id,st.id
   `).get(stage.competition_id,stage.season_year+1) as {seasonId:number;year:number;stageId:number;fixtureCount:number}|undefined;
-  if (existing) return {seasonId:existing.seasonId,year:existing.year,fixtures:existing.fixtureCount};
+  if (existing) { applyRosterSeason(db,existing.year); return {seasonId:existing.seasonId,year:existing.year,fixtures:existing.fixtureCount}; }
 
   const format = db.prepare("SELECT * FROM stage_format WHERE stage_id=?").get(stageId) as {
     legs:number;group_count:number;home_away:number;extra_time:number;penalties:number;
@@ -872,5 +873,7 @@ export function prepareNextLeagueSeason(db: SqliteDatabase, stageId: number): {s
     });
     return {seasonId,year,fixtures:fixtureCount};
   });
-  return create();
+  const result=create();
+  applyRosterSeason(db,result.year);
+  return result;
 }
