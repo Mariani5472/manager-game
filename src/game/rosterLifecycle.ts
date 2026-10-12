@@ -306,7 +306,7 @@ export function respondToTransferOffer(db:SqliteDatabase,offerId:number,action:"
   if(currentClub&&currentClub.clubId!==offer.selling_club_id)throw new Error("Player's club changed during negotiations; offer is stale.");
   const transaction=db.transaction(()=>{
     db.prepare("UPDATE club_finance SET balance=balance-?,transfer_budget=transfer_budget-? WHERE club_id=?").run(offer.offer_fee,offer.offer_fee,offer.buying_club_id);
-    if(offer.selling_club_id!==null)db.prepare("UPDATE club_finance SET balance=balance+?,transfer_budget=MIN(balance,transfer_budget+?) WHERE club_id=?").run(offer.offer_fee,Math.round(offer.offer_fee*.7),offer.selling_club_id);
+    if(offer.selling_club_id!==null)db.prepare("UPDATE club_finance SET balance=balance+?,transfer_budget=MIN(balance+?,transfer_budget+?) WHERE club_id=?").run(offer.offer_fee,offer.offer_fee,Math.round(offer.offer_fee*.7),offer.selling_club_id);
     if(currentClub)db.prepare("DELETE FROM squad_membership WHERE player_id=?").run(offer.player_id);
     const shirt=(db.prepare("SELECT COALESCE(MAX(shirt_number),0)+1 AS n FROM squad_membership WHERE club_id=?").get(offer.buying_club_id) as {n:number}).n;
     db.prepare("INSERT INTO squad_membership(player_id,club_id,shirt_number,squad_status) VALUES(?,?,?,'FIRST_TEAM')").run(offer.player_id,offer.buying_club_id,shirt<=99?shirt:null);
