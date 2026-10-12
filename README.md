@@ -1,3 +1,33 @@
+## Fase 9 — Interface e experiência do manager
+
+A interface web permite criar uma campanha a partir do banco matriz, escolher o clube, acompanhar a temporada e tomar decisões sem usar a CLI durante o jogo. A interface é servida localmente e não exige framework frontend adicional.
+
+### Iniciar
+
+```bash
+# Uma única vez por instalação: prepara o banco matriz e os dados de fábrica
+npm install
+npm run dev -- init-master
+
+# Inicia a interface local
+npm run ui
+```
+
+Abra http://127.0.0.1:4173. Use **Nova campanha** para informar o nome do manager, o nome da carreira e escolher um clube. A campanha é criada como save independente; a interface usa o ID do save para reabrir a carreira.
+
+### Funcionalidades
+
+- Painel com calendário, classificação, próximos jogos, resultados recentes e notícias derivadas da carreira.
+- Elenco e escalação pré-jogo com seleção de 11 titulares e até 7 reservas; a validação existente garante disponibilidade e posição de goleiro.
+- Tela tática com formação, mentalidade, pressão, ritmo, linha defensiva, largura, passe direto e contra-ataque, persistidos no save.
+- Central de partidas com placar, eventos, xG, finalizações e gráfico de momentum baseado nos dados persistidos pela engine.
+- Navegação entre competições/etapas, calendário completo e histórico de resultados.
+- Simulação de partida pela interface, com o mesmo motor e os mesmos dados transacionais do jogo via CLI.
+
+### Limites atuais
+
+A interface é uma primeira versão local, responsiva e sem autenticação, vinculada ao endereço de loopback `127.0.0.1`. Não a exponha diretamente à internet. A preparação inicial do banco matriz ainda usa o comando `init-master`; depois disso, criar campanhas, escalar, ajustar táticas e simular partidas pode ser feito pela UI. Notícias são derivadas dos resultados existentes, não de uma simulação editorial independente. O gráfico de momentum só tem dados após a engine processar a partida.
+
 # Manager Game
 
 A data-driven, text-based football manager built with TypeScript, Node.js and SQLite.
