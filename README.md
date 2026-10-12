@@ -164,3 +164,9 @@ npm run dev -- season-balance --save-id <save-id> --seasons 20 --seed 90210
 ```
 
 O comando usa o elenco atual de cada clube e simula ida e volta entre todos os participantes. O resultado inclui médias por clube e por faixa de força (elite, competitivos, meio de tabela e parte inferior). A análise é diagnóstica e não altera partidas nem dados do save. Para uma campanha com 16 clubes, cada temporada virtual contém 240 partidas; o número de temporadas pode variar de 1 a 500.
+
+Para aplicar os novos perfis a um save existente de 16 clubes, execute explicitamente (afeta atributos e reputações dos clubes desse save; partidas já concluídas permanecem intactas):
+
+```bash
+npm run dev -- recalibrate-squads --save-id <save-id>
+```
