@@ -8,7 +8,7 @@ import { SaveManager } from "./save/saveManager.js";
 import { applyPromotionRelegation, installDataPackage, listInstalledDataPackages, parseDataPackage, validateDataPackage } from "./game/dataPackages.js";
 import { applyRosterSeason, createTransferOffer, listClubFinances, listPlayerHistory, listRosterPlayers, listTransferHistory, renewPlayerContract, respondToTransferOffer } from "./game/rosterLifecycle.js";
 import {
-  advanceNextFixture, advanceStageRound, ensureFactoryLeagueCalendar, ensureFactoryWorld16, ensureFactorySquadProfiles, getManagedClub, getSeasonStatus, getStandings,
+  advanceNextFixture, advanceFixtureRound, advanceStageRound, ensureFactoryLeagueCalendar, ensureFactoryWorld16, ensureFactorySquadProfiles, getManagedClub, getSeasonStatus, getStandings,
   listClubs, listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
 } from "./game/gameService.js";
 
@@ -341,6 +341,16 @@ async function main(): Promise<void> {
     case "play": {
       const rawId = args.find(value => !value.startsWith("--"));
       const fixtureId = rawId === undefined ? undefined : parsePositiveId(rawId, "Fixture ID");
+      withSave(args, db => {
+        const results = advanceFixtureRound(db, fixtureId);
+        console.log(`Rodada processada: ${results.length} partida(s) simulada(s).`);
+        console.table(results);
+      });
+      return;
+    }
+    case "play-match": {
+      const rawId = args.find(value => !value.startsWith("--"));
+      const fixtureId = rawId === undefined ? undefined : parsePositiveId(rawId, "Fixture ID");
       withSave(args, db => console.table([advanceNextFixture(db, fixtureId)]));
       return;
     }
@@ -358,7 +368,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
-      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, roster, finances, roster-season, renew-contract, transfer-offer, transfer-response, player-history, transfer-history, balance, season-balance, recalibrate-squads, match-change, diagnostics, tactics-impact, fixtures, play, advance-round, simulate-season, standings, season-status, next-season");
+      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, roster, finances, roster-season, renew-contract, transfer-offer, transfer-response, player-history, transfer-history, balance, season-balance, recalibrate-squads, match-change, diagnostics, tactics-impact, fixtures, play (simula a rodada do próximo jogo do seu clube), play-match (simula apenas uma partida), advance-round, simulate-season, standings, season-status, next-season");
   }
 }
 
