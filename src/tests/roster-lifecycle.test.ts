@@ -25,7 +25,8 @@ test("roster lifecycle develops players, generates youth, manages contracts and 
     ensureRosterLifecycleSchema(db);
     const first=applyRosterSeason(db,2027);
     assert.ok(first.developed>0);
-    assert.ok(first.youthGenerated>=16);
+    const clubCount=(db.prepare("SELECT COUNT(*) AS n FROM club").get() as {n:number}).n;
+    assert.ok(first.youthGenerated>=clubCount);
     assert.equal(applyRosterSeason(db,2027).youthGenerated,first.youthGenerated,"season processing must be idempotent");
     const roster=listRosterPlayers(db,2027);
     assert.ok(roster.some(p=>p.status==="YOUTH"));
