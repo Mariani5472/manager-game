@@ -5,6 +5,7 @@ import { openDatabase, validateDatabase } from "./db/database.js";
 import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis, runSeasonBalanceAnalysis, scheduleMatchTacticalChange } from "./game/matchEngine.js";
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
+import { applyPromotionRelegation, installDataPackage, listInstalledDataPackages, parseDataPackage, validateDataPackage } from "./game/dataPackages.js";
 import { applyRosterSeason, createTransferOffer, listClubFinances, listPlayerHistory, listRosterPlayers, listTransferHistory, renewPlayerContract, respondToTransferOffer } from "./game/rosterLifecycle.js";
 import {
   advanceNextFixture, advanceStageRound, ensureFactoryLeagueCalendar, ensureFactoryWorld16, ensureFactorySquadProfiles, getManagedClub, getSeasonStatus, getStandings,
@@ -130,6 +131,36 @@ function simulateSeason(db: ReturnType<typeof openDatabase>): void {
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
   switch (command) {
+    case "data-package-validate": {
+      const file = parseOption(args, "--file");
+      if (!file) throw new Error("Required: --file <package.json> and --save-id <save-id>.");
+      const pkg = parseDataPackage(readFileSync(resolve(file), "utf8"));
+      withSave(args, db => {
+        const errors = validateDataPackage(db, pkg);
+        console.log(JSON.stringify({ packageId: pkg.id, version: pkg.version, valid: errors.length === 0, errors }, null, 2));
+        if (errors.length) throw new Error("Data package validation failed.");
+      });
+      return;
+    }
+    case "data-package-install": {
+      const file = parseOption(args, "--file");
+      if (!file) throw new Error("Required: --file <package.json> and --save-id <save-id>.");
+      const pkg = parseDataPackage(readFileSync(resolve(file), "utf8"));
+      withSave(args, db => console.log(JSON.stringify(installDataPackage(db, pkg), null, 2)));
+      return;
+    }
+    case "data-packages": withSave(args, db => console.table(listInstalledDataPackages(db))); return;
+    case "data-package-catalog": {
+      const catalogPath = resolve(root, "data/packages/catalog.json");
+      const catalog = JSON.parse(readFileSync(catalogPath, "utf8")) as { packages?: unknown[] };
+      console.table(catalog.packages ?? []);
+      return;
+    }
+    case "apply-movements": {
+      const year = parsePositiveId(parseOption(args, "--year"), "--year");
+      withSave(args, db => console.table(applyPromotionRelegation(db, year).movements));
+      return;
+    }
     case "init-master": initializeMaster(); return;
     case "clubs": {
       if (!existsSync(masterPath)) throw new Error('Run "npm run dev -- init-master" first.');

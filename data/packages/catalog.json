@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "packages": [
+    {
+      "id": "community.example-regional",
+      "version": "1.0.0",
+      "file": "data/packages/example-regional-leagues.json",
+      "minGameVersion": "0.1.0",
+      "dependencies": [],
+      "description": "Exemplo de país fictício, cidades, quatro clubes, jogadores, estádios e duas divisões com promoção/rebaixamento."
+    }
+  ]
+}

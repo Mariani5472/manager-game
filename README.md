@@ -2,6 +2,31 @@
 
 A data-driven, text-based football manager built with TypeScript, Node.js and SQLite.
 
+## Fase 8 — Data Packages e mundo expansível
+
+A engine importa mundos a partir de pacotes JSON versionados. Cada pacote pode definir países, cidades, clubes, estádios, jogadores, competições, temporadas, etapas, participantes, formatos, critérios de classificação, calendários explícitos e regras de promoção/rebaixamento. O motor usa um pipeline genérico para as competições; não é necessário adicionar um ramo de código específico por liga.
+
+- **Contrato versionado:** schemaVersion 1, identificador estável, versão semântica, versão mínima do jogo e dependências opcionais. Dependências declaradas precisam estar instaladas na campanha e, quando informada, a versão deve coincidir exatamente.
+- **Validação de referências:** verifica códigos duplicados, atributos de jogadores, países/cidades/clubes/estádios referenciados, participantes, grupos, calendários, formatos e destinos de promoção/rebaixamento antes de importar.
+- **Calendários e formatos:** ligas e grupos geram calendário round-robin em lote, com ida/volta e datas semanais. Etapas eliminatórias podem declarar partidas no JSON; se omitidas, o pacote gera a primeira rodada por seed.
+- **Promoção/rebaixamento:** regras por posição podem apontar para uma competição específica ou para um nível (tier). Depois de concluir a temporada e garantir que as temporadas-alvo do próximo ano existem, apply-movements transfere os clubes entre as divisões e atualiza participantes e inscrições do próximo ano.
+- **Catálogo e compatibilidade:** data/packages/catalog.json lista pacotes distribuídos com o projeto; data-package-catalog o exibe. A campanha registra versões e manifestos instalados no próprio save.
+- **Isolamento de saves:** instalar um pacote exige --save-id ou --save; a operação modifica somente esse banco de campanha, nunca o banco matriz. Saves existentes não recebem pacotes automaticamente.
+- **Segurança de atualização:** reinstalar a mesma versão é idempotente. Uma atualização precisa ter versão semântica maior; a substituição de calendário é recusada se a etapa já tiver partidas iniciadas ou concluídas.
+
+### Comandos de Data Packages
+
+```bash
+npm run dev -- data-package-catalog
+npm run dev -- data-package-validate --file data/packages/example-regional-leagues.json --save-id <save-id>
+npm run dev -- data-package-install --file data/packages/example-regional-leagues.json --save-id <save-id>
+npm run dev -- data-packages --save-id <save-id>
+npm run dev -- apply-movements --year 2026 --save-id <save-id>
+```
+
+O exemplo data/packages/example-regional-leagues.json inclui um país fictício, quatro clubes, cidades, estádios, jogadores, duas divisões e regras recíprocas de acesso/rebaixamento. A estrutura JSON está documentada em data/packages/README.md.
+
+
 ## Fase 2 — decisões estratégicas
 
 - **Escalação:** 11 titulares por slots da formação e até sete reservas. A API valida clube, disponibilidade, duplicidade e goleiro. Se ainda não existe uma escalação salva, a engine sugere automaticamente uma usando posição, atributos e condição individual.

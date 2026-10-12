@@ -1,0 +1,464 @@
+{
+  "schemaVersion": 1,
+  "id": "community.example-regional",
+  "version": "1.0.0",
+  "minGameVersion": "0.1.0",
+  "dependencies": [],
+  "nations": [
+    {
+      "code": "FIC",
+      "name": "República Ficcional"
+    }
+  ],
+  "cities": [
+    {
+      "code": "NORTE",
+      "nationCode": "FIC",
+      "name": "Vila do Norte",
+      "climateProfile": "TROPICAL"
+    },
+    {
+      "code": "SUL",
+      "nationCode": "FIC",
+      "name": "Porto do Sul",
+      "climateProfile": "TEMPERATE"
+    },
+    {
+      "code": "LESTE",
+      "nationCode": "FIC",
+      "name": "Santa Aurora",
+      "climateProfile": "TEMPERATE"
+    },
+    {
+      "code": "OESTE",
+      "nationCode": "FIC",
+      "name": "Vale Oeste",
+      "climateProfile": "DRY"
+    }
+  ],
+  "clubs": [
+    {
+      "code": "NFC",
+      "nationCode": "FIC",
+      "cityCode": "NORTE",
+      "name": "Norte FC",
+      "shortName": "NFC",
+      "reputation": 58,
+      "primaryColor": "#124E78",
+      "secondaryColor": "#FFFFFF"
+    },
+    {
+      "code": "PSC",
+      "nationCode": "FIC",
+      "cityCode": "SUL",
+      "name": "Porto Sul Clube",
+      "shortName": "PSC",
+      "reputation": 55,
+      "primaryColor": "#087F5B",
+      "secondaryColor": "#FFFFFF"
+    },
+    {
+      "code": "AUR",
+      "nationCode": "FIC",
+      "cityCode": "LESTE",
+      "name": "Aurora Atlético",
+      "shortName": "AUR",
+      "reputation": 43,
+      "primaryColor": "#E67700",
+      "secondaryColor": "#FFFFFF"
+    },
+    {
+      "code": "VLO",
+      "nationCode": "FIC",
+      "cityCode": "OESTE",
+      "name": "Vale Oeste FC",
+      "shortName": "VLO",
+      "reputation": 40,
+      "primaryColor": "#862E9C",
+      "secondaryColor": "#FFFFFF"
+    }
+  ],
+  "stadiums": [
+    {
+      "code": "NFC-STAD",
+      "clubCode": "NFC",
+      "cityCode": "NORTE",
+      "name": "Estádio do Norte",
+      "capacity": 18000,
+      "pitchQuality": 78
+    },
+    {
+      "code": "PSC-STAD",
+      "clubCode": "PSC",
+      "cityCode": "SUL",
+      "name": "Arena Porto Sul",
+      "capacity": 16000,
+      "pitchQuality": 76
+    },
+    {
+      "code": "AUR-STAD",
+      "clubCode": "AUR",
+      "cityCode": "LESTE",
+      "name": "Estádio Aurora",
+      "capacity": 9000,
+      "pitchQuality": 70
+    },
+    {
+      "code": "VLO-STAD",
+      "clubCode": "VLO",
+      "cityCode": "OESTE",
+      "name": "Campo do Vale",
+      "capacity": 7500,
+      "pitchQuality": 68
+    }
+  ],
+  "players": [
+    {
+      "code": "NFC-GK",
+      "name": "Davi Monteiro",
+      "nationalityCode": "FIC",
+      "birthDate": "2000-04-18",
+      "potential": 73,
+      "preferredFoot": "RIGHT",
+      "goalkeeper": true,
+      "clubCode": "NFC",
+      "shirtNumber": 1,
+      "attributes": {
+        "reflexes": 74,
+        "handling": 68,
+        "positioning": 70
+      },
+      "positions": [
+        {
+          "code": "GK",
+          "rating": 75
+        }
+      ]
+    },
+    {
+      "code": "NFC-ST",
+      "name": "Caio Ventura",
+      "nationalityCode": "FIC",
+      "birthDate": "2002-09-12",
+      "potential": 82,
+      "clubCode": "NFC",
+      "shirtNumber": 9,
+      "attributes": {
+        "pace": 74,
+        "finishing": 72,
+        "positioning": 68
+      },
+      "positions": [
+        {
+          "code": "ST",
+          "rating": 74
+        }
+      ]
+    },
+    {
+      "code": "PSC-GK",
+      "name": "Lucas Prado",
+      "nationalityCode": "FIC",
+      "birthDate": "1999-02-08",
+      "potential": 70,
+      "goalkeeper": true,
+      "clubCode": "PSC",
+      "shirtNumber": 1,
+      "attributes": {
+        "reflexes": 70,
+        "handling": 71
+      },
+      "positions": [
+        {
+          "code": "GK",
+          "rating": 71
+        }
+      ]
+    },
+    {
+      "code": "PSC-ST",
+      "name": "Bruno Leme",
+      "nationalityCode": "FIC",
+      "birthDate": "2001-06-21",
+      "potential": 78,
+      "clubCode": "PSC",
+      "shirtNumber": 9,
+      "attributes": {
+        "pace": 69,
+        "finishing": 75
+      },
+      "positions": [
+        {
+          "code": "ST",
+          "rating": 73
+        }
+      ]
+    },
+    {
+      "code": "AUR-GK",
+      "name": "Renan Vidal",
+      "nationalityCode": "FIC",
+      "birthDate": "2003-03-05",
+      "potential": 80,
+      "goalkeeper": true,
+      "clubCode": "AUR",
+      "shirtNumber": 1,
+      "attributes": {
+        "reflexes": 68,
+        "handling": 66
+      },
+      "positions": [
+        {
+          "code": "GK",
+          "rating": 69
+        }
+      ]
+    },
+    {
+      "code": "AUR-ST",
+      "name": "Ícaro Reis",
+      "nationalityCode": "FIC",
+      "birthDate": "2004-11-30",
+      "potential": 85,
+      "clubCode": "AUR",
+      "shirtNumber": 9,
+      "attributes": {
+        "pace": 76,
+        "finishing": 67
+      },
+      "positions": [
+        {
+          "code": "ST",
+          "rating": 70
+        }
+      ]
+    },
+    {
+      "code": "VLO-GK",
+      "name": "Mateus Serra",
+      "nationalityCode": "FIC",
+      "birthDate": "2000-08-15",
+      "potential": 69,
+      "goalkeeper": true,
+      "clubCode": "VLO",
+      "shirtNumber": 1,
+      "attributes": {
+        "reflexes": 69,
+        "handling": 67
+      },
+      "positions": [
+        {
+          "code": "GK",
+          "rating": 69
+        }
+      ]
+    },
+    {
+      "code": "VLO-ST",
+      "name": "André Farias",
+      "nationalityCode": "FIC",
+      "birthDate": "2002-01-19",
+      "potential": 76,
+      "clubCode": "VLO",
+      "shirtNumber": 9,
+      "attributes": {
+        "pace": 71,
+        "finishing": 70
+      },
+      "positions": [
+        {
+          "code": "ST",
+          "rating": 71
+        }
+      ]
+    }
+  ],
+  "competitions": [
+    {
+      "code": "FIC-D1",
+      "name": "Liga Ficcional — Divisão 1",
+      "nationCode": "FIC",
+      "tier": 1,
+      "kind": "LEAGUE",
+      "seasons": [
+        {
+          "year": 2026,
+          "startDate": "2026-01-10",
+          "endDate": "2026-12-15",
+          "stages": [
+            {
+              "code": "LEAGUE",
+              "name": "Liga",
+              "order": 1,
+              "kind": "LEAGUE",
+              "format": {
+                "groupCount": 1,
+                "legs": 2,
+                "homeAway": true
+              },
+              "standingsRules": [
+                "POINTS",
+                "GOAL_DIFFERENCE",
+                "GOALS_FOR",
+                "HEAD_TO_HEAD"
+              ],
+              "groups": [
+                {
+                  "code": "A",
+                  "name": "Liga"
+                }
+              ],
+              "participants": [
+                {
+                  "clubCode": "NFC",
+                  "groupCode": "A",
+                  "seed": 1
+                },
+                {
+                  "clubCode": "PSC",
+                  "groupCode": "A",
+                  "seed": 2
+                }
+              ],
+              "promotionRelegation": [
+                {
+                  "positionFrom": 2,
+                  "positionTo": 2,
+                  "movementType": "RELEGATE",
+                  "targetTier": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "year": 2027,
+          "startDate": "2027-01-10",
+          "endDate": "2027-12-15",
+          "stages": [
+            {
+              "code": "LEAGUE",
+              "name": "Liga",
+              "order": 1,
+              "kind": "LEAGUE",
+              "format": {
+                "groupCount": 1,
+                "legs": 2
+              },
+              "groups": [
+                {
+                  "code": "A",
+                  "name": "Liga"
+                }
+              ],
+              "participants": [
+                {
+                  "clubCode": "NFC",
+                  "groupCode": "A",
+                  "seed": 1
+                },
+                {
+                  "clubCode": "PSC",
+                  "groupCode": "A",
+                  "seed": 2
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FIC-D2",
+      "name": "Liga Ficcional — Divisão 2",
+      "nationCode": "FIC",
+      "tier": 2,
+      "kind": "LEAGUE",
+      "seasons": [
+        {
+          "year": 2026,
+          "startDate": "2026-01-10",
+          "endDate": "2026-12-15",
+          "stages": [
+            {
+              "code": "LEAGUE",
+              "name": "Liga",
+              "order": 1,
+              "kind": "LEAGUE",
+              "format": {
+                "groupCount": 1,
+                "legs": 2
+              },
+              "standingsRules": [
+                "POINTS",
+                "GOAL_DIFFERENCE",
+                "GOALS_FOR"
+              ],
+              "groups": [
+                {
+                  "code": "A",
+                  "name": "Liga"
+                }
+              ],
+              "participants": [
+                {
+                  "clubCode": "AUR",
+                  "groupCode": "A",
+                  "seed": 1
+                },
+                {
+                  "clubCode": "VLO",
+                  "groupCode": "A",
+                  "seed": 2
+                }
+              ],
+              "promotionRelegation": [
+                {
+                  "positionFrom": 1,
+                  "positionTo": 1,
+                  "movementType": "PROMOTE",
+                  "targetTier": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "year": 2027,
+          "startDate": "2027-01-10",
+          "endDate": "2027-12-15",
+          "stages": [
+            {
+              "code": "LEAGUE",
+              "name": "Liga",
+              "order": 1,
+              "kind": "LEAGUE",
+              "format": {
+                "groupCount": 1,
+                "legs": 2
+              },
+              "groups": [
+                {
+                  "code": "A",
+                  "name": "Liga"
+                }
+              ],
+              "participants": [
+                {
+                  "clubCode": "AUR",
+                  "groupCode": "A",
+                  "seed": 1
+                },
+                {
+                  "clubCode": "VLO",
+                  "groupCode": "A",
+                  "seed": 2
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
