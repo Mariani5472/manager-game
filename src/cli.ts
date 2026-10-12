@@ -198,6 +198,8 @@ async function main(): Promise<void> {
           const mentality = parseOption(args, "--mentality");
           if (!mentality) throw new Error("--mentality is required for MENTALITY changes.");
           payload = { mentality };
+        } else if (type === "FORMATION") {
+          payload = { formationId: parsePositiveId(parseOption(args, "--formation"), "--formation") };
         } else {
           const key = parseOption(args, "--key");
           const value = Number(parseOption(args, "--value"));
