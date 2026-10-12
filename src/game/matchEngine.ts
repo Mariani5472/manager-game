@@ -82,6 +82,7 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
  for(let minute=1;minute<=90;minute++){
   const minuteEvents:KernelShotEvent[]=[];
   for(const change of changes.filter(item=>item.minute===minute)){
+   const priorEventCount=minuteEvents.length;
    const team=change.club_id===home.clubId?home:change.club_id===away.clubId?away:null;
    if(!team)throw new Error(`Tactical change ${change.id} targets a club outside the fixture.`);
    let payload:Record<string,unknown>;
@@ -105,6 +106,7 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
     team.tactic={...team.tactic,[key]:value};
     minuteEvents.push({minute,clubId:team.clubId,playerId:0,secondaryPlayerId:null,eventType:"TACTIC_CHANGE",xg:0,description:`Instrução alterada: ${key} = ${value}`});
    }
+   if(minuteEvents.length>priorEventCount)events.push(minuteEvents[minuteEvents.length-1]!);
   }
   const hp=teamPressure(home,homeRandom),ap=teamPressure(away,awayRandom);
   for(const side of [{team:home,opponent:away,isHome:true,pressure:hp,opponentPressure:ap,random:homeRandom},
