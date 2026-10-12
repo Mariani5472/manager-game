@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { openDatabase } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
 import { advanceNextFixture, getManagedClub, getSeasonStatus, getStandings, listFixtures, listSquad, getTactics } from "../game/gameService.js";
-import { previewLineup, saveLineup } from "../game/lineupService.js";
+import { saveLineup } from "../game/lineupService.js";
 
 const root = process.cwd();
 const masterPath = resolve(process.env.GMF_MASTER_DB ?? "data/master.sqlite");
@@ -50,7 +50,8 @@ export function startManagerWebServer(): void {
           const standings = selectedStage ? getStandings(db, selectedStage) : [];
           const upcoming = fixtures.filter(f => f.status === "SCHEDULED").slice(0, 8);
           const recent = fixtures.filter(f => f.status === "COMPLETED").slice(-8).reverse();
-          const selectedFixture = fixtures.find(f => f.status === "SCHEDULED" && (f.homeClub === managed.name || f.awayClub === managed.name)) ?? upcoming[0];
+          const requestedFixtureId = Number(url.searchParams.get("fixtureId")) || 0;
+          const selectedFixture = fixtures.find(f => f.id === requestedFixtureId) ?? fixtures.find(f => f.status === "SCHEDULED" && (f.homeClub === managed.name || f.awayClub === managed.name)) ?? upcoming[0];
           const squad = selectedFixture ? listSquad(db, managed.id) : listSquad(db, managed.id);
           const tactics = getTactics(db, managed.id);
           const matchDetails = selectedFixture ? {
