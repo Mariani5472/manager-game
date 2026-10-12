@@ -6,7 +6,7 @@ import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysi
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
 import {
-  advanceNextFixture, advanceStageRound, ensureFactoryLeagueCalendar, ensureFactoryWorld16, getManagedClub, getSeasonStatus, getStandings,
+  advanceNextFixture, advanceStageRound, ensureFactoryLeagueCalendar, ensureFactoryWorld16, ensureFactorySquadProfiles, getManagedClub, getSeasonStatus, getStandings,
   listClubs, listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
 } from "./game/gameService.js";
 
@@ -178,6 +178,7 @@ async function main(): Promise<void> {
       });
       return;
     }
+    case "recalibrate-squads": withSave(args, db => { ensureFactorySquadProfiles(db); console.log("Elencos recalibrados; partidas já concluídas foram preservadas."); }); return;
     case "season-balance": {
       const seasons = parsePositiveId(parseOption(args, "--seasons") ?? "20", "--seasons");
       const seed = parsePositiveId(parseOption(args, "--seed") ?? "90210", "--seed");
@@ -231,7 +232,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
-      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, balance, season-balance, diagnostics, tactics-impact, fixtures, play, advance-round, simulate-season, standings, season-status, next-season");
+      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, balance, season-balance, recalibrate-squads, diagnostics, tactics-impact, fixtures, play, advance-round, simulate-season, standings, season-status, next-season");
   }
 }
 
