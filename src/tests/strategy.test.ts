@@ -71,7 +71,14 @@ test("factory world upgrade creates a playable 16-club league and knockout cup, 
  assert.equal(listFixtures(db).filter(f=>f.competition==="Liga Nacional de Teste").length,240);
  assert.equal(listFixtures(db).filter(f=>f.competition==="Copa Nacional de Teste").length,8);
  assert.equal((db.prepare("SELECT COUNT(*) AS count FROM competition_round WHERE stage_id=1").get() as {count:number}).count,30);
- for(let round=1;round<=30;round++) assert.equal(advanceStageRound(db,1,round).length,8);
+ const monteCarloStart=performance.now();
+ runMatchBalanceAnalysis(db,1,2,5000,73421);
+ const monteCarloMs=performance.now()-monteCarloStart;
+ const seasonStart=performance.now();
+ const firstRoundStart=performance.now();
+ assert.equal(advanceStageRound(db,1,1).length,8);
+ const firstRoundMs=performance.now()-firstRoundStart;
+ for(let round=2;round<=30;round++) assert.equal(advanceStageRound(db,1,round).length,8);
  const standings=getStandings(db,1);
  assert.equal(standings.length,16);
  assert.ok(standings.every(row=>row.played===30));
@@ -92,5 +99,6 @@ test("factory world upgrade creates a playable 16-club league and knockout cup, 
  assert.equal(integrity,"ok");
  const fk=db.pragma("foreign_key_check");
  assert.deepEqual(fk,[]);
- console.log("Phase 5 benchmark: 16 clubs, 240 league fixtures + 15 cup fixtures completed in "+Math.round(performance.now())+" ms elapsed test time.");
+ const seasonMs=performance.now()-seasonStart;
+ console.log("Phase 5 benchmark: 5,000 Monte Carlo matches="+Math.round(monteCarloMs)+" ms; 90-minute match batch mean="+Math.round(firstRoundMs/8)+" ms/match; full season (240 league + 15 cup fixtures)="+Math.round(seasonMs)+" ms.");
 }finally{if(db?.open)db.close();if(master.open)master.close();rmSync(s.root,{recursive:true,force:true});}});
