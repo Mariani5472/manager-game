@@ -73,6 +73,59 @@ function parsePositiveId(raw: string | undefined, label: string): number {
   return value;
 }
 
+function simulateSeason(db: ReturnType<typeof openDatabase>): void {
+  const stages = db.prepare(`
+    SELECT st.id AS stageId, st.name AS stage, st.stage_kind AS stageKind,
+      co.name AS competition, cs.season_year AS seasonYear
+    FROM competition_stage st
+    JOIN competition_season cs ON cs.id=st.season_id
+    JOIN competition co ON co.id=cs.competition_id
+    WHERE EXISTS (
+      SELECT 1 FROM competition_round r JOIN fixture f ON f.round_id=r.id
+      WHERE r.stage_id=st.id AND f.status IN ('SCHEDULED','IN_PROGRESS','POSTPONED')
+    )
+    ORDER BY cs.season_year,
+      CASE st.stage_kind WHEN 'LEAGUE' THEN 0 ELSE 1 END,
+      co.name, st.stage_order
+  `).all() as Array<{stageId:number;stage:string;stageKind:string;competition:string;seasonYear:number}>;
+
+  if (stages.length === 0) {
+    console.log("Não há rodadas pendentes para simular nesta campanha.");
+    return;
+  }
+
+  let processedRounds = 0;
+  for (const stage of stages) {
+    console.log(`\n=== ${stage.competition} — ${stage.stage} (${stage.seasonYear}) ===`);
+    let roundNumber = 1;
+    while (true) {
+      const round = db.prepare(`
+        SELECT id, name FROM competition_round WHERE stage_id=? AND round_number=?
+      `).get(stage.stageId, roundNumber) as {id:number;name:string}|undefined;
+      if (!round) break;
+
+      const pending = (db.prepare(`
+        SELECT COUNT(*) AS count FROM fixture
+        WHERE round_id=? AND status IN ('SCHEDULED','IN_PROGRESS','POSTPONED')
+      `).get(round.id) as {count:number}).count;
+
+      if (pending > 0) {
+        console.log(`\nRodada ${roundNumber}: ${round.name} — ${pending} partida(s) pendente(s)`);
+        const results = advanceStageRound(db, stage.stageId, roundNumber);
+        console.table(results);
+        console.log(`Classificação após ${stage.competition} — rodada ${roundNumber}:`);
+        console.table(getStandings(db, stage.stageId));
+        processedRounds++;
+      }
+      roundNumber++;
+    }
+  }
+
+  console.log(`\nTemporada processada: ${processedRounds} rodada(s) simulada(s).`);
+  console.log("\nStatus final das competições:");
+  console.table(getSeasonStatus(db));
+}
+
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
   switch (command) {
@@ -158,6 +211,7 @@ async function main(): Promise<void> {
       withSave(args, db => console.table([advanceNextFixture(db, fixtureId)]));
       return;
     }
+    case "simulate-season": withSave(args, db => simulateSeason(db)); return;
     case "advance-round": {
       const rawNumber = args.find(value => !value.startsWith("--"));
       const roundNumber = parsePositiveId(rawNumber, "Round number");
@@ -171,7 +225,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
-      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, balance, diagnostics, tactics-impact, fixtures, play, advance-round, standings, season-status, next-season");
+      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, balance, diagnostics, tactics-impact, fixtures, play, advance-round, simulate-season, standings, season-status, next-season");
   }
 }
 
