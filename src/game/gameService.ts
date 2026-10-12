@@ -548,7 +548,7 @@ function roundRobin(teams: ParticipantRow[], legs: number): Array<Array<{home:nu
  * Existing saves remain independent; only a save explicitly passed through this
  * factory initializer is profiled. Re-running initialization is idempotent.
  */
-function ensureFactorySquadProfiles(db: SqliteDatabase): void {
+export function ensureFactorySquadProfiles(db: SqliteDatabase): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS factory_balance_metadata (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -562,7 +562,7 @@ function ensureFactorySquadProfiles(db: SqliteDatabase): void {
 
   const clubs = db.prepare("SELECT id, reputation FROM club ORDER BY reputation DESC, id")
     .all() as Array<{id:number;reputation:number}>;
-  if (clubs.length !== 16) return;
+  if (clubs.length !== 16) throw new Error("Squad recalibration requires a 16-club factory world.");
   const tiers = new Map<number, number>();
   clubs.forEach((club, index) => {
     // 3 elite, 4 competitive, 5 mid-table, 4 lower-table clubs.
