@@ -470,6 +470,37 @@ export function advanceNextFixture(db: SqliteDatabase, fixtureId?: number): Matc
   return summary;
 }
 
+/**
+ * Simulate every pending fixture in the round containing the managed club's
+ * next match. Passing a fixture ID uses that fixture to choose the round.
+ * Completed fixtures are preserved, and each pending match is simulated once.
+ */
+export function advanceFixtureRound(db: SqliteDatabase, fixtureId?: number): MatchSummary[] {
+  let selected: { id: number } | undefined;
+  if (fixtureId !== undefined) {
+    selected = db.prepare("SELECT id FROM fixture WHERE id=? AND status IN ('SCHEDULED','IN_PROGRESS')").get(fixtureId) as {id:number}|undefined;
+    if (!selected) throw new Error(`Scheduled fixture ${fixtureId} not found (it may already be completed or is not playable).`);
+  } else {
+    const metadata = db.prepare("SELECT selected_club_id AS clubId FROM game_save_metadata LIMIT 1").get() as {clubId:number}|undefined;
+    if (!metadata) throw new Error("Campaign metadata is missing; cannot find the managed club's next match.");
+    selected = db.prepare(`
+      SELECT f.id FROM fixture f
+      WHERE f.status IN ('SCHEDULED','IN_PROGRESS')
+        AND (f.home_club_id=? OR f.away_club_id=?)
+      ORDER BY CASE f.status WHEN 'IN_PROGRESS' THEN 0 ELSE 1 END, f.scheduled_at, f.id
+      LIMIT 1
+    `).get(metadata.clubId, metadata.clubId) as {id:number}|undefined;
+    if (!selected) throw new Error("No scheduled or in-progress fixtures remain for your club.");
+  }
+  const round = db.prepare(`
+    SELECT r.id AS roundId, r.stage_id AS stageId
+    FROM fixture f JOIN competition_round r ON r.id=f.round_id
+    WHERE f.id=?
+  `).get(selected.id) as {roundId:number;stageId:number}|undefined;
+  if (!round) throw new Error(`Fixture ${selected.id} has no competition round.`);
+  return advanceRoundById(db, round.roundId, round.stageId);
+}
+
 export function advanceRound(db: SqliteDatabase, roundId: number): MatchSummary[] {
   const round = db.prepare("SELECT id,stage_id AS stageId FROM competition_round WHERE id=?").get(roundId) as {id:number;stageId:number}|undefined;
   if (!round) throw new Error(`Round ID ${roundId} was not found.`);

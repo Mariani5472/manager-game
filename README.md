@@ -134,6 +134,26 @@ npm run dev -- roster-season --year 2028 --save-id <save-id>
 
 A criação da temporada seguinte pelo comando `next-season` processa automaticamente o ciclo de elenco do novo ano, uma única vez. `roster-season` é útil para testes e campanhas que precisem disparar o processamento manualmente. Os orçamentos e contratos são independentes em cada save.
 
+## Simulação por rodada
+
+O comando principal `play` avança a rodada inteira que contém a próxima partida do clube controlado. Todos os confrontos pendentes dessa rodada são simulados, inclusive os jogos entre clubes controlados pela IA; partidas já concluídas são preservadas. A classificação é recalculada depois da rodada.
+
+```bash
+# Simular a rodada do próximo jogo do seu clube
+npm run dev -- play --save-id <save-id>
+
+# Simular a rodada que contém uma partida específica
+npm run dev -- play <fixture-id> --save-id <save-id>
+
+# Simular apenas uma partida individual
+npm run dev -- play-match <fixture-id> --save-id <save-id>
+
+# Alternativa: selecionar a rodada explicitamente
+npm run dev -- advance-round <numero-da-rodada> --stage <stage-id> --save-id <save-id>
+```
+
+O motor mantém checkpoints por partida. Se o processamento for interrompido, jogos já concluídos não são repetidos; ao executar `play` novamente, somente partidas pendentes da próxima rodada do seu clube serão simuladas.
+
 ## Fase 6 — contexto completo da partida
 
 O motor aplica o contexto de cada jogo por efeitos agregados no cálculo de pressão e de finalizações, sem simular física ou ações segundo a segundo:
