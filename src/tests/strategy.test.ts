@@ -1,4 +1,5 @@
 import test from "node:test";
+import { performance } from "node:perf_hooks";
 import assert from "node:assert/strict";
 import {mkdtempSync,readFileSync,rmSync} from "node:fs";
 import {tmpdir} from "node:os";
@@ -6,11 +7,11 @@ import {join,resolve} from "node:path";
 import {openDatabase,validateDatabase} from "../db/database.js";
 import {SaveManager} from "../save/saveManager.js";
 import {previewLineup,saveLineup} from "../game/lineupService.js";
-import {advanceNextFixture} from "../game/gameService.js";
+import {advanceNextFixture,advanceStageRound,ensureFactoryWorld16,getSeasonStatus,getStandings,listFixtures} from "../game/gameService.js";
 import {summarizeSamples} from "../game/matchBalance.js";
 import {runEngineDiagnostics,runMatchBalanceAnalysis,runTacticalImpactAnalysis} from "../game/matchEngine.js";
 const schema=resolve("src/schema/game_manager_mvp.sql");
-function setup(){const root=mkdtempSync(join(tmpdir(),"gmf-p2-"));const path=join(root,"master.sqlite");const db=openDatabase(path);db.exec(readFileSync(schema,"utf8"));validateDatabase(db);db.close();return{root,manager:new SaveManager(path,join(root,"saves"))};}
+function setup(){const root=mkdtempSync(join(tmpdir(),"gmf-p2-"));const path=join(root,"master.sqlite");const db=openDatabase(path);db.exec(readFileSync(schema,"utf8"));validateDatabase(db);db.close();return{root,masterPath:path,manager:new SaveManager(path,join(root,"saves"))};}
 async function campaign(){const s=setup();const save=await s.manager.create({name:"test",managerName:"test",clubId:1});return{...s,save,db:s.manager.open(save.filePath)};}
 test("lineup preview provides 11 distinct starters including a goalkeeper and at most seven substitutes",async()=>{const x=await campaign();try{const l=previewLineup(x.db,1,1);assert.equal(l.starters.length,11);assert.equal(new Set(l.starters.map(p=>p.playerId)).size,11);assert.equal(l.starters.filter(p=>p.position==="GK").length,1);assert.ok(l.bench.length<=7);}finally{x.db.close();rmSync(x.root,{recursive:true,force:true});}});
 test("custom lineup rejects wrong counts, duplicate players and missing goalkeeper, then persists valid XI",async()=>{const x=await campaign();try{const l=previewLineup(x.db,1,1);assert.throws(()=>saveLineup(x.db,1,1,l.starters.slice(1).map(p=>p.playerId)),/exactly 11/);assert.throws(()=>saveLineup(x.db,1,1,[...l.starters.slice(1).map(p=>p.playerId),l.starters[1]!.playerId]),/twice/);const withoutKeeper=l.starters.filter(p=>p.position!=="GK").map(p=>p.playerId);withoutKeeper.push(12);assert.throws(()=>saveLineup(x.db,1,1,withoutKeeper),/exactly one goalkeeper/);saveLineup(x.db,1,1,l.starters.map(p=>p.playerId),l.bench.map(p=>p.playerId));assert.equal((x.db.prepare("SELECT COUNT(*) c FROM match_lineup WHERE fixture_id=1 AND club_id=1 AND is_starting=1").get() as {c:number}).c,11);}finally{x.db.close();rmSync(x.root,{recursive:true,force:true});}});
@@ -47,3 +48,57 @@ test("controlled favorite-underdog matchup validates an 8+ strength gap and tact
  const repeat=runTacticalImpactAnalysis(x.db,favoriteId,underdogId,5000,73421);
  assert.deepEqual(repeat,report,"fixed matchup and seed must be reproducible");
 }finally{x.db.close();rmSync(x.root,{recursive:true,force:true});}});
+
+
+test("exceptional goalkeeper measurably reduces opponent conversion on paired seeds",async()=>{const x=await campaign();try{
+ const baseline=runMatchBalanceAnalysis(x.db,1,2,5000,88127);
+ const keeper=(x.db.prepare("SELECT sm.player_id AS id FROM squad_membership sm JOIN player p ON p.person_id=sm.player_id WHERE sm.club_id=2 AND p.goalkeeper=1 ORDER BY sm.shirt_number LIMIT 1").get() as {id:number});
+ x.db.prepare("UPDATE player_attribute SET reflexes=100,handling=100,positioning=100,concentration=100,aerial_reach=100 WHERE player_id=?").run(keeper.id);
+ const inspired=runMatchBalanceAnalysis(x.db,1,2,5000,88127);
+ assert.ok(inspired.averageHomeGoals<baseline.averageHomeGoals,JSON.stringify({baseline:baseline.averageHomeGoals,inspired:inspired.averageHomeGoals}));
+ assert.ok(inspired.homeShotRate>=baseline.homeShotRate-0.5,"keeper quality must affect conversion, not erase shot creation");
+}finally{x.db.close();rmSync(x.root,{recursive:true,force:true});}});
+
+test("factory world upgrade creates a playable 16-club league and knockout cup, then completes a measured season",async()=>{const s=setup();let master=openDatabase(s.masterPath);let db:ReturnType<typeof openDatabase>|undefined;try{
+ const upgraded=ensureFactoryWorld16(master);
+ assert.deepEqual(upgraded,{upgraded:true,clubs:16,leagueFixtures:240,cupEntrants:16});
+ assert.deepEqual(ensureFactoryWorld16(master),{upgraded:false,clubs:16,leagueFixtures:240,cupEntrants:16});
+ validateDatabase(master);
+ master.close();
+ const save=await s.manager.create({name:"16 club benchmark",managerName:"Test",clubId:1});
+ db=s.manager.open(save.filePath);
+ assert.equal((db.prepare("SELECT COUNT(*) AS count FROM club").get() as {count:number}).count,16);
+ assert.equal(listFixtures(db).filter(f=>f.competition==="Liga Nacional de Teste").length,240);
+ assert.equal(listFixtures(db).filter(f=>f.competition==="Copa Nacional de Teste").length,8);
+ assert.equal((db.prepare("SELECT COUNT(*) AS count FROM competition_round WHERE stage_id=1").get() as {count:number}).count,30);
+ const monteCarloStart=performance.now();
+ runMatchBalanceAnalysis(db,1,2,5000,73421);
+ const monteCarloMs=performance.now()-monteCarloStart;
+ const seasonStart=performance.now();
+ const firstRoundStart=performance.now();
+ assert.equal(advanceStageRound(db,1,1).length,8);
+ const firstRoundMs=performance.now()-firstRoundStart;
+ for(let round=2;round<=30;round++) assert.equal(advanceStageRound(db,1,round).length,8);
+ const standings=getStandings(db,1);
+ assert.equal(standings.length,16);
+ assert.ok(standings.every(row=>row.played===30));
+ assert.equal(getSeasonStatus(db,1)[0]?.seasonStatus,"COMPLETED");
+ let cupRound=1,cupMatches=0;
+ while(true){
+   const row=db.prepare("SELECT id FROM competition_round WHERE stage_id=2 AND round_number=?").get(cupRound) as {id:number}|undefined;
+   if(!row) break;
+   const matches=(db.prepare("SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status='SCHEDULED'").get(row.id) as {count:number}).count;
+   if(matches===0) break;
+   cupMatches+=advanceStageRound(db,2,cupRound).length;
+   cupRound++;
+ }
+ assert.equal(cupMatches,15);
+ assert.equal(getSeasonStatus(db,2)[0]?.seasonStatus,"COMPLETED");
+ assert.equal((db.prepare("SELECT COUNT(*) AS count FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=2 AND f.status='COMPLETED'").get() as {count:number}).count,15);
+ const integrity=db.pragma("integrity_check",{simple:true});
+ assert.equal(integrity,"ok");
+ const fk=db.pragma("foreign_key_check");
+ assert.deepEqual(fk,[]);
+ const seasonMs=performance.now()-seasonStart;
+ console.log("Phase 5 benchmark: 5,000 Monte Carlo matches="+Math.round(monteCarloMs)+" ms; 90-minute match batch mean="+Math.round(firstRoundMs/8)+" ms/match; full season (240 league + 15 cup fixtures)="+Math.round(seasonMs)+" ms.");
+}finally{if(db?.open)db.close();if(master.open)master.close();rmSync(s.root,{recursive:true,force:true});}});

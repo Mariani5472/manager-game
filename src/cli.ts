@@ -6,7 +6,7 @@ import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysi
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
 import {
-  advanceNextFixture, advanceStageRound, ensureFactoryLeagueCalendar, getManagedClub, getSeasonStatus, getStandings,
+  advanceNextFixture, advanceStageRound, ensureFactoryLeagueCalendar, ensureFactoryWorld16, getManagedClub, getSeasonStatus, getStandings,
   listClubs, listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
 } from "./game/gameService.js";
 
@@ -21,10 +21,12 @@ function initializeMaster(): void {
     const existing = openDatabase(masterPath);
     try {
       validateDatabase(existing);
+      const world = ensureFactoryWorld16(existing);
       const repair = ensureFactoryLeagueCalendar(existing);
       validateDatabase(existing);
+      if (world.upgraded) console.log(`Factory world upgraded: ${world.clubs} clubs, ${world.leagueFixtures} league fixtures, ${world.cupEntrants} cup entrants.`);
       if (repair.repaired) console.log(`Factory league calendar repaired: ${repair.rounds} rounds, ${repair.fixtures} fixtures.`);
-      else console.log(`Master DB already exists and is valid: ${masterPath}`);
+      if (!world.upgraded && !repair.repaired) console.log(`Master DB already exists and is valid: ${masterPath}`);
     } finally { existing.close(); }
     return;
   }
@@ -33,8 +35,10 @@ function initializeMaster(): void {
   try {
     db.exec(readFileSync(schemaPath, "utf8"));
     validateDatabase(db);
+    const world = ensureFactoryWorld16(db);
     const repair = ensureFactoryLeagueCalendar(db);
     validateDatabase(db);
+    if (world.upgraded) console.log(`Factory world upgraded: ${world.clubs} clubs, ${world.leagueFixtures} league fixtures, ${world.cupEntrants} cup entrants.`);
     if (repair.repaired) console.log(`Factory league calendar repaired: ${repair.rounds} rounds, ${repair.fixtures} fixtures.`);
     console.log(`Master DB created: ${masterPath}`);
   } catch (error) {
