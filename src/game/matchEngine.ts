@@ -105,6 +105,20 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
     if(!ranges[key]||!Number.isFinite(value)||value<ranges[key]![0]||value>ranges[key]![1])throw new Error(`Tactical change ${change.id} has invalid instruction.`);
     team.tactic={...team.tactic,[key]:value};
     minuteEvents.push({minute,clubId:team.clubId,playerId:0,secondaryPlayerId:null,eventType:"TACTIC_CHANGE",xg:0,description:`Instrução alterada: ${key} = ${value}`});
+   }else if(change.change_type==="FORMATION"){
+    const slots=payload.slots;
+    if(!Array.isArray(slots)||slots.length!==11)throw new Error(`Formation change ${change.id} requires eleven assignments.`);
+    const assigned=new Set<number>();
+    for(const player of team.lineup.filter(p=>p.isStarting))player.isStarting=false;
+    for(const raw of slots as Array<Record<string,unknown>>){
+     const playerId=Number(raw.playerId),slot=Number(raw.slotNumber),role=String(raw.positionCode??"");
+     const player=team.lineup.find(p=>p.id===playerId);
+     if(!player||assigned.has(playerId)||!Number.isInteger(slot)||!["GK","CB","LB","RB","LWB","RWB","DM","CM","AM","LW","RW","LM","RM","ST"].includes(role))throw new Error(`Formation change ${change.id} has invalid slot assignments.`);
+     player.isStarting=true;player.slot=slot;player.role=role;assigned.add(playerId);
+    }
+    if(team.lineup.filter(p=>p.isStarting).length!==11||team.lineup.filter(p=>p.isStarting&&p.role==="GK"&&p.goalkeeper===1).length!==1)throw new Error("Formation change must retain eleven players and one goalkeeper.");
+    team.tactic={...team.tactic,formation_id:Number(payload.formationId)};refreshTeamStrength(team);
+    minuteEvents.push({minute,clubId:team.clubId,playerId:0,secondaryPlayerId:null,eventType:"TACTIC_CHANGE",xg:0,description:"Formação alterada durante a partida"});
    }
    if(minuteEvents.length>priorEventCount)events.push(minuteEvents[minuteEvents.length-1]!);
   }
@@ -351,7 +365,7 @@ export function runSeasonBalanceAnalysis(db:SqliteDatabase,seasons=20,seedStart=
   clubs,tierSummary};
 }
 
-export function scheduleMatchTacticalChange(db:SqliteDatabase,fixtureId:number,clubId:number,minute:number,changeType:"MENTALITY"|"INSTRUCTION"|"SUBSTITUTION",payload:Record<string,unknown>):number{
+export function scheduleMatchTacticalChange(db:SqliteDatabase,fixtureId:number,clubId:number,minute:number,changeType:"MENTALITY"|"INSTRUCTION"|"SUBSTITUTION"|"FORMATION",payload:Record<string,unknown>):number{
  if(!Number.isSafeInteger(minute)||minute<1||minute>90)throw new Error("Tactical change minute must be between 1 and 90.");
  const fixture=db.prepare("SELECT status,current_minute AS currentMinute,home_club_id AS home,away_club_id AS away,scheduled_at AS scheduledAt FROM fixture WHERE id=?").get(fixtureId) as {status:string;currentMinute:number;home:number;away:number;scheduledAt:string|null}|undefined;
  if(!fixture)throw new Error("Fixture not found.");
@@ -363,6 +377,15 @@ export function scheduleMatchTacticalChange(db:SqliteDatabase,fixtureId:number,c
   const key=String(payload.key??""),value=Number(payload.value);
   const ranges:Record<string,[number,number]>={pressing:[0,100],tempo:[0,100],defensive_line:[0,100],width:[0,100],passing_directness:[0,100],counter_attack:[0,1]};
   if(!ranges[key]||!Number.isFinite(value)||value<ranges[key]![0]||value>ranges[key]![1])throw new Error("Invalid instruction key or value.");
+ }
+ if(changeType==="FORMATION"){
+  loadTeam(db,fixtureId,clubId);
+  const formationId=Number(payload.formationId);
+  if(!db.prepare("SELECT 1 FROM formation WHERE id=?").get(formationId))throw new Error("Formation does not exist.");
+  const slots=db.prepare("SELECT slot_number AS slotNumber,position_code AS positionCode FROM formation_slot WHERE formation_id=? ORDER BY slot_number").all(formationId) as Array<{slotNumber:number;positionCode:string}>;
+  const starters=db.prepare("SELECT player_id AS playerId FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=1 ORDER BY slot_number").all(fixtureId,clubId) as Array<{playerId:number}>;
+  if(slots.length!==11||starters.length!==11)throw new Error("Formation changes require eleven existing starters and eleven formation slots.");
+  payload={formationId,slots:slots.map((slot,index)=>({slotNumber:slot.slotNumber,positionCode:slot.positionCode,playerId:starters[index]!.playerId}))};
  }
  if(changeType==="SUBSTITUTION"){
   loadTeam(db,fixtureId,clubId);
