@@ -221,7 +221,7 @@ export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=884
   }
  }
  
- const xgBands: XgBandDiagnostic[]=bands.map(b=>({band:b.label,shots:b.shots,averageXg:b.shots?b.xg/b.shots:0,onTargetRate:b.shots?(b.onTarget/b.shots):0,goalRate:b.shots?b.goals/b.shots:0,saveRate:b.shots?b.saves/b.shots:0,missRate:b.shots?b.misses/b.shots:0,goals:b.goals,saves:b.saves,misses:b.misses}));
+ const xgBands: XgBandDiagnostic[]=bands.filter(b=>b.shots>0).map(b=>({band:b.label,shots:b.shots,averageXg:b.xg/b.shots,onTargetRate:b.onTarget/b.shots,goalRate:b.goals/b.shots,saveRate:b.saves/b.shots,missRate:b.misses/b.shots,goals:b.goals,saves:b.saves,misses:b.misses}));
  const ab=runMonteCarlo(strong.team,weak.team,simulations,seed+1700003);
  const ba=runMonteCarlo(weak.team,strong.team,simulations,seed+1700003);
  const persistedRows=db.prepare("SELECT f.id,f.home_club_id,f.away_club_id,f.home_score,f.away_score,f.current_minute, s.simulation_minute,s.state_json,(SELECT COUNT(*) FROM match_momentum m WHERE m.fixture_id=f.id) AS momentum_count,(SELECT COUNT(*) FROM match_event e WHERE e.fixture_id=f.id AND e.event_type='GOAL' AND e.club_id=f.home_club_id) AS event_home_goals,(SELECT COUNT(*) FROM match_event e WHERE e.fixture_id=f.id AND e.event_type='GOAL' AND e.club_id=f.away_club_id) AS event_away_goals FROM fixture f LEFT JOIN match_simulation_state s ON s.fixture_id=f.id WHERE f.status='COMPLETED' ORDER BY f.id DESC LIMIT 100").all() as Array<{id:number;home_score:number;away_score:number;current_minute:number;simulation_minute:number|null;state_json:string|null;momentum_count:number;event_home_goals:number;event_away_goals:number}>;
