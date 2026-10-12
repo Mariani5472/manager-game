@@ -43,7 +43,7 @@ O motor aplica o contexto de cada jogo por efeitos agregados no cálculo de pres
 - **Clima e gramado:** `match_environment` persiste clima, temperatura e condição do gramado por partida. Sem override manual, o clima é gerado deterministicamente a partir da seed e do perfil climático da cidade; a qualidade base vem do estádio. Chuva, chuva forte, vento, calor e gramado ruim alteram a criação e a qualidade das chances.
 - **Descanso e viagem:** o descanso é calculado entre datas de jogos concluídos; a recuperação pré-jogo restaura energia em blocos de oito pontos por dia completo. A viagem usa `travel_route` quando existe uma rota cadastrada; quando falta uma rota entre cidades diferentes, o modelo usa uma estimativa conservadora de 250 km. Descanso curto e deslocamento reduzem pressão e criação de chances.
 - **Disponibilidade consistente:** suspensões e lesões são filtradas pela data da partida tanto na seleção automática quanto na prévia e no salvamento da escalação. A suspensão é reduzida após cada partida do clube, não antes do jogo em que o atleta ainda deve cumprir pena.
-- **Decisões durante a partida:** `match_tactical_change` permite programar substituições, alteração de mentalidade e ajustes de instruções por minuto. Cada decisão vira um evento persistido e afeta os minutos seguintes. Substituições validam titular/reserva e elegibilidade; a fadiga final considera se o atleta foi substituído ou entrou no decorrer do jogo.
+- **Decisões durante a partida:** `match_tactical_change` permite programar substituições, alteração de mentalidade, formação e ajustes de instruções por minuto. Cada decisão vira um evento persistido e afeta os minutos seguintes. Substituições validam titular/reserva e elegibilidade; a fadiga final considera se o atleta foi substituído ou entrou no decorrer do jogo.
 - **Reprodutibilidade:** clima e alterações são persistidos e o timeline é reconstruído pela seed e pelas decisões agendadas; o checkpoint continua sendo gravado por minuto/evento, sem executar uma simulação segundo a segundo.
 
 Exemplos:
@@ -61,6 +61,9 @@ npm run dev -- match-change <fixture-id> --club <club-id> --minute 70 --type MEN
 
 # Ajustar a pressão aos 55 minutos (0–100)
 npm run dev -- match-change <fixture-id> --club <club-id> --minute 55 --type INSTRUCTION --key pressing --value 72 --save-id <save-id>
+
+# Reorganizar a formação aos 75 minutos (use o ID da tabela formation)
+npm run dev -- match-change <fixture-id> --club <club-id> --minute 75 --type FORMATION --formation <formation-id> --save-id <save-id>
 ```
 
 As alterações devem ser agendadas antes de o motor processar o respectivo minuto. Para substituições manuais, salve primeiro a escalação para definir explicitamente os titulares e o banco. Mudanças em minutos já processados são rejeitadas. `travel_route` é opcional e pode ser preenchida pelos data packages/mods.
