@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { openDatabase, validateDatabase } from "./db/database.js";
-import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis } from "./game/matchEngine.js";
+import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis, runSeasonBalanceAnalysis } from "./game/matchEngine.js";
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
 import {
@@ -178,6 +178,12 @@ async function main(): Promise<void> {
       });
       return;
     }
+    case "season-balance": {
+      const seasons = parsePositiveId(parseOption(args, "--seasons") ?? "20", "--seasons");
+      const seed = parsePositiveId(parseOption(args, "--seed") ?? "90210", "--seed");
+      withSave(args, db => console.log(JSON.stringify(runSeasonBalanceAnalysis(db, seasons, seed), null, 2)));
+      return;
+    }
     case "diagnostics": {
       const simulations = parsePositiveId(parseOption(args, "--simulations") ?? "2000", "--simulations");
       withSave(args, db => console.log(JSON.stringify(runEngineDiagnostics(db, simulations), null, 2)));
@@ -225,7 +231,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
-      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, balance, diagnostics, tactics-impact, fixtures, play, advance-round, simulate-season, standings, season-status, next-season");
+      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, balance, season-balance, diagnostics, tactics-impact, fixtures, play, advance-round, simulate-season, standings, season-status, next-season");
   }
 }
 
