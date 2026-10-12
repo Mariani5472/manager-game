@@ -383,9 +383,13 @@ export function scheduleMatchTacticalChange(db:SqliteDatabase,fixtureId:number,c
   const formationId=Number(payload.formationId);
   if(!db.prepare("SELECT 1 FROM formation WHERE id=?").get(formationId))throw new Error("Formation does not exist.");
   const slots=db.prepare("SELECT slot_number AS slotNumber,position_code AS positionCode FROM formation_slot WHERE formation_id=? ORDER BY slot_number").all(formationId) as Array<{slotNumber:number;positionCode:string}>;
-  const starters=db.prepare("SELECT player_id AS playerId FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=1 ORDER BY slot_number").all(fixtureId,clubId) as Array<{playerId:number}>;
-  if(slots.length!==11||starters.length!==11)throw new Error("Formation changes require eleven existing starters and eleven formation slots.");
-  payload={formationId,slots:slots.map((slot,index)=>({slotNumber:slot.slotNumber,positionCode:slot.positionCode,playerId:starters[index]!.playerId}))};
+  const starters=db.prepare("SELECT ml.player_id AS playerId,p.goalkeeper AS goalkeeper FROM match_lineup ml JOIN player p ON p.person_id=ml.player_id WHERE ml.fixture_id=? AND ml.club_id=? AND ml.is_starting=1 ORDER BY ml.slot_number").all(fixtureId,clubId) as Array<{playerId:number;goalkeeper:number}>;
+  if(slots.length!==11||starters.length!==11||slots.filter(slot=>slot.positionCode==="GK").length!==1)throw new Error("Formation changes require eleven starters and exactly one goalkeeper slot.");
+  const keeper=starters.find(player=>player.goalkeeper===1);
+  if(!keeper)throw new Error("Current lineup has no goalkeeper.");
+  const outfield=starters.filter(player=>player.goalkeeper!==1);
+  let outfieldIndex=0;
+  payload={formationId,slots:slots.map(slot=>({slotNumber:slot.slotNumber,positionCode:slot.positionCode,playerId:slot.positionCode==="GK"?keeper.playerId:outfield[outfieldIndex++]!.playerId}))};
  }
  if(changeType==="SUBSTITUTION"){
   loadTeam(db,fixtureId,clubId);
