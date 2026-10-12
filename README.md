@@ -36,6 +36,26 @@ O kernel é pseudoaleatório e reproduzível por seed para facilitar comparaçõ
 
 
 
+## Simulação por rodada
+
+O comando principal `play` avança a rodada inteira que contém a próxima partida do clube controlado. Todos os confrontos pendentes dessa rodada são simulados, incluindo jogos entre clubes controlados pela IA; partidas já concluídas são preservadas. A classificação é recalculada depois da rodada, não depois de cada comando manual.
+
+```bash
+# Simular a rodada do próximo jogo do seu clube
+npm run dev -- play --save-id <save-id>
+
+# Simular a rodada que contém uma partida específica
+npm run dev -- play <fixture-id> --save-id <save-id>
+
+# Simular somente uma partida individual (modo pontual)
+npm run dev -- play-match <fixture-id> --save-id <save-id>
+
+# Alternativa: selecionar a rodada explicitamente
+npm run dev -- advance-round <numero-da-rodada> --stage <stage-id> --save-id <save-id>
+```
+
+O processamento em lote continua simulando cada partida separadamente para manter checkpoints e persistência por jogo. Se o processo for interrompido, partidas concluídas não são repetidas; ao executar `play` novamente, apenas as partidas ainda pendentes da próxima rodada do seu clube serão processadas.
+
 ## Fase 6 — contexto completo da partida
 
 O motor aplica o contexto de cada jogo por efeitos agregados no cálculo de pressão e de finalizações, sem simular física ou ações segundo a segundo:
