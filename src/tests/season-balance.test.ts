@@ -23,8 +23,8 @@ test("factory upgrade generates distinct tiered squads and multi-seed season dia
 
     const tierCounts = db.prepare(`
       SELECT CASE
-        WHEN reputation >= 80 THEN 'ELITE'
-        WHEN reputation >= 75 THEN 'COMPETITIVE'
+        WHEN reputation >= 84 THEN 'ELITE'
+        WHEN reputation >= 77 THEN 'COMPETITIVE'
         WHEN reputation >= 70 THEN 'MID_TABLE'
         ELSE 'LOWER_TABLE'
       END AS tier, COUNT(*) AS count
