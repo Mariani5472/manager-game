@@ -348,6 +348,33 @@ export function runSeasonBalanceAnalysis(db:SqliteDatabase,seasons=20,seedStart=
   clubs,tierSummary};
 }
 
+export function scheduleMatchTacticalChange(db:SqliteDatabase,fixtureId:number,clubId:number,minute:number,changeType:"MENTALITY"|"INSTRUCTION"|"SUBSTITUTION",payload:Record<string,unknown>):number{
+ if(!Number.isSafeInteger(minute)||minute<1||minute>90)throw new Error("Tactical change minute must be between 1 and 90.");
+ const fixture=db.prepare("SELECT status,current_minute AS currentMinute,home_club_id AS home,away_club_id AS away,scheduled_at AS scheduledAt FROM fixture WHERE id=?").get(fixtureId) as {status:string;currentMinute:number;home:number;away:number;scheduledAt:string|null}|undefined;
+ if(!fixture)throw new Error("Fixture not found.");
+ if(!["SCHEDULED","IN_PROGRESS"].includes(fixture.status))throw new Error("Tactical changes require a scheduled or in-progress fixture.");
+ if(clubId!==fixture.home&&clubId!==fixture.away)throw new Error("Club is not part of this fixture.");
+ if(fixture.status==="IN_PROGRESS"&&minute<=fixture.currentMinute)throw new Error("Cannot schedule a change at or before the current minute.");
+ if(changeType==="MENTALITY"&&!["VERY_DEFENSIVE","DEFENSIVE","BALANCED","ATTACKING","VERY_ATTACKING"].includes(String(payload.mentality??"")))throw new Error("Invalid mentality.");
+ if(changeType==="INSTRUCTION"){
+  const key=String(payload.key??""),value=Number(payload.value);
+  const ranges:Record<string,[number,number]>={pressing:[0,100],tempo:[0,100],defensive_line:[0,100],width:[0,100],passing_directness:[0,100],counter_attack:[0,1]};
+  if(!ranges[key]||!Number.isFinite(value)||value<ranges[key]![0]||value>ranges[key]![1])throw new Error("Invalid instruction key or value.");
+ }
+ if(changeType==="SUBSTITUTION"){
+  const playerOutId=Number(payload.playerOutId),playerInId=Number(payload.playerInId);
+  if(!Number.isSafeInteger(playerOutId)||!Number.isSafeInteger(playerInId)||playerOutId===playerInId)throw new Error("Substitution requires different playerOutId and playerInId.");
+  const outgoing=db.prepare("SELECT p.goalkeeper AS goalkeeper FROM squad_membership sm JOIN player p ON p.person_id=sm.player_id WHERE sm.player_id=? AND sm.club_id=?").get(playerOutId,clubId) as {goalkeeper:number}|undefined;
+  const incoming=db.prepare("SELECT p.goalkeeper AS goalkeeper,COALESCE(pc.suspension_matches,0) AS suspension,pc.injured_until AS injuredUntil FROM squad_membership sm JOIN player p ON p.person_id=sm.player_id LEFT JOIN player_condition pc ON pc.player_id=p.person_id WHERE sm.player_id=? AND sm.club_id=?").get(playerInId,clubId) as {goalkeeper:number;suspension:number;injuredUntil:string|null}|undefined;
+  if(!outgoing||!incoming)throw new Error("Both players must belong to the selected club.");
+  const matchDate=fixture.scheduledAt?.slice(0,10)??null;
+  if(incoming.suspension>0||(incoming.injuredUntil&&matchDate&&incoming.injuredUntil>=matchDate))throw new Error("Incoming player is unavailable.");
+  if(outgoing.goalkeeper===1&&incoming.goalkeeper!==1)throw new Error("A goalkeeper can only be replaced by another goalkeeper.");
+  payload={playerOutId,playerInId};
+ }
+ return Number(db.prepare("INSERT INTO match_tactical_change(fixture_id,minute,club_id,change_type,payload) VALUES(?,?,?,?,?)").run(fixtureId,minute,clubId,changeType,JSON.stringify(payload)).lastInsertRowid);
+}
+
 export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
  const f=db.prepare("SELECT id,home_club_id,away_club_id,random_seed,status FROM fixture WHERE id=?").get(fixtureId) as FixtureRow|undefined;
  if(!f)throw new Error(`Fixture ${fixtureId} not found.`);
@@ -390,7 +417,7 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
  const insertMomentum=db.prepare("INSERT INTO match_momentum(fixture_id,minute,home_pressure,away_pressure,home_score,away_score) VALUES(?,?,?,?,?,?)");
  const checkpoint=db.prepare("UPDATE match_simulation_state SET simulation_minute=?,state_json=?,updated_at=CURRENT_TIMESTAMP WHERE fixture_id=?");
  const minuteUpdate=db.transaction((m:KernelMinute)=>{
-  for(const e of m.events)insertEvent.run(fixtureId,e.minute,e.clubId,e.playerId,e.secondaryPlayerId,e.eventType,e.xg,e.description);
+  for(const e of m.events)insertEvent.run(fixtureId,e.minute,e.clubId,e.playerId||null,e.secondaryPlayerId,e.eventType,e.xg,e.description);
   insertMomentum.run(fixtureId,m.minute,m.homePressure,m.awayPressure,m.homeScore,m.awayScore);
   checkpoint.run(m.minute,JSON.stringify({seed,minute:m.minute,homeScore:m.homeScore,awayScore:m.awayScore,
    homeShots:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id&&["GOAL","SAVE","MISS"].includes(e.eventType)).length,
