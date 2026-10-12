@@ -31,11 +31,28 @@ test("match context persists weather and pitch, applies substitutions as events,
     assert.ok(preview.bench.length > 0);
     saveLineup(db, fixture.id, fixture.home, preview.starters.map(p=>p.playerId), preview.bench.map(p=>p.playerId));
 
+    const prior = db.prepare("SELECT id FROM fixture WHERE id<>? AND (home_club_id=? OR away_club_id=?) ORDER BY id LIMIT 1").get(fixture.id,fixture.home,fixture.home) as {id:number}|undefined;
+    if (prior) {
+      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=0,away_score=0,scheduled_at='2026-01-01T12:00:00' WHERE id=?").run(prior.id);
+      db.prepare("UPDATE fixture SET scheduled_at='2026-01-02T12:00:00' WHERE id=?").run(fixture.id);
+    }
+    const stadiumCity = db.prepare("SELECT city_id AS id FROM stadium WHERE id=(SELECT stadium_id FROM fixture WHERE id=?)").get(fixture.id) as {id:number}|undefined;
+    const otherCity = stadiumCity ? db.prepare("SELECT id FROM city WHERE id<>? ORDER BY id LIMIT 1").get(stadiumCity.id) as {id:number}|undefined : undefined;
+    if (stadiumCity?.id && otherCity) {
+      db.prepare("UPDATE club SET city_id=? WHERE id=?").run(otherCity.id,fixture.away);
+      db.prepare("INSERT OR REPLACE INTO travel_route(from_city_id,to_city_id,distance_km,estimated_hours,travel_mode) VALUES(?,?,600,8,'PLANE')").run(otherCity.id,stadiumCity.id);
+    }
     db.prepare("INSERT INTO match_environment(fixture_id,weather,temperature_c,pitch_condition) VALUES(?,?,?,?)")
       .run(fixture.id, "HEAVY_RAIN", 16, 35);
     const context = resolveMatchContext(db, fixture.id, fixture.home);
     assert.equal(context.weather, "HEAVY_RAIN");
     assert.equal(context.pitchCondition, 35);
+    if (prior) assert.ok(context.restHours <= 24, "short rest should be derived from the previous fixture date");
+    if (stadiumCity?.id && otherCity) {
+      const awayContext = resolveMatchContext(db, fixture.id, fixture.away);
+      assert.equal(awayContext.travelKm, 600);
+      assert.equal(awayContext.travelHours, 8);
+    }
 
     const suspended = db.prepare("SELECT player_id AS id FROM squad_membership WHERE club_id=? ORDER BY player_id LIMIT 1")
       .get(fixture.away) as {id:number};
