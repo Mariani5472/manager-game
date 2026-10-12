@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { openDatabase, validateDatabase } from "./db/database.js";
-import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis, runSeasonBalanceAnalysis } from "./game/matchEngine.js";
+import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis, runSeasonBalanceAnalysis, scheduleMatchTacticalChange } from "./game/matchEngine.js";
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
 import {
@@ -179,6 +179,36 @@ async function main(): Promise<void> {
       return;
     }
     case "recalibrate-squads": withSave(args, db => { ensureFactorySquadProfiles(db); console.log("Elencos recalibrados; partidas já concluídas foram preservadas."); }); return;
+    case "match-change": {
+      const fixtureId = parsePositiveId(args.find(value => !value.startsWith("--")), "Fixture ID");
+      const clubId = parsePositiveId(parseOption(args, "--club"), "--club");
+      const minute = parsePositiveId(parseOption(args, "--minute"), "--minute");
+      const type = parseOption(args, "--type");
+      if (type !== "SUBSTITUTION" && type !== "MENTALITY" && type !== "INSTRUCTION") {
+        throw new Error("--type must be SUBSTITUTION, MENTALITY or INSTRUCTION.");
+      }
+      withSave(args, db => {
+        let payload: Record<string, unknown>;
+        if (type === "SUBSTITUTION") {
+          payload = {
+            playerOutId: parsePositiveId(parseOption(args, "--out"), "--out"),
+            playerInId: parsePositiveId(parseOption(args, "--in"), "--in"),
+          };
+        } else if (type === "MENTALITY") {
+          const mentality = parseOption(args, "--mentality");
+          if (!mentality) throw new Error("--mentality is required for MENTALITY changes.");
+          payload = { mentality };
+        } else {
+          const key = parseOption(args, "--key");
+          const value = Number(parseOption(args, "--value"));
+          if (!key || !Number.isFinite(value)) throw new Error("--key and numeric --value are required for INSTRUCTION changes.");
+          payload = { key, value };
+        }
+        const changeId = scheduleMatchTacticalChange(db, fixtureId, clubId, minute, type, payload);
+        console.log(JSON.stringify({ changeId, fixtureId, clubId, minute, type, payload }, null, 2));
+      });
+      return;
+    }
     case "season-balance": {
       const seasons = parsePositiveId(parseOption(args, "--seasons") ?? "20", "--seasons");
       const seed = parsePositiveId(parseOption(args, "--seed") ?? "90210", "--seed");
@@ -232,7 +262,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
-      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, balance, season-balance, recalibrate-squads, diagnostics, tactics-impact, fixtures, play, advance-round, simulate-season, standings, season-status, next-season");
+      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, balance, season-balance, recalibrate-squads, match-change, diagnostics, tactics-impact, fixtures, play, advance-round, simulate-season, standings, season-status, next-season");
   }
 }
 
