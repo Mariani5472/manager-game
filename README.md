@@ -2,6 +2,40 @@
 
 A data-driven, text-based football manager built with TypeScript, Node.js and SQLite.
 
+## Fase 8 — Data Packages e mundo expansível
+
+A engine agora importa mundos a partir de pacotes JSON versionados. O formato é declarativo: cada pacote pode definir países, cidades, clubes, estádios, jogadores, competições, temporadas, etapas, participantes, formatos, critérios de classificação, calendários explícitos e regras de promoção/rebaixamento. O motor usa o mesmo pipeline genérico para as competições; não é necessário adicionar um `if` específico por liga.
+
+- **Contrato versionado:** `schemaVersion: 1`, identificador estável `id`, versão semântica `version`, versão mínima do jogo e dependências opcionais. Dependências declaradas precisam estar instaladas na campanha e, quando informada, a versão deve coincidir exatamente.
+- **Validação de referências:** verifica códigos duplicados, atributos de jogadores, países/cidades/clubes/estádios referenciados, participantes, grupos, calendários, formatos e destinos de promoção/rebaixamento antes de importar.
+- **Calendários e formatos:** ligas e grupos geram calendário round-robin em lote, com ida/volta e datas semanais. Etapas eliminatórias podem declarar partidas no JSON; se omitidas, o pacote gera a primeira rodada por seed. Datas e participantes declarados são validados.
+- **Promoção/rebaixamento:** regras por posição podem apontar para uma competição específica ou para um nível (`tier`). Depois de concluir a temporada e garantir que as temporadas-alvo do próximo ano existem, `apply-movements` transfere os clubes entre as divisões e atualiza participantes e inscrições do próximo ano.
+- **Catálogo e compatibilidade:** `data/packages/catalog.json` lista pacotes distribuídos com o projeto; `data-package-catalog` o exibe. A campanha registra versões e manifestos instalados no próprio save.
+- **Isolamento de saves:** instalar um pacote exige `--save-id` ou `--save`; a operação modifica somente esse banco de campanha, nunca o banco matriz. Saves existentes não recebem pacotes automaticamente.
+- **Segurança de atualização:** reinstalar a mesma versão é idempotente. Uma atualização precisa ter versão semântica maior; a substituição de calendário é recusada se a etapa já tiver partidas iniciadas ou concluídas.
+
+### Comandos de Data Packages
+
+```bash
+# Ver o catálogo distribuído com o jogo
+npm run dev -- data-package-catalog
+
+# Validar antes de alterar a campanha
+npm run dev -- data-package-validate --file data/packages/example-regional-leagues.json --save-id <save-id>
+
+# Instalar no save selecionado
+npm run dev -- data-package-install --file data/packages/example-regional-leagues.json --save-id <save-id>
+
+# Conferir pacotes instalados nesta campanha
+npm run dev -- data-packages --save-id <save-id>
+
+# Após concluir a temporada 2026 e preparar as competições de 2027
+npm run dev -- apply-movements --year 2026 --save-id <save-id>
+```
+
+O exemplo `data/packages/example-regional-leagues.json` inclui um país fictício, quatro clubes, cidades, estádios, jogadores, duas divisões e regras recíprocas de acesso/rebaixamento. A estrutura JSON completa e as regras de autoria estão em `data/packages/README.md`.
+
+
 ## Fase 2 — decisões estratégicas
 
 - **Escalação:** 11 titulares por slots da formação e até sete reservas. A API valida clube, disponibilidade, duplicidade e goleiro. Se ainda não existe uma escalação salva, a engine sugere automaticamente uma usando posição, atributos e condição individual.
@@ -35,49 +69,6 @@ Mudanças futuras no calendário, simulação, classificação, persistência ou
 O kernel é pseudoaleatório e reproduzível por seed para facilitar comparações entre escalações/táticas. O motor continua sendo uma simulação probabilística compacta, não uma garantia de equilíbrio calibrado; os relatórios Monte Carlo devem orientar ajustes graduais nos parâmetros.
 
 
-
-## Fase 7 — ciclo de vida do elenco
-
-A Fase 7 adiciona estado persistente de carreira e finanças ao save. As tabelas de gestão são criadas de forma idempotente na primeira utilização, preservando saves existentes sem exigir uma edição manual do schema base.
-
-- **Evolução de atributos e potencial:** ao processar uma nova temporada, os atributos evoluem ou declinam por idade, potencial, nível atual e energia. A variação é determinística por jogador/temporada para manter reprodutibilidade.
-- **Idade, aposentadoria e base:** idade é derivada de `person.birth_date`; jogadores veteranos podem se aposentar. Cada clube recebe uma geração anual de jovens com atributos, potencial, posições, condição e contrato inicial.
-- **Contratos e orçamento:** salários semanais, duração de contrato, balanço, verba de transferências e teto salarial são persistidos por save. A virada de temporada desconta a folha anual, expira contratos vencidos e libera jogadores sem contrato.
-- **Mercado e negociação:** ofertas validam verba e teto salarial. Uma negociação pode ser aceita, rejeitada ou receber contraproposta; ao aceitar, a transferência, o contrato, o movimento financeiro e o histórico são atualizados na mesma transação.
-- **Histórico:** snapshots por temporada guardam idade, overall, potencial, salário, jogos, minutos e gols; o histórico de transferências registra transferências, formação, expiração e aposentadoria.
-
-### Comandos de gestão
-
-```bash
-# Elenco com idade, overall, potencial, valor estimado e contrato
-npm run dev -- roster --save-id <save-id>
-npm run dev -- roster --club 1 --year 2028 --save-id <save-id>
-
-# Finanças de todos os clubes ou de um clube
-npm run dev -- finances --save-id <save-id>
-npm run dev -- finances --club 1 --save-id <save-id>
-
-# Renovar contrato (salário semanal, duração em temporadas)
-npm run dev -- renew-contract --player <player-id> --club 1 --wage 1800 --years 3 --save-id <save-id>
-
-# Enviar oferta por um jogador de outro clube ou agente livre
-npm run dev -- transfer-offer --player <player-id> --club 1 --fee 250000 --wage 2200 --years 4 --save-id <save-id>
-
-# Responder à oferta: aceitar, rejeitar ou fazer contraproposta
-npm run dev -- transfer-response --offer <offer-id> --action COUNTER --fee 300000 --wage 2300 --years 4 --save-id <save-id>
-npm run dev -- transfer-response --offer <offer-id> --action ACCEPT --save-id <save-id>
-npm run dev -- transfer-response --offer <offer-id> --action REJECT --save-id <save-id>
-
-# Histórico individual e histórico de transferências
-npm run dev -- player-history --player <player-id> --save-id <save-id>
-npm run dev -- transfer-history --player <player-id> --save-id <save-id>
-npm run dev -- transfer-history --save-id <save-id>
-
-# Processamento explícito e idempotente do ciclo de uma temporada
-npm run dev -- roster-season --year 2028 --save-id <save-id>
-```
-
-A criação da temporada seguinte pelo comando `next-season` processa automaticamente o ciclo de elenco do novo ano, uma única vez. `roster-season` é útil para testes e campanhas que precisem disparar o processamento manualmente. Os orçamentos e contratos são independentes em cada save.
 
 ## Fase 6 — contexto completo da partida
 
