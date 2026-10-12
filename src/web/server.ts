@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { openDatabase } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
-import { advanceNextFixture, getManagedClub, getSeasonStatus, getStandings, listFixtures, listSquad, getTactics } from "../game/gameService.js";
+import { advanceNextFixture, getManagedClub, getSeasonStatus, getStandings, listClubs, listFixtures, listSquad, getTactics } from "../game/gameService.js";
 import { saveLineup } from "../game/lineupService.js";
 
 const root = process.cwd();
@@ -39,6 +39,20 @@ export function startManagerWebServer(): void {
       if (req.method === "GET" && url.pathname === "/") {
         res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
         res.end(readFileSync(htmlPath)); return;
+      }
+      if (req.method === "GET" && url.pathname === "/api/clubs") {
+        const db = openDatabase(masterPath, true);
+        try { json(res, 200, listClubs(db)); } finally { db.close(); }
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/api/campaign") {
+        const input = await body(req);
+        const name = String(input.name ?? "").trim();
+        const managerName = String(input.managerName ?? "").trim();
+        const clubId = positiveInt(input.clubId, "clubId");
+        const save = await manager.create({ name, managerName, clubId });
+        json(res, 201, save);
+        return;
       }
       if (req.method === "GET" && url.pathname === "/api/state") {
         const saveId = url.searchParams.get("saveId") ?? "";
