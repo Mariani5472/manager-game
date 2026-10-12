@@ -439,8 +439,11 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
   db.prepare("UPDATE match_tactical_change SET applied=1 WHERE fixture_id=?").run(fixtureId);
   const state=db.prepare("INSERT INTO match_player_state(fixture_id,player_id,club_id,energy,rating,minutes_played) VALUES(?,?,?,?,?,?)");
   for(const team of [home,away])for(const p of team.lineup){
-   const loss=p.isStarting?14:2;
-   state.run(fixtureId,p.id,team.clubId,Math.max(0,p.energy-loss),p.isStarting?6.3:6,p.isStarting?90:0);
+   const substitutionOut=timeline.events.find(e=>e.eventType==="SUBSTITUTION"&&e.playerId===p.id);
+   const substitutionIn=timeline.events.find(e=>e.eventType==="SUBSTITUTION"&&e.secondaryPlayerId===p.id);
+   const loss=p.isStarting?(substitutionOut?9:14):(substitutionIn?7:2);
+   const minutesPlayed=p.isStarting?(substitutionOut?substitutionOut.minute:90):(substitutionIn?90-substitutionIn.minute:0);
+   state.run(fixtureId,p.id,team.clubId,Math.max(0,p.energy-loss),p.isStarting?6.3:6,minutesPlayed);
    db.prepare("UPDATE player_condition SET energy=MAX(0,energy-?) WHERE player_id=?").run(loss,p.id);
    if(p.isStarting){
     const delta=timeline.result.homeScore===timeline.result.awayScore?0:
