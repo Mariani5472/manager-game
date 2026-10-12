@@ -52,12 +52,10 @@ function selectLineup(db:SqliteDatabase,fixtureId:number,clubId:number,players:P
 function loadTeam(db:SqliteDatabase,fixtureId:number,clubId:number,persistLineup=true):Team{const c=db.prepare("SELECT reputation FROM club WHERE id=?").get(clubId) as {reputation:number}|undefined;if(!c)throw new Error(`Club ${clubId} not found.`);const t=tactic(db,clubId),players=loadPlayers(db,clubId,fixtureId),lineup=selectLineup(db,fixtureId,clubId,players,t,persistLineup),s=lineup.filter(p=>p.isStarting);const posRating=mean(s.map(p=>p.positionRating*fit(bestPosition(p.id,loadPositions(db,clubId)),p.role)));const attacking=mean(s.map(p=>skill(p,p.role)*.72+p.positionRating*.28+p.energy*.18+p.morale*.08+p.sharpness*.08));const defending=mean(s.map(p=>mean([p.tackling,p.marking,p.positioning,p.concentration,p.strength])));const keeper=s.find(p=>p.isStarting&&p.role==="GK");return{clubId,reputation:c.reputation,tactic:t,lineup,attacking:attacking+(posRating-50)*.15,defending,goalkeeping:keeper?mean([keeper.reflexes,keeper.handling,keeper.aerial_reach,keeper.positioning]):45,energy:mean(s.map(p=>p.energy)),fitness:mean(s.map(p=>p.stamina)),context:resolveMatchContext(db,fixtureId,clubId)};}
 interface KernelShotEvent {
  minute:number; clubId:number; playerId:number; secondaryPlayerId:number|null;
- eventType:"GOAL"|"SAVE"|"MISS"; xg:number; description:string;
+ eventType:"GOAL"|"SAVE"|"MISS"|"SUBSTITUTION"|"TACTIC_CHANGE"; xg:number; description:string;
 }
-interface KernelMinute {
- minute:number; homePressure:number; awayPressure:number; homeScore:number; awayScore:number;
- events:KernelShotEvent[];
-}
+interface KernelMinute { minute:number; homePressure:number; awayPressure:number; homeScore:number; awayScore:number; events:KernelShotEvent[]; }
+interface TacticalChange {id:number;minute:number;club_id:number;change_type:string;payload:string;}
 interface KernelTimeline {result:SimulatedMatchResult; events:KernelShotEvent[]; minutes:KernelMinute[];}
 const HOME_SHOT_CHANCE_BONUS=0.004; // +0.4 percentage points per minute: modest, isolated home advantage.
 function mentalityShotModifier(value:string):number {
@@ -70,7 +68,9 @@ function teamPressure(team:Team, random:()=>number):number {
  return clamp(team.attacking*.43+team.tactic.pressing*.16+team.tactic.tempo*.10+
   team.tactic.defensive_line*.04+mentality-fatigue+random()*8,0,100);
 }
-function simulateMatchTimeline(home:Team,away:Team,seed:number):KernelTimeline {
+function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalChange[]=[]):KernelTimeline {
+ home={...home,tactic:{...home.tactic},lineup:home.lineup.map(p=>({...p}))};
+ away={...away,tactic:{...away.tactic},lineup:away.lineup.map(p=>({...p}))};
  // Random streams are tied to club identity, not home/away slot. This makes side-swapped
  // diagnostics a paired comparison rather than a comparison polluted by RNG draw order.
  const homeRandom=rng(seed ^ Math.imul(home.clubId,0x9e3779b1));
@@ -79,8 +79,33 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number):KernelTimeline {
  const events:KernelShotEvent[]=[];
  const minutes:KernelMinute[]=[];
  for(let minute=1;minute<=90;minute++){
-  const hp=teamPressure(home,homeRandom),ap=teamPressure(away,awayRandom);
   const minuteEvents:KernelShotEvent[]=[];
+  for(const change of changes.filter(item=>item.minute===minute)){
+   const team=change.club_id===home.clubId?home:change.club_id===away.clubId?away:null;
+   if(!team)throw new Error(`Tactical change ${change.id} targets a club outside the fixture.`);
+   let payload:Record<string,unknown>;
+   try{payload=JSON.parse(change.payload) as Record<string,unknown>;}catch{throw new Error(`Tactical change ${change.id} has invalid JSON.`);}
+   if(change.change_type==="SUBSTITUTION"){
+    const outId=Number(payload.playerOutId),inId=Number(payload.playerInId);
+    const outgoing=team.lineup.find(p=>p.id===outId&&p.isStarting),incoming=team.lineup.find(p=>p.id===inId&&!p.isStarting);
+    if(!outgoing||!incoming)throw new Error(`Substitution ${change.id} needs an active player and a bench player.`);
+    if(outgoing.role==="GK"&&incoming.goalkeeper!==1)throw new Error("A goalkeeper can only be replaced by another goalkeeper.");
+    incoming.role=outgoing.role;incoming.slot=outgoing.slot;incoming.isStarting=true;outgoing.isStarting=false;
+    minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição: ${outgoing.name} sai, ${incoming.name} entra`});
+   }else if(change.change_type==="MENTALITY"){
+    const mentality=String(payload.mentality??"");
+    if(!["VERY_DEFENSIVE","DEFENSIVE","BALANCED","ATTACKING","VERY_ATTACKING"].includes(mentality))throw new Error(`Tactical change ${change.id} has invalid mentality.`);
+    team.tactic={...team.tactic,mentality};
+    minuteEvents.push({minute,clubId:team.clubId,playerId:0,secondaryPlayerId:null,eventType:"TACTIC_CHANGE",xg:0,description:`Mentalidade alterada para ${mentality}`});
+   }else if(change.change_type==="INSTRUCTION"){
+    const key=String(payload.key??""),value=Number(payload.value);
+    const ranges:Record<string,[number,number]>={pressing:[0,100],tempo:[0,100],defensive_line:[0,100],width:[0,100],passing_directness:[0,100],counter_attack:[0,1]};
+    if(!ranges[key]||!Number.isFinite(value)||value<ranges[key]![0]||value>ranges[key]![1])throw new Error(`Tactical change ${change.id} has invalid instruction.`);
+    team.tactic={...team.tactic,[key]:value};
+    minuteEvents.push({minute,clubId:team.clubId,playerId:0,secondaryPlayerId:null,eventType:"TACTIC_CHANGE",xg:0,description:`Instrução alterada: ${key} = ${value}`});
+   }
+  }
+  const hp=teamPressure(home,homeRandom),ap=teamPressure(away,awayRandom);
   for(const side of [{team:home,opponent:away,isHome:true,pressure:hp,opponentPressure:ap,random:homeRandom},
                       {team:away,opponent:home,isHome:false,pressure:ap,opponentPressure:hp,random:awayRandom}]){
    const tactic=side.team.tactic;
@@ -335,7 +360,8 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
  const context=resolveMatchContext(db,fixtureId,f.home_club_id);
  persistMatchEnvironment(db,fixtureId,context);
  const home=loadTeam(db,fixtureId,f.home_club_id),away=loadTeam(db,fixtureId,f.away_club_id);
- const timeline=simulateMatchTimeline(home,away,seed);
+ const changes=db.prepare("SELECT id,minute,club_id,change_type,payload FROM match_tactical_change WHERE fixture_id=? ORDER BY minute,id").all(fixtureId) as TacticalChange[];
+ const timeline=simulateMatchTimeline(home,away,seed,changes);
  const existing=db.prepare("SELECT simulation_minute,state_json FROM match_simulation_state WHERE fixture_id=?")
   .get(fixtureId) as {simulation_minute:number;state_json:string}|undefined;
  let startMinute=existing?.simulation_minute??0;
@@ -367,13 +393,13 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
   for(const e of m.events)insertEvent.run(fixtureId,e.minute,e.clubId,e.playerId,e.secondaryPlayerId,e.eventType,e.xg,e.description);
   insertMomentum.run(fixtureId,m.minute,m.homePressure,m.awayPressure,m.homeScore,m.awayScore);
   checkpoint.run(m.minute,JSON.stringify({seed,minute:m.minute,homeScore:m.homeScore,awayScore:m.awayScore,
-   homeShots:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id).length,
-   awayShots:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.away_club_id).length,
+   homeShots:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id&&["GOAL","SAVE","MISS"].includes(e.eventType)).length,
+   awayShots:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.away_club_id&&["GOAL","SAVE","MISS"].includes(e.eventType)).length,
    homeShotsOnTarget:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id&&(e.eventType==="GOAL"||e.eventType==="SAVE")).length,
    awayShotsOnTarget:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.away_club_id&&(e.eventType==="GOAL"||e.eventType==="SAVE")).length,
    homePressure:m.homePressure,awayPressure:m.awayPressure,
-   homeXg:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id).reduce((n,e)=>n+e.xg,0),
-   awayXg:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.away_club_id).reduce((n,e)=>n+e.xg,0),
+   homeXg:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id&&["GOAL","SAVE","MISS"].includes(e.eventType)).reduce((n,e)=>n+e.xg,0),
+   awayXg:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.away_club_id&&["GOAL","SAVE","MISS"].includes(e.eventType)).reduce((n,e)=>n+e.xg,0),
    completed:false}),fixtureId);
   db.prepare("UPDATE fixture SET status='IN_PROGRESS',current_minute=?,home_score=?,away_score=? WHERE id=?")
    .run(m.minute,m.homeScore,m.awayScore,fixtureId);
@@ -383,6 +409,7 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
   const alreadyFullTime=db.prepare("SELECT 1 FROM match_event WHERE fixture_id=? AND event_type='FULL_TIME'").get(fixtureId);
   if(!alreadyFullTime)insertEvent.run(fixtureId,90,null,null,null,"FULL_TIME",0,"Fim de jogo");
   db.prepare("DELETE FROM match_player_state WHERE fixture_id=?").run(fixtureId);
+  db.prepare("UPDATE match_tactical_change SET applied=1 WHERE fixture_id=?").run(fixtureId);
   const state=db.prepare("INSERT INTO match_player_state(fixture_id,player_id,club_id,energy,rating,minutes_played) VALUES(?,?,?,?,?,?)");
   for(const team of [home,away])for(const p of team.lineup){
    const loss=p.isStarting?14:2;
