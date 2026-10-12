@@ -362,11 +362,14 @@ export function scheduleMatchTacticalChange(db:SqliteDatabase,fixtureId:number,c
   if(!ranges[key]||!Number.isFinite(value)||value<ranges[key]![0]||value>ranges[key]![1])throw new Error("Invalid instruction key or value.");
  }
  if(changeType==="SUBSTITUTION"){
+  loadTeam(db,fixtureId,clubId);
   const playerOutId=Number(payload.playerOutId),playerInId=Number(payload.playerInId);
   if(!Number.isSafeInteger(playerOutId)||!Number.isSafeInteger(playerInId)||playerOutId===playerInId)throw new Error("Substitution requires different playerOutId and playerInId.");
   const outgoing=db.prepare("SELECT p.goalkeeper AS goalkeeper FROM squad_membership sm JOIN player p ON p.person_id=sm.player_id WHERE sm.player_id=? AND sm.club_id=?").get(playerOutId,clubId) as {goalkeeper:number}|undefined;
   const incoming=db.prepare("SELECT p.goalkeeper AS goalkeeper,COALESCE(pc.suspension_matches,0) AS suspension,pc.injured_until AS injuredUntil FROM squad_membership sm JOIN player p ON p.person_id=sm.player_id LEFT JOIN player_condition pc ON pc.player_id=p.person_id WHERE sm.player_id=? AND sm.club_id=?").get(playerInId,clubId) as {goalkeeper:number;suspension:number;injuredUntil:string|null}|undefined;
   if(!outgoing||!incoming)throw new Error("Both players must belong to the selected club.");
+  const lineupState=db.prepare("SELECT player_id AS playerId,is_starting AS isStarting FROM match_lineup WHERE fixture_id=? AND club_id=? AND player_id IN (?,?)").all(fixtureId,clubId,playerOutId,playerInId) as Array<{playerId:number;isStarting:number}>;
+  if(lineupState.length!==2||lineupState.find(p=>p.playerId===playerOutId)?.isStarting!==1||lineupState.find(p=>p.playerId===playerInId)?.isStarting!==0)throw new Error("Select a current starter and a saved bench player before scheduling a substitution.");
   const matchDate=fixture.scheduledAt?.slice(0,10)??null;
   if(incoming.suspension>0||(incoming.injuredUntil&&matchDate&&incoming.injuredUntil>=matchDate))throw new Error("Incoming player is unavailable.");
   if(outgoing.goalkeeper===1&&incoming.goalkeeper!==1)throw new Error("A goalkeeper can only be replaced by another goalkeeper.");
