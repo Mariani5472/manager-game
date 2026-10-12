@@ -184,8 +184,8 @@ async function main(): Promise<void> {
       const clubId = parsePositiveId(parseOption(args, "--club"), "--club");
       const minute = parsePositiveId(parseOption(args, "--minute"), "--minute");
       const type = parseOption(args, "--type");
-      if (type !== "SUBSTITUTION" && type !== "MENTALITY" && type !== "INSTRUCTION") {
-        throw new Error("--type must be SUBSTITUTION, MENTALITY or INSTRUCTION.");
+      if (type !== "SUBSTITUTION" && type !== "MENTALITY" && type !== "INSTRUCTION" && type !== "FORMATION") {
+        throw new Error("--type must be SUBSTITUTION, MENTALITY, INSTRUCTION or FORMATION.");
       }
       withSave(args, db => {
         let payload: Record<string, unknown>;
