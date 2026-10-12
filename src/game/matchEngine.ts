@@ -81,10 +81,11 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number):KernelTimeline {
   for(const side of [{team:home,opponent:away,isHome:true,pressure:hp,opponentPressure:ap,random:homeRandom},
                       {team:away,opponent:home,isHome:false,pressure:ap,opponentPressure:hp,random:awayRandom}]){
    const tactic=side.team.tactic;
-   const chance=clamp(.095+(side.team.attacking-50)*.0011+(50-side.opponent.defending)*.00045+
+   const chance=clamp(.095+(side.team.attacking-50)*.00135+(50-side.opponent.defending)*.00060+
     mentalityShotModifier(tactic.mentality)+(tactic.pressing-50)*.00012+
     (tactic.tempo-50)*.00012+(side.pressure-side.opponentPressure)*.00012+
-    (tactic.counter_attack?.004:0)+(side.isHome?HOME_SHOT_CHANCE_BONUS:0),.055,.19);
+    (tactic.passing_directness-50)*.000055+(tactic.width-50)*.000025+
+    (tactic.counter_attack?.004:0)+(side.isHome?HOME_SHOT_CHANCE_BONUS:0),.05,.205);
    if(side.random()>=chance)continue;
    const attackers=side.team.lineup.filter(p=>p.isStarting&&p.role!=="GK");
    if(!attackers.length)throw new Error(`Club ${side.team.clubId} has no available outfield starters.`);
@@ -97,11 +98,12 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number):KernelTimeline {
    const qualityRoll=side.random();
    const baseXg=qualityRoll<.56 ? .035+side.random()*.06 :
     qualityRoll<.92 ? .095+side.random()*.075 : .17+side.random()*.15;
-   const xg=clamp(baseXg+(side.team.attacking-50)*.0002+
-    (shooter.finishing-50)*.0001+(tactic.tempo-50)*.00003,.025,.35);
+   const xg=clamp(baseXg+(side.team.attacking-50)*.00042+
+    (shooter.finishing-50)*.00018+(tactic.tempo-50)*.00004+
+    (tactic.passing_directness-50)*.00006+(tactic.width-50)*.000035,.02,.38);
    const onTargetChance=clamp(.29+xg*.5,.30,.48);
    const onTarget=side.random()<onTargetChance;
-   const keeperFactor=clamp(1+(50-keeperSkill)*.006,.70,1.30);
+   const keeperFactor=clamp(1+(50-keeperSkill)*.0075,.66,1.34);
    const goal=onTarget&&side.random()<clamp((xg/onTargetChance)*keeperFactor,.015,.82);
    const event:KernelShotEvent={
     minute,clubId:side.team.clubId,playerId:shooter.id,secondaryPlayerId:onTarget?keeper.id:null,
@@ -219,7 +221,7 @@ export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=884
   }
  }
  
- const xgBands: XgBandDiagnostic[]=bands.map(b=>({band:b.label,shots:b.shots,averageXg:b.shots?b.xg/b.shots:0,onTargetRate:b.shots?(b.onTarget/b.shots):0,goalRate:b.shots?b.goals/b.shots:0,saveRate:b.shots?b.saves/b.shots:0,missRate:b.shots?b.misses/b.shots:0,goals:b.goals,saves:b.saves,misses:b.misses}));
+ const xgBands: XgBandDiagnostic[]=bands.filter(b=>b.shots>0).map(b=>({band:b.label,shots:b.shots,averageXg:b.xg/b.shots,onTargetRate:b.onTarget/b.shots,goalRate:b.goals/b.shots,saveRate:b.saves/b.shots,missRate:b.misses/b.shots,goals:b.goals,saves:b.saves,misses:b.misses}));
  const ab=runMonteCarlo(strong.team,weak.team,simulations,seed+1700003);
  const ba=runMonteCarlo(weak.team,strong.team,simulations,seed+1700003);
  const persistedRows=db.prepare("SELECT f.id,f.home_club_id,f.away_club_id,f.home_score,f.away_score,f.current_minute, s.simulation_minute,s.state_json,(SELECT COUNT(*) FROM match_momentum m WHERE m.fixture_id=f.id) AS momentum_count,(SELECT COUNT(*) FROM match_event e WHERE e.fixture_id=f.id AND e.event_type='GOAL' AND e.club_id=f.home_club_id) AS event_home_goals,(SELECT COUNT(*) FROM match_event e WHERE e.fixture_id=f.id AND e.event_type='GOAL' AND e.club_id=f.away_club_id) AS event_away_goals FROM fixture f LEFT JOIN match_simulation_state s ON s.fixture_id=f.id WHERE f.status='COMPLETED' ORDER BY f.id DESC LIMIT 100").all() as Array<{id:number;home_score:number;away_score:number;current_minute:number;simulation_minute:number|null;state_json:string|null;momentum_count:number;event_home_goals:number;event_away_goals:number}>;
@@ -245,6 +247,72 @@ export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=884
  };
 }
 
+
+
+export interface SeasonBalanceClub {
+ clubId:number; reputation:number; strength:number; tier:string;
+ averagePoints:number; averageGoalDifference:number; averageGoalsFor:number; averageGoalsAgainst:number;
+ titleRate:number; topFourRate:number; bottomFourRate:number;
+}
+export interface SeasonBalanceReport {
+ seasons:number; matchesPerSeason:number; totalMatches:number; seedStart:number;
+ favoriteWinRate:number; underdogWinRate:number; drawRate:number; upsetDefinition:string;
+ clubs:SeasonBalanceClub[]; tierSummary:Array<{tier:string;clubs:number;averagePoints:number;averageGoalDifference:number;averageGoalsAgainst:number}>;
+}
+
+/** Fast whole-season Monte Carlo: 16-club double round robin, repeated with distinct seeds. */
+export function runSeasonBalanceAnalysis(db:SqliteDatabase,seasons=20,seedStart=90210):SeasonBalanceReport {
+ if(!Number.isSafeInteger(seasons)||seasons<1||seasons>500)throw new Error("Season simulations must be an integer from 1 to 500.");
+ const ids=(db.prepare("SELECT id FROM club ORDER BY id").all() as Array<{id:number}>).map(r=>r.id);
+ if(ids.length<4)throw new Error("Season balance analysis requires at least four clubs.");
+ const teams=ids.map(id=>loadTeam(db,-1,id,false));
+ const strength=(t:Team)=>t.attacking*.4+t.defending*.35+t.goalkeeping*.25;
+ const ranked=[...teams].sort((a,b)=>strength(b)-strength(a));
+ const tierByClub=new Map<number,string>();
+ ranked.forEach((t,i)=>tierByClub.set(t.clubId,i<3?"ELITE":i<7?"COMPETITIVE":i<12?"MID_TABLE":"LOWER_TABLE"));
+ const stats=new Map(ids.map(id=>[id,{points:0,gd:0,gf:0,ga:0,first:0,topFour:0,bottomFour:0}]));
+ let favoriteWins=0, favoriteDecisions=0, underdogWins=0, underdogDecisions=0, draws=0, totalMatches=0;
+ for(let season=0;season<seasons;season++){
+  const table=new Map(ids.map(id=>[id,{points:0,gf:0,ga:0}]));
+  let matchIndex=0;
+  for(let i=0;i<teams.length;i++)for(let j=i+1;j<teams.length;j++){
+   const legs: Array<[number,number]> = [[i,j],[j,i]];
+   for(const [homeIndex,awayIndex] of legs){
+    const home=teams[homeIndex]!,away=teams[awayIndex]!;
+    const result=simulateMatchKernel(home,away,(seedStart+season*1000003+matchIndex*7919)>>>0);
+    matchIndex++;totalMatches++;
+    const h=table.get(home.clubId)!,a=table.get(away.clubId)!;
+    h.gf+=result.homeScore;h.ga+=result.awayScore;a.gf+=result.awayScore;a.ga+=result.homeScore;
+    if(result.homeScore>result.awayScore)h.points+=3;
+    else if(result.homeScore<result.awayScore)a.points+=3;
+    else {h.points++;a.points++;draws++;}
+    const gap=strength(home)-strength(away);
+    if(Math.abs(gap)>=5){favoriteDecisions++;const favoriteWon=gap>0?result.homeScore>result.awayScore:result.awayScore>result.homeScore;if(favoriteWon)favoriteWins++;}
+    if(Math.abs(gap)>=8){underdogDecisions++;const underdogWon=gap>0?result.awayScore>result.homeScore:result.homeScore>result.awayScore;if(underdogWon)underdogWins++;}
+   }
+  }
+  const ordered=[...table.entries()].sort((a,b)=>b[1].points-a[1].points||(b[1].gf-b[1].ga)-(a[1].gf-a[1].ga)||b[1].gf-a[1].gf);
+  ordered.forEach(([id,row],rank)=>{const acc=stats.get(id)!;acc.points+=row.points;acc.gf+=row.gf;acc.ga+=row.ga;acc.gd+=row.gf-row.ga;if(rank===0)acc.first++;if(rank<4)acc.topFour++;if(rank>=ordered.length-4)acc.bottomFour++;});
+ }
+ const clubs:SeasonBalanceClub[]=ids.map(id=>{
+  const team=teams.find(t=>t.clubId===id)!;const s=stats.get(id)!;
+  return {clubId:id,reputation:team.reputation,strength:strength(team),tier:tierByClub.get(id)!,
+   averagePoints:s.points/seasons,averageGoalDifference:s.gd/seasons,averageGoalsFor:s.gf/seasons,averageGoalsAgainst:s.ga/seasons,
+   titleRate:s.first/seasons,topFourRate:s.topFour/seasons,bottomFourRate:s.bottomFour/seasons};
+ }).sort((a,b)=>b.averagePoints-a.averagePoints);
+ const tierSummary=["ELITE","COMPETITIVE","MID_TABLE","LOWER_TABLE"].map(tier=>{
+  const group=clubs.filter(c=>c.tier===tier);
+  return {tier,clubs:group.length,averagePoints:group.reduce((sum,c)=>sum+c.averagePoints,0)/(group.length||1),
+   averageGoalDifference:group.reduce((sum,c)=>sum+c.averageGoalDifference,0)/(group.length||1),
+   averageGoalsAgainst:group.reduce((sum,c)=>sum+c.averageGoalsAgainst,0)/(group.length||1)};
+ });
+ return {seasons,matchesPerSeason:teams.length*(teams.length-1),totalMatches,seedStart,
+  favoriteWinRate:favoriteDecisions?favoriteWins/favoriteDecisions:0,
+  underdogWinRate:underdogDecisions?underdogWins/underdogDecisions:0,
+  drawRate:totalMatches?draws/totalMatches:0,
+  upsetDefinition:"Favorite/underdog comparisons use a pre-match strength gap of at least 5/8 rating points; ties are not wins.",
+  clubs,tierSummary};
+}
 
 export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
  const f=db.prepare("SELECT id,home_club_id,away_club_id,random_seed,status FROM fixture WHERE id=?").get(fixtureId) as FixtureRow|undefined;
