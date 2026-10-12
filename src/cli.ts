@@ -5,7 +5,7 @@ import { openDatabase, validateDatabase } from "./db/database.js";
 import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis, runSeasonBalanceAnalysis, scheduleMatchTacticalChange } from "./game/matchEngine.js";
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
-import { applyRosterSeason, createTransferOffer, listClubFinances, listPlayerHistory, listRosterPlayers, listTransferHistory, renewPlayerContract, respondToTransferOffer } from "./game/rosterLifecycle.js";
+import { applyPromotionRelegation, installDataPackage, listInstalledDataPackages, parseDataPackage, validateDataPackage } from "./game/dataPackages.js";
 import {
   advanceNextFixture, advanceStageRound, ensureFactoryLeagueCalendar, ensureFactoryWorld16, ensureFactorySquadProfiles, getManagedClub, getSeasonStatus, getStandings,
   listClubs, listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
@@ -130,6 +130,36 @@ function simulateSeason(db: ReturnType<typeof openDatabase>): void {
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
   switch (command) {
+    case "data-package-validate": {
+      const file = parseOption(args, "--file");
+      if (!file) throw new Error("Required: --file <package.json> and --save-id <save-id>.");
+      const pkg = parseDataPackage(readFileSync(resolve(file), "utf8"));
+      withSave(args, db => {
+        const errors = validateDataPackage(db, pkg);
+        console.log(JSON.stringify({ packageId: pkg.id, version: pkg.version, valid: errors.length === 0, errors }, null, 2));
+        if (errors.length) throw new Error("Data package validation failed.");
+      });
+      return;
+    }
+    case "data-package-install": {
+      const file = parseOption(args, "--file");
+      if (!file) throw new Error("Required: --file <package.json> and --save-id <save-id>.");
+      const pkg = parseDataPackage(readFileSync(resolve(file), "utf8"));
+      withSave(args, db => console.log(JSON.stringify(installDataPackage(db, pkg), null, 2)));
+      return;
+    }
+    case "data-packages": withSave(args, db => console.table(listInstalledDataPackages(db))); return;
+    case "data-package-catalog": {
+      const catalogPath = resolve(root, "data/packages/catalog.json");
+      const catalog = JSON.parse(readFileSync(catalogPath, "utf8")) as { packages?: unknown[] };
+      console.table(catalog.packages ?? []);
+      return;
+    }
+    case "apply-movements": {
+      const year = parsePositiveId(parseOption(args, "--year"), "--year");
+      withSave(args, db => console.table(applyPromotionRelegation(db, year).movements));
+      return;
+    }
     case "init-master": initializeMaster(); return;
     case "clubs": {
       if (!existsSync(masterPath)) throw new Error('Run "npm run dev -- init-master" first.');
@@ -147,68 +177,6 @@ async function main(): Promise<void> {
     }
     case "saves": console.table(new SaveManager(masterPath, savesDir).list()); return;
     case "club": withSave(args, db => console.table([getManagedClub(db)])); return;
-    case "roster": {
-      const clubRaw = parseOption(args, "--club");
-      const yearRaw = parseOption(args, "--year");
-      const clubId = clubRaw ? parsePositiveId(clubRaw, "--club") : undefined;
-      const year = yearRaw ? parsePositiveId(yearRaw, "--year") : undefined;
-      withSave(args, db => console.table(listRosterPlayers(db, year, clubId)));
-      return;
-    }
-    case "finances": {
-      const clubRaw = parseOption(args, "--club");
-      const clubId = clubRaw ? parsePositiveId(clubRaw, "--club") : undefined;
-      withSave(args, db => console.table(listClubFinances(db, clubId)));
-      return;
-    }
-    case "roster-season": {
-      const year = parsePositiveId(parseOption(args, "--year"), "--year");
-      withSave(args, db => console.log(JSON.stringify(applyRosterSeason(db, year), null, 2)));
-      return;
-    }
-    case "player-history": {
-      const playerId = parsePositiveId(parseOption(args, "--player"), "--player");
-      withSave(args, db => console.table(listPlayerHistory(db, playerId)));
-      return;
-    }
-    case "transfer-history": {
-      const raw = parseOption(args, "--player");
-      const playerId = raw ? parsePositiveId(raw, "--player") : undefined;
-      withSave(args, db => console.table(listTransferHistory(db, playerId)));
-      return;
-    }
-    case "renew-contract": {
-      const playerId = parsePositiveId(parseOption(args, "--player"), "--player");
-      const clubId = parsePositiveId(parseOption(args, "--club"), "--club");
-      const wage = parsePositiveId(parseOption(args, "--wage"), "--wage");
-      const years = parsePositiveId(parseOption(args, "--years"), "--years");
-      withSave(args, db => { renewPlayerContract(db, playerId, clubId, wage, years); console.log("Contrato renovado."); });
-      return;
-    }
-    case "transfer-offer": {
-      const playerId = parsePositiveId(parseOption(args, "--player"), "--player");
-      const clubId = parsePositiveId(parseOption(args, "--club"), "--club");
-      const fee = parsePositiveId(parseOption(args, "--fee") ?? "0", "--fee");
-      const wage = parsePositiveId(parseOption(args, "--wage"), "--wage");
-      const years = parsePositiveId(parseOption(args, "--years"), "--years");
-      withSave(args, db => console.log(JSON.stringify({offerId:createTransferOffer(db, playerId, clubId, fee, wage, years)}, null, 2)));
-      return;
-    }
-    case "transfer-response": {
-      const offerId = parsePositiveId(parseOption(args, "--offer"), "--offer");
-      const action = parseOption(args, "--action");
-      if (action !== "ACCEPT" && action !== "REJECT" && action !== "COUNTER") throw new Error("--action must be ACCEPT, REJECT or COUNTER.");
-      withSave(args, db => {
-        const counter = action === "COUNTER" ? {
-          fee: parsePositiveId(parseOption(args, "--fee"), "--fee"),
-          weeklyWage: parsePositiveId(parseOption(args, "--wage"), "--wage"),
-          years: parsePositiveId(parseOption(args, "--years"), "--years"),
-        } : undefined;
-        respondToTransferOffer(db, offerId, action, counter);
-        console.log(action === "ACCEPT" ? "Transferência concluída." : action === "REJECT" ? "Oferta rejeitada." : "Contraproposta enviada.");
-      });
-      return;
-    }
     case "squad": withSave(args, db => {
       const rawClubId = parseOption(args, "--club");
       const clubId = rawClubId === undefined ? getManagedClub(db).id : parsePositiveId(rawClubId, "--club");
@@ -327,7 +295,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
-      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, roster, finances, roster-season, renew-contract, transfer-offer, transfer-response, player-history, transfer-history, balance, season-balance, recalibrate-squads, match-change, diagnostics, tactics-impact, fixtures, play, advance-round, simulate-season, standings, season-status, next-season");
+      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, balance, season-balance, recalibrate-squads, match-change, diagnostics, tactics-impact, fixtures, play, advance-round, simulate-season, standings, season-status, next-season, data-package-validate, data-package-install, data-packages, data-package-catalog, apply-movements");
   }
 }
 
