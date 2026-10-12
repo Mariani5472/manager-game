@@ -40,7 +40,7 @@ test("versioned data packages validate references, import generically and remain
     assert.equal(moved.length,2);
     const d1=(db.prepare("SELECT id FROM competition WHERE code='FIC-D1'").get() as {id:number}).id;
     const d2=(db.prepare("SELECT id FROM competition WHERE code='FIC-D2'").get() as {id:number}).id;
-    const d1Next=(db.prepare("SELECT id FROM competition_stage st JOIN competition_season cs ON cs.id=st.season_id WHERE cs.competition_id=? AND cs.season_year=2027").get(d1) as {id:number}).id;
+    const d1Next=(db.prepare("SELECT st.id FROM competition_stage st JOIN competition_season cs ON cs.id=st.season_id WHERE cs.competition_id=? AND cs.season_year=2027").get(d1) as {id:number}).id;
     const d2Next=(db.prepare("SELECT id FROM competition_stage st JOIN competition_season cs ON cs.id=st.season_id WHERE cs.competition_id=? AND cs.season_year=2027").get(d2) as {id:number}).id;
     const aurora=(db.prepare("SELECT local_id AS id FROM data_package_entity WHERE package_id=? AND entity_type='club' AND external_id='AUR'").get(pkg.id) as {id:number}).id;
     const porto=(db.prepare("SELECT local_id AS id FROM data_package_entity WHERE package_id=? AND entity_type='club' AND external_id='PSC'").get(pkg.id) as {id:number}).id;
