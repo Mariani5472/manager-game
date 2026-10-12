@@ -10,12 +10,27 @@ A data-driven, text-based football manager built with TypeScript, Node.js and SQ
 - **Eventos explicáveis:** finalizações, defesas e gols incluem jogador envolvido e descrição; o xG e o momentum minuto a minuto ficam persistidos no save.
 - **Balanceamento estatístico:** `runMatchBalanceAnalysis(db, clubA, clubB, 5000)` executa seeds em memória e fornece taxas de vitória/empate/derrota, gols médios, finalizações e diferença média de gols. `summarizeSamples` agrega amostras para testes de regressão.
 
-## Testes
+## Testes e baseline de regressão
 
 ```bash
 npm install
 npm test
+npm run build
 ```
+
+`npm test` executa primeiro o build TypeScript e depois a suíte de testes Node (`dist/tests/*.test.js`). O workflow de CI também executa `npm test` e `npm run build` em mudanças submetidas ao GitHub.
+
+### Baseline do núcleo — temporada completa
+
+O teste de integração `season integration validates standings, persistence, replay safety and cup completion`, em `src/tests/game.test.ts`, é o baseline de regressão do fluxo de temporada. Ele protege os seguintes contratos:
+
+- **Classificação:** recalcula de forma independente jogos, vitórias, empates, derrotas, gols pró/contra, saldo, pontos e fair play a partir de partidas/eventos concluídos, comparando o resultado com `getStandings`.
+- **Encerramento:** completa as seis rodadas da liga (12 partidas; cada um dos quatro clubes joga seis vezes) e verifica os status de etapa/temporada; conclui semifinais e final da copa e verifica o vencedor.
+- **Idempotência:** tentar processar novamente uma rodada concluída deve falhar explicitamente sem alterar placares nem duplicar eventos ou momentum.
+- **Persistência:** fecha e reabre o save e confirma classificação e status finais.
+- **Integridade SQLite:** exige `integrity_check = ok` e nenhuma linha em `foreign_key_check`.
+
+Mudanças futuras no calendário, simulação, classificação, persistência ou encerramento devem manter esse teste verde. Se uma regra do jogo mudar intencionalmente, atualize o teste junto com a regra e documente o contrato novo; não remova a cobertura só para fazer o CI passar.
 
 O kernel é pseudoaleatório e reproduzível por seed para facilitar comparações entre escalações/táticas. O motor continua sendo uma simulação probabilística compacta, não uma garantia de equilíbrio calibrado; os relatórios Monte Carlo devem orientar ajustes graduais nos parâmetros.
 
