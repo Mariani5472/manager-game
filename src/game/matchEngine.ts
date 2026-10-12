@@ -68,6 +68,7 @@ function teamPressure(team:Team, random:()=>number):number {
  return clamp(team.attacking*.43+team.tactic.pressing*.16+team.tactic.tempo*.10+
   team.tactic.defensive_line*.04+mentality-fatigue+random()*8,0,100);
 }
+function refreshTeamStrength(team:Team):void{const starters=team.lineup.filter(p=>p.isStarting);team.attacking=mean(starters.map(p=>skill(p,p.role)*.72+p.positionRating*.28+p.energy*.18+p.morale*.08+p.sharpness*.08))+(mean(starters.map(p=>p.positionRating))-50)*.15;team.defending=mean(starters.map(p=>mean([p.tackling,p.marking,p.positioning,p.concentration,p.strength])));const keeper=starters.find(p=>p.role==="GK");team.goalkeeping=keeper?mean([keeper.reflexes,keeper.handling,keeper.aerial_reach,keeper.positioning]):45;team.energy=mean(starters.map(p=>p.energy));team.fitness=mean(starters.map(p=>p.stamina));}
 function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalChange[]=[]):KernelTimeline {
  home={...home,tactic:{...home.tactic},lineup:home.lineup.map(p=>({...p}))};
  away={...away,tactic:{...away.tactic},lineup:away.lineup.map(p=>({...p}))};
@@ -90,7 +91,7 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
     const outgoing=team.lineup.find(p=>p.id===outId&&p.isStarting),incoming=team.lineup.find(p=>p.id===inId&&!p.isStarting);
     if(!outgoing||!incoming)throw new Error(`Substitution ${change.id} needs an active player and a bench player.`);
     if(outgoing.role==="GK"&&incoming.goalkeeper!==1)throw new Error("A goalkeeper can only be replaced by another goalkeeper.");
-    incoming.role=outgoing.role;incoming.slot=outgoing.slot;incoming.isStarting=true;outgoing.isStarting=false;
+    incoming.role=outgoing.role;incoming.slot=outgoing.slot;incoming.isStarting=true;outgoing.isStarting=false;refreshTeamStrength(team);
     minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição: ${outgoing.name} sai, ${incoming.name} entra`});
    }else if(change.change_type==="MENTALITY"){
     const mentality=String(payload.mentality??"");
