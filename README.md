@@ -35,6 +35,39 @@ Mudanças futuras no calendário, simulação, classificação, persistência ou
 O kernel é pseudoaleatório e reproduzível por seed para facilitar comparações entre escalações/táticas. O motor continua sendo uma simulação probabilística compacta, não uma garantia de equilíbrio calibrado; os relatórios Monte Carlo devem orientar ajustes graduais nos parâmetros.
 
 
+
+## Fase 6 — contexto completo da partida
+
+O motor aplica o contexto de cada jogo por efeitos agregados no cálculo de pressão e de finalizações, sem simular física ou ações segundo a segundo:
+
+- **Clima e gramado:** `match_environment` persiste clima, temperatura e condição do gramado por partida. Sem override manual, o clima é gerado deterministicamente a partir da seed e do perfil climático da cidade; a qualidade base vem do estádio. Chuva, chuva forte, vento, calor e gramado ruim alteram a criação e a qualidade das chances.
+- **Descanso e viagem:** o descanso é calculado entre datas de jogos concluídos; a recuperação pré-jogo restaura energia em blocos de oito pontos por dia completo. A viagem usa `travel_route` quando existe uma rota cadastrada; quando falta uma rota entre cidades diferentes, o modelo usa uma estimativa conservadora de 250 km. Descanso curto e deslocamento reduzem pressão e criação de chances.
+- **Disponibilidade consistente:** suspensões e lesões são filtradas pela data da partida tanto na seleção automática quanto na prévia e no salvamento da escalação. A suspensão é reduzida após cada partida do clube, não antes do jogo em que o atleta ainda deve cumprir pena.
+- **Decisões durante a partida:** `match_tactical_change` permite programar substituições, alteração de mentalidade, formação e ajustes de instruções por minuto. Cada decisão vira um evento persistido e afeta os minutos seguintes. Substituições validam titular/reserva e elegibilidade; a fadiga final considera se o atleta foi substituído ou entrou no decorrer do jogo.
+- **Reprodutibilidade:** clima e alterações são persistidos e o timeline é reconstruído pela seed e pelas decisões agendadas; o checkpoint continua sendo gravado por minuto/evento, sem executar uma simulação segundo a segundo.
+
+Exemplos:
+
+```bash
+# Prévia e escalação salva antes de preparar uma substituição
+npm run dev -- lineup 1 --save-id <save-id>
+npm run dev -- lineup 1 --club <club-id> --starters <11-ids-separados-por-virgula> --bench <ate-7-ids-separados-por-virgula> --save-id <save-id>
+
+# Substituir um titular aos 60 minutos
+npm run dev -- match-change <fixture-id> --club <club-id> --minute 60 --type SUBSTITUTION --out <player-id> --in <player-id> --save-id <save-id>
+
+# Mudar a mentalidade aos 70 minutos
+npm run dev -- match-change <fixture-id> --club <club-id> --minute 70 --type MENTALITY --mentality ATTACKING --save-id <save-id>
+
+# Ajustar a pressão aos 55 minutos (0–100)
+npm run dev -- match-change <fixture-id> --club <club-id> --minute 55 --type INSTRUCTION --key pressing --value 72 --save-id <save-id>
+
+# Reorganizar a formação aos 75 minutos (use o ID da tabela formation)
+npm run dev -- match-change <fixture-id> --club <club-id> --minute 75 --type FORMATION --formation <formation-id> --save-id <save-id>
+```
+
+As alterações devem ser agendadas antes de o motor processar o respectivo minuto. Para substituições manuais, salve primeiro a escalação para definir explicitamente os titulares e o banco. Mudanças em minutos já processados são rejeitadas. `travel_route` é opcional e pode ser preenchida pelos data packages/mods.
+
 ## Fase 5 — calibração da engine e mundo de 16 clubes
 
 O comando `npm run dev -- init-master` cria ou reconcilia o banco matriz. No banco de fábrica original, o comando amplia o mundo ficcional para **16 clubes**, preservando a independência dos saves existentes. A migração automática só é permitida no banco matriz com as partidas de fábrica ainda agendadas; se houver resultados ou estado parcial, ela falha de forma explícita em vez de apagar progresso.
