@@ -276,7 +276,8 @@ export function runSeasonBalanceAnalysis(db:SqliteDatabase,seasons=20,seedStart=
   const table=new Map(ids.map(id=>[id,{points:0,gf:0,ga:0}]));
   let matchIndex=0;
   for(let i=0;i<teams.length;i++)for(let j=i+1;j<teams.length;j++){
-   for(const [homeIndex,awayIndex] of [[i,j],[j,i]]){
+   const legs: Array<[number,number]> = [[i,j],[j,i]];
+   for(const [homeIndex,awayIndex] of legs){
     const home=teams[homeIndex]!,away=teams[awayIndex]!;
     const result=simulateMatchKernel(home,away,(seedStart+season*1000003+matchIndex*7919)>>>0);
     matchIndex++;totalMatches++;
