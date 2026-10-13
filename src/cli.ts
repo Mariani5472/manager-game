@@ -411,7 +411,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
-      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, roster, finances, roster-season, renew-contract, transfer-offer, transfer-response, player-history, transfer-history, balance, season-balance, recalibrate-squads, match-change, diagnostics, tactics-impact, fixtures, play (simula a rodada do próximo jogo do seu clube), play-match (simula apenas uma partida), advance-round, simulate-season, standings, season-status, next-season");
+      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, roster, finances, roster-season, renew-contract, transfer-offer, transfer-response, player-history, transfer-history, balance, season-balance, recalibrate-squads, match-change, integrity-audit, benchmark, diagnostics, tactics-impact, sensitivity, fixtures, play (simula a rodada do próximo jogo do seu clube), play-match (simula apenas uma partida), advance-round, simulate-season, standings, season-status, next-season");
   }
 }
 
