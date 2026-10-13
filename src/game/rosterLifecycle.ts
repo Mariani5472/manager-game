@@ -292,7 +292,7 @@ export function createTransferOffer(db:SqliteDatabase,playerId:number,buyingClub
   return Number(db.prepare(`INSERT INTO transfer_negotiation(player_id,selling_club_id,buying_club_id,offer_fee,offered_weekly_wage,contract_years,status,last_message)
     VALUES(?,?,?,?,?,?,'OPEN','Oferta inicial enviada')`).run(playerId,player.clubId,buyingClubId,fee,weeklyWage,years).lastInsertRowid);
   });
-  createOffer.immediate();
+  return createOffer.immediate();
 }
 
 export function respondToTransferOffer(db:SqliteDatabase,offerId:number,action:"ACCEPT"|"REJECT"|"COUNTER",counter?:{fee:number;weeklyWage:number;years:number},seasonYear=seasonYearForPlayer(db)):void {
