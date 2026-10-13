@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { openDatabase, validateDatabase } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
+import { auditGameIntegrity } from "../game/integrityAudit.js";
 import {
   advanceNextFixture, advanceRound, advanceStageRound, ensureFactoryLeagueCalendar,
   resolveKnockoutFixtureWinner, getManagedClub, getSeasonStatus, getStandings,
@@ -50,6 +51,26 @@ test("complete schema executes and passes SQLite integrity and foreign-key check
       db.close();
     }
   } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("integrity audit is read-only and reports a clean campaign without completed fixtures", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof openDatabase> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Audit Campaign", 1);
+    db = manager.open(save.filePath);
+    const before = db.prepare("SELECT COUNT(*) AS count FROM fixture WHERE status='COMPLETED'").get() as {count:number};
+    const report = auditGameIntegrity(db);
+    const after = db.prepare("SELECT COUNT(*) AS count FROM fixture WHERE status='COMPLETED'").get() as {count:number};
+    assert.equal(report.completedFixtures, 0);
+    assert.equal(report.ok, true);
+    assert.deepEqual(report.findings, []);
+    assert.equal(after.count, before.count);
+    assert.throws(() => auditGameIntegrity(db!, 0), /between 1 and 100000/);
+  } finally {
+    if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });
   }
 });
