@@ -160,6 +160,15 @@ function nextScheduledFixture(db:SqliteDatabase):number {
   if(!row) throw new Error("Performance benchmark requires at least one scheduled fixture in the selected save.");
   return row.id;
 }
+function nextScheduledAiFixture(db:SqliteDatabase):number {
+  const metadata=db.prepare("SELECT selected_club_id AS clubId FROM game_save_metadata LIMIT 1").get() as {clubId:number}|undefined;
+  if(metadata) {
+    const row=db.prepare("SELECT id FROM fixture WHERE status='SCHEDULED' AND home_club_id<>? AND away_club_id<>? ORDER BY scheduled_at,id LIMIT 1")
+      .get(metadata.clubId,metadata.clubId) as {id:number}|undefined;
+    if(row) return row.id;
+  }
+  return nextScheduledFixture(db);
+}
 function benchmarkRound(db:SqliteDatabase):unknown {
   const stage=db.prepare(`
     SELECT st.id AS stageId,MIN(r.round_number) AS roundNumber
@@ -229,6 +238,7 @@ export async function runPerformanceBenchmark(
   samples.push({...scaleSample,details:{scales:scalability.map(row=>({clubs:row.clubs,matches:row.matches}))}});
 
   samples.push(await withDisposableCopy(source,(db,path)=>measure(db,path,"singleMatchAndPersistence",()=>simulateMatch(db,nextScheduledFixture(db)))));
+  samples.push(await withDisposableCopy(source,(db,path)=>measure(db,path,"aiMatchAndPersistence",()=>simulateMatch(db,nextScheduledAiFixture(db)))));
 
   samples.push(await withDisposableCopy(source,dbPath=>measure(dbPath,dbPath.name,"roundAndStandings",()=>benchmarkRound(dbPath))));
 
