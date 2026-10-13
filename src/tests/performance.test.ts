@@ -66,6 +66,9 @@ test("one-variable-at-a-time sensitivity report covers tactics and match context
     assert.ok(report.scenarios.some(row=>row.changedVariable==="rest"));
     assert.ok(report.scenarios.some(row=>row.changedVariable==="travel"));
     assert.ok(report.scenarios.some(row=>row.changedVariable==="goalkeeper attributes"));
+    assert.ok(report.scenarios.some(row=>row.changedVariable==="individual finishing"));
+    assert.ok(report.scenarios.some(row=>row.changedVariable==="individual defensive attributes"));
+    assert.ok(report.scenarios.some(row=>row.changedVariable==="player role"));
     assert.ok(report.scenarios.every(row=>Number.isFinite(row.homeWinRateDelta)&&Number.isFinite(row.homeShotsDelta)));
   } finally { db.close(); rmSync(root,{recursive:true,force:true}); }
 });
