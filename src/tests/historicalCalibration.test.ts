@@ -45,3 +45,21 @@ test("persisted-world benchmark validates scale before opening disposable worlds
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM club").get() as {n:number}).n,16);
   } finally {db.close();rmSync(root,{recursive:true,force:true});}
 });
+
+test("persisted-world benchmark completes a persisted 16-club league on a disposable copy",async()=>{
+  const root=mkdtempSync(join(tmpdir(),"gm-world-scale-integration-"));
+  const db=openDatabase(join(root,"campaign.sqlite"));
+  try {
+    db.exec(readFileSync(resolve("src/schema/game_manager_mvp.sql"),"utf8"));
+    ensureFactoryWorld16(db);
+    const before=(db.prepare("SELECT COUNT(*) AS n FROM fixture").get() as {n:number}).n;
+    const results=await runPersistedWorldBenchmarks(db,[16],42);
+    assert.equal(results.length,1);
+    assert.equal(results[0]!.clubs,16);
+    assert.equal(results[0]!.rounds,30);
+    assert.equal(results[0]!.fixtures,240);
+    assert.equal(results[0]!.completedFixtures,240);
+    assert.equal(results[0]!.integrity,"ok");
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM fixture").get() as {n:number}).n,before,"benchmark must not mutate source save");
+  } finally {db.close();rmSync(root,{recursive:true,force:true});}
+});
