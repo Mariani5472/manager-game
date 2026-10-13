@@ -1,9 +1,12 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { createHash } from "node:crypto";
 import { openDatabase, validateDatabase } from "./db/database.js";
 import { auditGameIntegrity } from "./game/integrityAudit.js";
 import { runPerformanceBenchmark } from "./game/performance.js";
+import { runPersistedWorldBenchmarks } from "./game/persistedWorldBenchmark.js";
+import { buildHistoricalCalibrationReport, parseHistoricalJsonl } from "./game/historicalCalibration.js";
 import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis, runTacticalSensitivityAnalysis, runSeasonBalanceAnalysis, scheduleMatchTacticalChange } from "./game/matchEngine.js";
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
@@ -332,6 +335,39 @@ async function main(): Promise<void> {
       });
       return;
     }
+    case "benchmark-world": {
+      const seed = parsePositiveId(parseOption(args, "--seed") ?? "90210", "--seed");
+      const rawScales = parseOption(args, "--scales") ?? "16,64,256";
+      const scales = rawScales.split(",").map(value => parsePositiveId(value.trim(), "scale"));
+      const packageFile = parseOption(args, "--package-file");
+      const dataPackages = packageFile ? [parseDataPackage(readFileSync(resolve(packageFile), "utf8"))] : [];
+      const results = await withSaveAsync(args, db => runPersistedWorldBenchmarks(db, scales, seed, dataPackages));
+      console.log(JSON.stringify({
+        generatedAt: new Date().toISOString(), seed, results,
+        notes: [
+          "Each scale is built and simulated in a disposable SQLite backup; the selected save is not mutated.",
+          "This includes persistent squads, stadiums, tactics, generated fixtures, match events, player conditions and standings.",
+          "Run each scale at least five times on a reference machine and compare median/p95. The 256-club season contains 65,280 fixtures and may take a long time.",
+          "Squads reuse source player profiles. Pass --package-file to include installation of one Data Package in setup time; multiple package dependencies should be bundled in a package or installed in dependency order."
+        ]
+      }, null, 2));
+      return;
+    }
+    case "calibration-report": {
+      const file = parseOption(args, "--file");
+      const splitDate = parseOption(args, "--split-date");
+      const datasetVersion = parseOption(args, "--dataset-version");
+      if (!file || !splitDate || !datasetVersion) throw new Error("Required: calibration-report --file <historical.jsonl> --dataset-version <version> --split-date YYYY-MM-DD [--sha256 <hash>].");
+      const source = readFileSync(resolve(file), "utf8");
+      const sha256 = createHash("sha256").update(source, "utf8").digest("hex");
+      const expectedSha256 = parseOption(args, "--sha256");
+      if (expectedSha256 && expectedSha256.toLowerCase() !== sha256) throw new Error("Historical dataset SHA-256 does not match --sha256.");
+      const report = buildHistoricalCalibrationReport(parseHistoricalJsonl(source), {
+        datasetVersion, splitDate, sha256,
+      });
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
     case "benchmark": {
       const seed = parsePositiveId(parseOption(args, "--seed") ?? "90210", "--seed");
       const rawScales = parseOption(args, "--scales") ?? "16,64,256";
@@ -411,7 +447,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
-      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, roster, finances, roster-season, renew-contract, transfer-offer, transfer-response, player-history, transfer-history, balance, season-balance, recalibrate-squads, match-change, integrity-audit, benchmark, diagnostics, tactics-impact, sensitivity, fixtures, play (simula a rodada do próximo jogo do seu clube), play-match (simula apenas uma partida), advance-round, simulate-season, standings, season-status, next-season");
+      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, roster, finances, roster-season, renew-contract, transfer-offer, transfer-response, player-history, transfer-history, balance, season-balance, recalibrate-squads, match-change, integrity-audit, benchmark, benchmark-world, calibration-report, diagnostics, tactics-impact, sensitivity, fixtures, play (simula a rodada do próximo jogo do seu clube), play-match (simula apenas uma partida), advance-round, simulate-season, standings, season-status, next-season");
   }
 }
 
