@@ -137,7 +137,7 @@ function benchmarkRound(db:SqliteDatabase):unknown {
   if(!stage) throw new Error("Round benchmark requires a league stage with scheduled fixtures.");
   return advanceStageRound(db,stage.stageId,stage.roundNumber);
 }
-function benchmarkLeagueSeason(db:SqliteDatabase):{stageId:number;rounds:number;fixtures:number} {
+function benchmarkLeagueSeason(db:SqliteDatabase):{stageId:number;rounds:number;fixtures:number;eventCounts:Array<{type:string;count:number}>;injuredPlayers:number} {
   const stage=nextPlayableLeagueStage(db);
   if(!stage) throw new Error("Season benchmark requires a league stage with scheduled fixtures.");
   const rounds=db.prepare("SELECT round_number AS number FROM competition_round WHERE stage_id=? ORDER BY round_number").all(stage.stageId) as Array<{number:number}>;
@@ -149,7 +149,14 @@ function benchmarkLeagueSeason(db:SqliteDatabase):{stageId:number;rounds:number;
     processedRounds++;
     processedFixtures+=results.length;
   }
-  return {stageId:stage.stageId,rounds:processedRounds,fixtures:processedFixtures};
+  const eventCounts=db.prepare(`
+    SELECT e.event_type AS type,COUNT(*) AS count
+    FROM match_event e JOIN fixture f ON f.id=e.fixture_id
+    JOIN competition_round r ON r.id=f.round_id
+    WHERE r.stage_id=? GROUP BY e.event_type ORDER BY e.event_type
+  `).all(stage.stageId) as Array<{type:string;count:number}>;
+  const injuredPlayers=(db.prepare("SELECT COUNT(*) AS count FROM player_condition WHERE injured_until IS NOT NULL AND date(injured_until)>=date('now')").get() as {count:number}).count;
+  return {stageId:stage.stageId,rounds:processedRounds,fixtures:processedFixtures,eventCounts,injuredPlayers};
 }
 
 /**
