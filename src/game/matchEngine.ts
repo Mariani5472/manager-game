@@ -385,7 +385,7 @@ export function runTacticalSensitivityAnalysis(
  const clone=(team:Team):Team=>({...team,tactic:{...team.tactic},lineup:team.lineup.map(player=>({...player})),context:team.context?{...team.context}:undefined});
  const scenarios:Array<{name:string;changedVariable:string;value:string|number;home:Team}>=[];
  const tacticCase=(name:string,key:keyof Tactic,value:number|string)=>{
-  const home=clone(originalHome);home.tactic={...home.tactic,[key]:value};scenarios.push({name,changedVariable:String(key),value,home});
+  const home=clone(originalHome);home.tactic={...home.tactic,[key]:value} as Tactic;scenarios.push({name,changedVariable:String(key),value,home});
  };
  tacticCase("pressing_low","pressing",20);tacticCase("pressing_high","pressing",80);
  tacticCase("tempo_low","tempo",20);tacticCase("tempo_high","tempo",80);
