@@ -179,7 +179,7 @@ test("web-safe standings query does not write the derived standings cache", asyn
     db = manager.open(save.filePath);
     db.exec(`
       CREATE TRIGGER test_block_standing_writes
-      BEFORE UPDATE ON stage_standing
+      BEFORE DELETE ON stage_standing
       BEGIN SELECT RAISE(ABORT, 'standing cache write blocked'); END;
     `);
     assert.equal(getStandings(db, 1, false).length, 4);
