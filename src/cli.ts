@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { openDatabase, validateDatabase } from "./db/database.js";
 import { auditGameIntegrity } from "./game/integrityAudit.js";
 import { runPerformanceBenchmark } from "./game/performance.js";
-import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis, runSeasonBalanceAnalysis, scheduleMatchTacticalChange } from "./game/matchEngine.js";
+import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis, runTacticalSensitivityAnalysis, runSeasonBalanceAnalysis, scheduleMatchTacticalChange } from "./game/matchEngine.js";
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
 import { applyPromotionRelegation, installDataPackage, listInstalledDataPackages, parseDataPackage, validateDataPackage } from "./game/dataPackages.js";
@@ -366,6 +366,16 @@ async function main(): Promise<void> {
       if (simulations < 100) throw new Error("--simulations must be at least 100.");
       if (homeId === awayId) throw new Error("--home and --away must be different clubs.");
       withSave(args, db => console.log(JSON.stringify(runTacticalImpactAnalysis(db, homeId, awayId, simulations, seed), null, 2)));
+      return;
+    }
+    case "sensitivity": {
+      const homeId = parsePositiveId(parseOption(args, "--home"), "--home");
+      const awayId = parsePositiveId(parseOption(args, "--away"), "--away");
+      const simulations = parsePositiveId(parseOption(args, "--simulations") ?? "1000", "--simulations");
+      const seed = parsePositiveId(parseOption(args, "--seed") ?? "73421", "--seed");
+      if (simulations < 100) throw new Error("--simulations must be at least 100.");
+      if (homeId === awayId) throw new Error("--home and --away must be different clubs.");
+      withSave(args, db => console.log(JSON.stringify(runTacticalSensitivityAnalysis(db, homeId, awayId, simulations, seed), null, 2)));
       return;
     }
     case "fixtures": withSave(args, db => console.table(listFixtures(db, args.includes("--pending")))); return;
