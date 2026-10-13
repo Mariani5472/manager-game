@@ -69,6 +69,7 @@ test("one-variable-at-a-time sensitivity report covers tactics and match context
     assert.ok(report.scenarios.some(row=>row.changedVariable==="individual finishing"));
     assert.ok(report.scenarios.some(row=>row.changedVariable==="individual defensive attributes"));
     assert.ok(report.scenarios.some(row=>row.changedVariable==="player role"));
+    assert.ok(report.scenarios.some(row=>row.changedVariable==="formation"));
     assert.ok(report.scenarios.every(row=>Number.isFinite(row.homeWinRateDelta)&&Number.isFinite(row.homeShotsDelta)));
   } finally { db.close(); rmSync(root,{recursive:true,force:true}); }
 });
@@ -77,13 +78,16 @@ test("performance harness measures representative operations on disposable copie
   const {root,db}=fixtureDb();
   try {
     const before=db.prepare("SELECT COUNT(*) AS count FROM fixture WHERE status='COMPLETED'").get() as {count:number};
-    const report=await runPerformanceBenchmark(db,{seed:777,scales:[16],includeSeason:false});
+    const report=await runPerformanceBenchmark(db,{seed:777,scales:[16],includeSeason:true});
     const after=db.prepare("SELECT COUNT(*) AS count FROM fixture WHERE status='COMPLETED'").get() as {count:number};
     assert.equal(after.count,before.count,"benchmark must not mutate the source campaign");
     assert.equal(report.seed,777);
     assert.equal(report.sourceClubCount,16);
     assert.ok(report.samples.some(sample=>sample.name==="singleMatchAndPersistence"));
     assert.ok(report.samples.some(sample=>sample.name==="roundAndStandings"));
+    const seasonSample=report.samples.find(sample=>sample.name==="completeLeagueSeason");
+    assert.ok(seasonSample);
+    assert.equal((seasonSample.details as {fixtures:number}).fixtures,240);
     assert.ok(report.samples.some(sample=>sample.name==="playerEvolution"));
     assert.ok(report.samples.some(sample=>sample.name==="transferMarketOffer"));
     assert.ok(report.samples.some(sample=>sample.name==="sqliteValidationAndPersistence"));
