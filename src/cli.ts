@@ -3,7 +3,8 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { openDatabase, validateDatabase } from "./db/database.js";
 import { auditGameIntegrity } from "./game/integrityAudit.js";
-import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis, runSeasonBalanceAnalysis, scheduleMatchTacticalChange } from "./game/matchEngine.js";
+import { runPerformanceBenchmark } from "./game/performance.js";
+import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis, runTacticalSensitivityAnalysis, runSeasonBalanceAnalysis, scheduleMatchTacticalChange } from "./game/matchEngine.js";
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
 import { applyPromotionRelegation, installDataPackage, listInstalledDataPackages, parseDataPackage, validateDataPackage } from "./game/dataPackages.js";
@@ -68,6 +69,16 @@ function withSave<T>(args: string[], callback: (db: ReturnType<typeof openDataba
   const manager = new SaveManager(masterPath, savesDir);
   const db = saveId ? manager.openById(saveId) : manager.open(savePath!);
   try { return callback(db); } finally { db.close(); }
+}
+
+async function withSaveAsync<T>(args: string[], callback: (db: ReturnType<typeof openDatabase>) => Promise<T>): Promise<T> {
+  const saveId = parseOption(args, "--save-id");
+  const savePath = parseOption(args, "--save");
+  if (saveId && savePath) throw new Error("Use either --save-id or --save, not both.");
+  if (!saveId && !savePath) throw new Error("Provide --save-id <save-id> or --save <path>.");
+  const manager = new SaveManager(masterPath, savesDir);
+  const db = saveId ? manager.openById(saveId) : manager.open(savePath!);
+  try { return await callback(db); } finally { db.close(); }
 }
 
 function parsePositiveId(raw: string | undefined, label: string): number {
@@ -321,6 +332,18 @@ async function main(): Promise<void> {
       });
       return;
     }
+    case "benchmark": {
+      const seed = parsePositiveId(parseOption(args, "--seed") ?? "90210", "--seed");
+      const rawScales = parseOption(args, "--scales") ?? "16,64,256";
+      const scales = rawScales.split(",").map(value => parsePositiveId(value.trim(), "scale"));
+      const report = await withSaveAsync(args, db => runPerformanceBenchmark(db, {
+        seed, scales, includeSeason: !args.includes("--no-season"),
+      }));
+      console.log(JSON.stringify(report, null, 2));
+      const season = report.samples.find(sample => sample.name === "completeCampaignSeason");
+      if (season && season.durationMs > 7_200_000) process.exitCode = 1;
+      return;
+    }
     case "diagnostics": {
       const simulations = parsePositiveId(parseOption(args, "--simulations") ?? "2000", "--simulations");
       withSave(args, db => console.log(JSON.stringify(runEngineDiagnostics(db, simulations), null, 2)));
@@ -343,6 +366,16 @@ async function main(): Promise<void> {
       if (simulations < 100) throw new Error("--simulations must be at least 100.");
       if (homeId === awayId) throw new Error("--home and --away must be different clubs.");
       withSave(args, db => console.log(JSON.stringify(runTacticalImpactAnalysis(db, homeId, awayId, simulations, seed), null, 2)));
+      return;
+    }
+    case "sensitivity": {
+      const homeId = parsePositiveId(parseOption(args, "--home"), "--home");
+      const awayId = parsePositiveId(parseOption(args, "--away"), "--away");
+      const simulations = parsePositiveId(parseOption(args, "--simulations") ?? "1000", "--simulations");
+      const seed = parsePositiveId(parseOption(args, "--seed") ?? "73421", "--seed");
+      if (simulations < 100) throw new Error("--simulations must be at least 100.");
+      if (homeId === awayId) throw new Error("--home and --away must be different clubs.");
+      withSave(args, db => console.log(JSON.stringify(runTacticalSensitivityAnalysis(db, homeId, awayId, simulations, seed), null, 2)));
       return;
     }
     case "fixtures": withSave(args, db => console.table(listFixtures(db, args.includes("--pending")))); return;
@@ -378,7 +411,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
-      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, roster, finances, roster-season, renew-contract, transfer-offer, transfer-response, player-history, transfer-history, balance, season-balance, recalibrate-squads, match-change, diagnostics, tactics-impact, fixtures, play (simula a rodada do próximo jogo do seu clube), play-match (simula apenas uma partida), advance-round, simulate-season, standings, season-status, next-season");
+      console.log("Commands: init-master, clubs, new-save, saves, club, squad, tactics, lineup, roster, finances, roster-season, renew-contract, transfer-offer, transfer-response, player-history, transfer-history, balance, season-balance, recalibrate-squads, match-change, integrity-audit, benchmark, diagnostics, tactics-impact, sensitivity, fixtures, play (simula a rodada do próximo jogo do seu clube), play-match (simula apenas uma partida), advance-round, simulate-season, standings, season-status, next-season");
   }
 }
 

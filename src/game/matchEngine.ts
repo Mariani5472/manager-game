@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import type { SqliteDatabase } from "../db/database.js";
 import { persistMatchEnvironment, recoverSquadBeforeMatch, resolveMatchContext, type MatchContext } from "./matchContext.js";
 export interface MatchSummary {fixtureId:number;homeClubId:number;awayClubId:number;homeScore:number;awayScore:number;events:number;minutes:number;homeShots:number;awayShots:number;homeShotsOnTarget:number;awayShotsOnTarget:number;homeXg:number;awayXg:number;}
@@ -14,7 +15,36 @@ function mean(xs:number[]):number{return xs.length?xs.reduce((a,b)=>a+b,0)/xs.le
 const compatible:Record<string,string[]>={GK:["GK"],CB:["CB"],LB:["LB","LWB","RB"],RB:["RB","RWB","LB"],LWB:["LWB","LB","RWB"],RWB:["RWB","RB","LWB"],DM:["DM","CM"],CM:["CM","DM","AM"],AM:["AM","CM","ST"],LW:["LW","LM","RW","RM"],RW:["RW","RM","LW","LM"],LM:["LM","LW","RM","RW"],RM:["RM","RW","LM","LW"],ST:["ST","AM"]};
 function fit(actual:string,required:string):number{return actual===required?1:(compatible[required]?.includes(actual)?0.82:0.48);}
 function tactic(db:SqliteDatabase,clubId:number):Tactic{const t=db.prepare("SELECT formation_id,mentality,pressing,tempo,defensive_line,width,passing_directness,counter_attack FROM team_tactic WHERE club_id=?").get(clubId) as Tactic|undefined;if(!t)throw new Error(`Tactics for club ${clubId} were not found.`);return t;}
-function loadPlayers(db:SqliteDatabase,clubId:number,fixtureId:number):Player[]{const date=db.prepare("SELECT substr(scheduled_at,1,10) AS date FROM fixture WHERE id=?").get(fixtureId) as {date:string|null}|undefined;return db.prepare(`SELECT p.person_id AS id,pe.full_name AS name,p.goalkeeper,COALESCE(pc.energy,100) energy,COALESCE(pc.morale,50) morale,COALESCE(pc.sharpness,50) sharpness,pa.pace,pa.stamina,pa.strength,pa.positioning,pa.decisions,pa.composure,pa.teamwork,pa.work_rate,pa.passing,pa.vision,pa.crossing,pa.dribbling,pa.finishing,pa.long_shots,pa.heading,pa.tackling,pa.marking,pa.aggression,pa.concentration,pa.reflexes,pa.handling,pa.aerial_reach FROM squad_membership sm JOIN player p ON p.person_id=sm.player_id JOIN person pe ON pe.id=p.person_id JOIN player_attribute pa ON pa.player_id=p.person_id LEFT JOIN player_condition pc ON pc.player_id=p.person_id WHERE sm.club_id=? AND COALESCE(pc.suspension_matches,0)=0 AND (pc.injured_until IS NULL OR ? IS NULL OR date(pc.injured_until)<date(?)) ORDER BY p.person_id`).all(clubId,date?.date??null,date?.date??null) as Player[];}
+function loadPlayers(db:SqliteDatabase,clubId:number,fixtureId:number):Player[]{
+ const date=db.prepare("SELECT substr(scheduled_at,1,10) AS date FROM fixture WHERE id=?").get(fixtureId) as {date:string|null}|undefined;
+ const available=db.prepare(`SELECT p.person_id AS id,pe.full_name AS name,p.goalkeeper,
+  COALESCE(pc.energy,100) energy,COALESCE(pc.morale,50) morale,COALESCE(pc.sharpness,50) sharpness,
+  pa.pace,pa.stamina,pa.strength,pa.positioning,pa.decisions,pa.composure,pa.teamwork,pa.work_rate,
+  pa.passing,pa.vision,pa.crossing,pa.dribbling,pa.finishing,pa.long_shots,pa.heading,pa.tackling,
+  pa.marking,pa.aggression,pa.concentration,pa.reflexes,pa.handling,pa.aerial_reach
+  FROM squad_membership sm JOIN player p ON p.person_id=sm.player_id JOIN person pe ON pe.id=p.person_id
+  JOIN player_attribute pa ON pa.player_id=p.person_id LEFT JOIN player_condition pc ON pc.player_id=p.person_id
+  WHERE sm.club_id=? AND COALESCE(pc.suspension_matches,0)=0
+    AND (pc.injured_until IS NULL OR ? IS NULL OR date(pc.injured_until)<date(?))
+  ORDER BY p.person_id`).all(clubId,date?.date??null,date?.date??null) as Player[];
+ if(available.length>=11) return available;
+ // A shallow squad must remain playable after an injury. Prefer healthy players,
+ // but allow injured players as a last resort with a substantial temporary
+ // energy/sharpness penalty instead of aborting an entire league round.
+ const fallback=db.prepare(`SELECT p.person_id AS id,pe.full_name AS name,p.goalkeeper,
+  COALESCE(pc.energy,100) energy,COALESCE(pc.morale,50) morale,COALESCE(pc.sharpness,50) sharpness,
+  pa.pace,pa.stamina,pa.strength,pa.positioning,pa.decisions,pa.composure,pa.teamwork,pa.work_rate,
+  pa.passing,pa.vision,pa.crossing,pa.dribbling,pa.finishing,pa.long_shots,pa.heading,pa.tackling,
+  pa.marking,pa.aggression,pa.concentration,pa.reflexes,pa.handling,pa.aerial_reach,
+  CASE WHEN pc.injured_until IS NOT NULL AND ? IS NOT NULL AND date(pc.injured_until)>=date(?) THEN 1 ELSE 0 END AS injuryFallback
+  FROM squad_membership sm JOIN player p ON p.person_id=sm.player_id JOIN person pe ON pe.id=p.person_id
+  JOIN player_attribute pa ON pa.player_id=p.person_id LEFT JOIN player_condition pc ON pc.player_id=p.person_id
+  WHERE sm.club_id=? AND COALESCE(pc.suspension_matches,0)=0 ORDER BY p.person_id
+ `).all(date?.date??null,date?.date??null,clubId) as Array<Player&{injuryFallback:number}>;
+ return fallback.map(({injuryFallback,...player})=>injuryFallback
+  ? {...player,energy:Math.min(player.energy,40),sharpness:Math.min(player.sharpness,25)}
+  : player);
+}
 function loadPositions(db:SqliteDatabase,clubId:number):Map<number,Map<string,number>>{const rows=db.prepare("SELECT pp.player_id,pp.position_code,pp.rating FROM player_position pp JOIN squad_membership sm ON sm.player_id=pp.player_id WHERE sm.club_id=?").all(clubId) as Array<{player_id:number;position_code:string;rating:number}>;const out=new Map<number,Map<string,number>>();for(const r of rows){if(!out.has(r.player_id))out.set(r.player_id,new Map());out.get(r.player_id)!.set(r.position_code,r.rating);}return out;}
 function bestPosition(id:number,positions:Map<number,Map<string,number>>):string{return [...(positions.get(id)?.entries()??[])].sort((a,b)=>b[1]-a[1])[0]?.[0]??"CM";}
 function skill(p:Player,role:string):number{return role==="GK"?mean([p.reflexes,p.handling,p.positioning,p.concentration,p.aerial_reach]):["CB","LB","RB","LWB","RWB"].includes(role)?mean([p.tackling,p.marking,p.positioning,p.strength,p.pace]):["DM","CM","AM"].includes(role)?mean([p.passing,p.vision,p.decisions,p.teamwork,p.stamina]):["LW","RW","LM","RM"].includes(role)?mean([p.pace,p.dribbling,p.crossing,p.composure]):mean([p.finishing,p.composure,p.positioning,p.heading,p.decisions]);}
@@ -52,12 +82,20 @@ function selectLineup(db:SqliteDatabase,fixtureId:number,clubId:number,players:P
 function loadTeam(db:SqliteDatabase,fixtureId:number,clubId:number,persistLineup=true):Team{const c=db.prepare("SELECT reputation FROM club WHERE id=?").get(clubId) as {reputation:number}|undefined;if(!c)throw new Error(`Club ${clubId} not found.`);const t=tactic(db,clubId),players=loadPlayers(db,clubId,fixtureId),lineup=selectLineup(db,fixtureId,clubId,players,t,persistLineup),s=lineup.filter(p=>p.isStarting);const posRating=mean(s.map(p=>p.positionRating*fit(bestPosition(p.id,loadPositions(db,clubId)),p.role)));const attacking=mean(s.map(p=>skill(p,p.role)*.72+p.positionRating*.28+p.energy*.18+p.morale*.08+p.sharpness*.08));const defending=mean(s.map(p=>mean([p.tackling,p.marking,p.positioning,p.concentration,p.strength])));const keeper=s.find(p=>p.isStarting&&p.role==="GK");return{clubId,reputation:c.reputation,tactic:t,lineup,attacking:attacking+(posRating-50)*.15,defending,goalkeeping:keeper?mean([keeper.reflexes,keeper.handling,keeper.aerial_reach,keeper.positioning]):45,energy:mean(s.map(p=>p.energy)),fitness:mean(s.map(p=>p.stamina)),context:resolveMatchContext(db,fixtureId,clubId)};}
 interface KernelShotEvent {
  minute:number; clubId:number; playerId:number; secondaryPlayerId:number|null;
- eventType:"GOAL"|"SAVE"|"MISS"|"SUBSTITUTION"|"TACTIC_CHANGE"; xg:number; description:string;
+ eventType:"GOAL"|"SAVE"|"MISS"|"SUBSTITUTION"|"TACTIC_CHANGE"|"CHANCE"|"FOUL"|"YELLOW_CARD"|"RED_CARD"|"INJURY"; xg:number; description:string; injuryDays?:number;
 }
 interface KernelMinute { minute:number; homePressure:number; awayPressure:number; homeScore:number; awayScore:number; events:KernelShotEvent[]; }
 interface TacticalChange {id:number;minute:number;club_id:number;change_type:string;payload:string;}
 interface KernelTimeline {result:SimulatedMatchResult; events:KernelShotEvent[]; minutes:KernelMinute[];}
 const HOME_SHOT_CHANCE_BONUS=0.004; // +0.4 percentage points per minute: modest, isolated home advantage.
+export const MATCH_EVENT_PROBABILITIES = {
+ foulPerTeamMinute:0.12,
+ yellowCardPerTeamMinute:0.022,
+ redCardPerTeamMinute:0.0005,
+ injuryPerTeamMinute:0.0015,
+ defensiveErrorPerDefendingTeamMinute:0.0015,
+ substitutionAttemptPerTeamMinuteAfter60:0.035,
+} as const;
 function mentalityShotModifier(value:string):number {
  return ({"VERY_DEFENSIVE":-.018,"DEFENSIVE":-.009,"BALANCED":0,"ATTACKING":.009,"VERY_ATTACKING":.018}[value]??0);
 }
@@ -68,6 +106,36 @@ function teamPressure(team:Team, random:()=>number):number {
  return clamp(team.attacking*.43+team.tactic.pressing*.16+team.tactic.tempo*.10+
   team.tactic.defensive_line*.04+mentality-fatigue+random()*8,0,100);
 }
+function shotCreationProbability(
+ team:Team,opponent:Team,isHome:boolean,pressure:number,opponentPressure:number,
+):number {
+ const tactic=team.tactic;
+ const ctx=team.context??{weather:"CLEAR",temperatureC:20,pitchCondition:70,restHours:168,travelKm:0,travelHours:0};
+ const fatigue=Math.min(.035,Math.max(0,72-ctx.restHours)*.00020+ctx.travelKm/500*.004);
+ const weatherPenalty=ctx.weather==="HEAVY_RAIN"?.012:ctx.weather==="RAIN"?.006:ctx.weather==="WIND"?(tactic.passing_directness<60?.008:.003):ctx.weather==="HEAT"?.004:0;
+ const pitchPenalty=Math.max(0,70-ctx.pitchCondition)*.00012;
+ return clamp(.095+(team.attacking-50)*.00135+(50-opponent.defending)*.00060+
+  mentalityShotModifier(tactic.mentality)+(tactic.pressing-50)*.00012+
+  (tactic.tempo-50)*.00012+(pressure-opponentPressure)*.00012+
+  (tactic.passing_directness-50)*.000055+(tactic.width-50)*.000025+
+  (tactic.counter_attack?.004:0)+(isHome?HOME_SHOT_CHANCE_BONUS:0)-fatigue-weatherPenalty-pitchPenalty,.05,.205);
+}
+function sampleChanceQuality(team:Team,tactic:Tactic,finishing:number,random:()=>number):number {
+ const ctx=team.context??{weather:"CLEAR",temperatureC:20,pitchCondition:70,restHours:168,travelKm:0,travelHours:0};
+ const qualityRoll=random();
+ const baseXg=qualityRoll<.56 ? .035+random()*.06 :
+  qualityRoll<.92 ? .095+random()*.075 : .17+random()*.15;
+ return clamp(baseXg+(team.attacking-50)*.00042+(finishing-50)*.00018+
+  (tactic.tempo-50)*.00004+(tactic.passing_directness-50)*.00006+
+  (tactic.width-50)*.000035-
+  Math.max(0,70-ctx.pitchCondition)*.00025-
+  (ctx.weather==="HEAVY_RAIN"?.012:ctx.weather==="RAIN"?.006:ctx.weather==="WIND"?.004:0),.02,.38);
+}
+function onTargetProbability(xg:number):number { return clamp(.29+xg*.5,.30,.48); }
+function goalConversionProbability(xg:number,onTargetChance:number,keeperSkill:number):number {
+ const keeperFactor=clamp(1+(50-keeperSkill)*.0075,.66,1.34);
+ return clamp((xg/onTargetChance)*keeperFactor,.015,.82);
+}
 function refreshTeamStrength(team:Team):void{const starters=team.lineup.filter(p=>p.isStarting);team.attacking=mean(starters.map(p=>skill(p,p.role)*.72+p.positionRating*.28+p.energy*.18+p.morale*.08+p.sharpness*.08))+(mean(starters.map(p=>p.positionRating))-50)*.15;team.defending=mean(starters.map(p=>mean([p.tackling,p.marking,p.positioning,p.concentration,p.strength])));const keeper=starters.find(p=>p.role==="GK");team.goalkeeping=keeper?mean([keeper.reflexes,keeper.handling,keeper.aerial_reach,keeper.positioning]):45;team.energy=mean(starters.map(p=>p.energy));team.fitness=mean(starters.map(p=>p.stamina));}
 function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalChange[]=[]):KernelTimeline {
  home={...home,tactic:{...home.tactic},lineup:home.lineup.map(p=>({...p}))};
@@ -76,12 +144,22 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
  // diagnostics a paired comparison rather than a comparison polluted by RNG draw order.
  const homeRandom=rng(seed ^ Math.imul(home.clubId,0x9e3779b1));
  const awayRandom=rng(seed ^ Math.imul(away.clubId,0x9e3779b1));
+ const homeEventRandom=rng((seed ^ Math.imul(home.clubId,0x85ebca6b) ^ 0x51ed270b)>>>0);
+ const awayEventRandom=rng((seed ^ Math.imul(away.clubId,0x85ebca6b) ^ 0x51ed270b)>>>0);
+ const homeErrorRandom=rng((seed ^ Math.imul(home.clubId,0xc2b2ae35) ^ 0x27d4eb2f)>>>0);
+ const awayErrorRandom=rng((seed ^ Math.imul(away.clubId,0xc2b2ae35) ^ 0x27d4eb2f)>>>0);
  let hs=0,as=0,hShots=0,aShots=0,hOn=0,aOn=0,hxg=0,axg=0;
  const events:KernelShotEvent[]=[];
  const minutes:KernelMinute[]=[];
+ const changesByMinute=new Map<number,TacticalChange[]>();
+ for(const change of changes) {
+  const list=changesByMinute.get(change.minute)??[];
+  list.push(change);changesByMinute.set(change.minute,list);
+ }
+ const substitutionsByClub=new Map<number,number>([[home.clubId,0],[away.clubId,0]]);
  for(let minute=1;minute<=90;minute++){
   const minuteEvents:KernelShotEvent[]=[];
-  for(const change of changes.filter(item=>item.minute===minute)){
+  for(const change of changesByMinute.get(minute)??[]){
    const priorEventCount=minuteEvents.length;
    const team=change.club_id===home.clubId?home:change.club_id===away.clubId?away:null;
    if(!team)throw new Error(`Tactical change ${change.id} targets a club outside the fixture.`);
@@ -94,6 +172,7 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
     if(outgoing.role==="GK"&&incoming.goalkeeper!==1)throw new Error("A goalkeeper can only be replaced by another goalkeeper.");
     incoming.role=outgoing.role;incoming.slot=outgoing.slot;incoming.isStarting=true;outgoing.isStarting=false;refreshTeamStrength(team);
     minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição: ${outgoing.name} sai, ${incoming.name} entra`});
+    substitutionsByClub.set(team.clubId,(substitutionsByClub.get(team.clubId)??0)+1);
    }else if(change.change_type==="MENTALITY"){
     const mentality=String(payload.mentality??"");
     if(!["VERY_DEFENSIVE","DEFENSIVE","BALANCED","ATTACKING","VERY_ATTACKING"].includes(mentality))throw new Error(`Tactical change ${change.id} has invalid mentality.`);
@@ -122,20 +201,89 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
    }
    if(minuteEvents.length>priorEventCount)events.push(minuteEvents[minuteEvents.length-1]!);
   }
+  // Independent event streams keep cards/injuries/errors reproducible without
+  // perturbing the shot RNG stream when event rates are adjusted.
+  for(const incident of [
+    {team:home,random:homeEventRandom},
+    {team:away,random:awayEventRandom},
+  ]) {
+   const chooseActive=()=>{
+    const active=incident.team.lineup.filter(player=>player.isStarting&&player.role!=="GK");
+    return active.length?active[Math.floor(incident.random()*active.length)]:undefined;
+   };
+   if(!incident.team.lineup.some(player=>player.isStarting&&player.role!=="GK")) continue;
+   if(incident.random()<MATCH_EVENT_PROBABILITIES.foulPerTeamMinute) {
+    const player=chooseActive();
+    if(player) {
+     const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:player.id,secondaryPlayerId:null,eventType:"FOUL",xg:0,description:`Falta cometida por ${player.name}`};
+    minuteEvents.push(event);events.push(event);
+    }
+   }
+   if(incident.random()<MATCH_EVENT_PROBABILITIES.yellowCardPerTeamMinute) {
+    const player=chooseActive();
+    if(player) {
+     const secondYellow=events.some(event=>event.clubId===incident.team.clubId&&event.playerId===player.id&&event.eventType==="YELLOW_CARD");
+     if(secondYellow) { player.isStarting=false;refreshTeamStrength(incident.team); }
+     const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:player.id,secondaryPlayerId:null,eventType:secondYellow?"RED_CARD":"YELLOW_CARD",xg:0,description:secondYellow?`Segundo amarelo e expulsão para ${player.name}`:`Cartão amarelo para ${player.name}`};
+     minuteEvents.push(event);events.push(event);
+    }
+   }
+   if(incident.random()<MATCH_EVENT_PROBABILITIES.redCardPerTeamMinute) {
+    const player=chooseActive();
+    if(player) {
+     player.isStarting=false;refreshTeamStrength(incident.team);
+     const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:player.id,secondaryPlayerId:null,eventType:"RED_CARD",xg:0,description:`Cartão vermelho para ${player.name}`};
+     minuteEvents.push(event);events.push(event);
+    }
+   }
+   if(incident.random()<MATCH_EVENT_PROBABILITIES.injuryPerTeamMinute) {
+    const currentlyActive=incident.team.lineup.filter(player=>player.isStarting&&player.role!=="GK");
+    if(currentlyActive.length) {
+     const injured=currentlyActive[Math.floor(incident.random()*currentlyActive.length)]!;
+     const durationRoll=incident.random();
+     const injuryDays=durationRoll<.70?7:durationRoll<.95?14:28;
+     const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:injured.id,secondaryPlayerId:null,eventType:"INJURY",xg:0,injuryDays,description:`Lesão de ${injured.name}; afastamento estimado de ${injuryDays} dias`};
+     minuteEvents.push(event);events.push(event);
+     const substitute=incident.team.lineup.find(player=>!player.isStarting&&player.role!=="GK");
+     injured.isStarting=false;
+     if(substitute) {
+      substitute.role=injured.role;substitute.slot=injured.slot;substitute.isStarting=true;
+      const subEvent:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:injured.id,secondaryPlayerId:substitute.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição por lesão: ${injured.name} sai, ${substitute.name} entra`};
+      minuteEvents.push(subEvent);events.push(subEvent);
+      substitutionsByClub.set(incident.team.clubId,(substitutionsByClub.get(incident.team.clubId)??0)+1);
+     }
+     refreshTeamStrength(incident.team);
+    }
+   }
+   const substitutionsUsed=substitutionsByClub.get(incident.team.clubId)??0;
+   if(minute>=60&&substitutionsUsed<3&&incident.random()<MATCH_EVENT_PROBABILITIES.substitutionAttemptPerTeamMinuteAfter60) {
+    const activeNow=incident.team.lineup.filter(player=>player.isStarting&&player.role!=="GK");
+    const bench=incident.team.lineup.filter(player=>!player.isStarting&&player.role!=="GK");
+    if(activeNow.length&&bench.length) {
+     const outgoing=activeNow[Math.floor(incident.random()*activeNow.length)]!;
+     const incoming=bench[Math.floor(incident.random()*bench.length)]!;
+     outgoing.isStarting=false;incoming.isStarting=true;incoming.role=outgoing.role;incoming.slot=outgoing.slot;
+     refreshTeamStrength(incident.team);
+     const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição tática: ${outgoing.name} sai, ${incoming.name} entra`};
+     minuteEvents.push(event);events.push(event);
+     substitutionsByClub.set(incident.team.clubId,(substitutionsByClub.get(incident.team.clubId)??0)+1);
+    }
+   }
+  }
   const hp=teamPressure(home,homeRandom),ap=teamPressure(away,awayRandom);
-  for(const side of [{team:home,opponent:away,isHome:true,pressure:hp,opponentPressure:ap,random:homeRandom},
-                      {team:away,opponent:home,isHome:false,pressure:ap,opponentPressure:hp,random:awayRandom}]){
+  for(const side of [
+    {team:home,opponent:away,isHome:true,pressure:hp,opponentPressure:ap,random:homeRandom,opponentErrorRandom:awayErrorRandom},
+    {team:away,opponent:home,isHome:false,pressure:ap,opponentPressure:hp,random:awayRandom,opponentErrorRandom:homeErrorRandom},
+  ]){
    const tactic=side.team.tactic;
    const ctx=side.team.context??{weather:"CLEAR",temperatureC:20,pitchCondition:70,restHours:168,travelKm:0,travelHours:0};
-   const fatigue=Math.min(.035,Math.max(0,72-ctx.restHours)*.00020+ctx.travelKm/500*.004);
-   const weatherPenalty=ctx.weather==="HEAVY_RAIN"?.012:ctx.weather==="RAIN"?.006:ctx.weather==="WIND"?(tactic.passing_directness<60?.008:.003):ctx.weather==="HEAT"?.004:0;
-   const pitchPenalty=Math.max(0,70-ctx.pitchCondition)*.00012;
-   const chance=clamp(.095+(side.team.attacking-50)*.00135+(50-side.opponent.defending)*.00060+
-    mentalityShotModifier(tactic.mentality)+(tactic.pressing-50)*.00012+
-    (tactic.tempo-50)*.00012+(side.pressure-side.opponentPressure)*.00012+
-    (tactic.passing_directness-50)*.000055+(tactic.width-50)*.000025+
-    (tactic.counter_attack?.004:0)+(side.isHome?HOME_SHOT_CHANCE_BONUS:0)-fatigue-weatherPenalty-pitchPenalty,.05,.205);
-   if(side.random()>=chance)continue;
+   const defensiveError=side.opponentErrorRandom()<MATCH_EVENT_PROBABILITIES.defensiveErrorPerDefendingTeamMinute;
+   const chance=shotCreationProbability(side.team,side.opponent,side.isHome,side.pressure,side.opponentPressure);
+   if(!defensiveError&&side.random()>=chance)continue;
+   if(defensiveError) {
+    const errorEvent:KernelShotEvent={minute,clubId:side.team.clubId,playerId:0,secondaryPlayerId:null,eventType:"CHANCE",xg:0,description:`Erro defensivo do clube ${side.opponent.clubId} concede uma chance`};
+    minuteEvents.push(errorEvent);events.push(errorEvent);
+   }
    const attackers=side.team.lineup.filter(p=>p.isStarting&&p.role!=="GK");
    if(!attackers.length)throw new Error(`Club ${side.team.clubId} has no available outfield starters.`);
    const shooter=attackers[Math.floor(side.random()*attackers.length)]!;
@@ -144,18 +292,11 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
    const keeperSkill=mean([keeper.reflexes,keeper.handling,keeper.positioning,keeper.concentration]);
    // Sample shot quality from low-, medium-, and high-quality chance profiles.
    // The mixture retains a similar average xG while making clear chances observable in diagnostics.
-   const qualityRoll=side.random();
-   const baseXg=qualityRoll<.56 ? .035+side.random()*.06 :
-    qualityRoll<.92 ? .095+side.random()*.075 : .17+side.random()*.15;
-   const xg=clamp(baseXg+(side.team.attacking-50)*.00042+
-    (shooter.finishing-50)*.00018+(tactic.tempo-50)*.00004+
-    (tactic.passing_directness-50)*.00006+(tactic.width-50)*.000035-
-    Math.max(0,70-ctx.pitchCondition)*.00025-
-    (ctx.weather==="HEAVY_RAIN"?.012:ctx.weather==="RAIN"?.006:ctx.weather==="WIND"?.004:0),.02,.38);
-   const onTargetChance=clamp(.29+xg*.5,.30,.48);
+   const sampledXg=sampleChanceQuality(side.team,tactic,shooter.finishing,side.random);
+   const xg=defensiveError?clamp(sampledXg+.10,.02,.38):sampledXg;
+   const onTargetChance=onTargetProbability(xg);
    const onTarget=side.random()<onTargetChance;
-   const keeperFactor=clamp(1+(50-keeperSkill)*.0075,.66,1.34);
-   const goal=onTarget&&side.random()<clamp((xg/onTargetChance)*keeperFactor,.015,.82);
+   const goal=onTarget&&side.random()<goalConversionProbability(xg,onTargetChance,keeperSkill);
    const event:KernelShotEvent={
     minute,clubId:side.team.clubId,playerId:shooter.id,secondaryPlayerId:onTarget?keeper.id:null,
     eventType:goal?"GOAL":onTarget?"SAVE":"MISS",xg,
@@ -234,15 +375,53 @@ export function runTacticalImpactAnalysis(db:SqliteDatabase,homeClubId:number,aw
  return {homeClubId,awayClubId,simulations,seed,scenarios};
 }
 
+export interface MeanConfidenceInterval {estimate:number;lower:number;upper:number;observations:number;confidenceLevel:number;}
 export interface XgBandDiagnostic {
- band:string;shots:number;averageXg:number;onTargetRate:number;goalRate:number;saveRate:number;missRate:number;goals:number;saves:number;misses:number;
+ band:string;shots:number;averageXg:number;averageXgInterval:MeanConfidenceInterval;
+ onTargetRate:number;onTargetInterval:BinomialConfidenceInterval;
+ goalRate:number;goalInterval:BinomialConfidenceInterval;
+ saveRate:number;saveInterval:BinomialConfidenceInterval;
+ missRate:number;missInterval:BinomialConfidenceInterval;
+ goals:number;saves:number;misses:number;
+}
+export interface BinomialConfidenceInterval {
+ estimate:number;
+ lower:number;
+ upper:number;
+ successes:number;
+ trials:number;
+ confidenceLevel:number;
+}
+function meanConfidenceInterval(sum:number,sumSquares:number,observations:number,confidenceLevel=0.95):MeanConfidenceInterval {
+ const estimate=observations?sum/observations:0;
+ if(observations<2) return {estimate,lower:0,upper:.38,observations,confidenceLevel};
+ const variance=Math.max(0,(sumSquares-sum*sum/observations)/(observations-1));
+ const margin=1.959963984540054*Math.sqrt(variance/observations);
+ return {estimate,lower:Math.max(0,estimate-margin),upper:Math.min(.38,estimate+margin),observations,confidenceLevel};
+}
+function wilsonInterval(rate:number,trials:number,confidenceLevel=0.95):BinomialConfidenceInterval {
+ const successes=Math.round(clamp(rate,0,1)*trials);
+ const z=confidenceLevel===0.95?1.959963984540054:confidenceLevel===0.99?2.5758293035489004:1.959963984540054;
+ const p=successes/trials,z2=z*z,denominator=1+z2/trials;
+ const center=(p+z2/(2*trials))/denominator;
+ const margin=(z*Math.sqrt((p*(1-p)+z2/(4*trials))/trials))/denominator;
+ return {estimate:p,lower:Math.max(0,center-margin),upper:Math.min(1,center+margin),successes,trials,confidenceLevel};
 }
 export interface MatchEngineDiagnostics {
  simulations:number;
  baseline:MonteCarloReport;
+ statisticalAcceptance:{
+  method:"Wilson score interval";
+  confidenceLevel:number;
+  outcomes:{homeWin:BinomialConfidenceInterval;draw:BinomialConfidenceInterval;awayWin:BinomialConfidenceInterval};
+  outcomeRatesSum:number;
+  outcomeRatesPartition:boolean;
+  interpretation:string;
+ };
  xgBands:XgBandDiagnostic[];
  homeAdvantage:{clubA:number;clubB:number;clubAWinRateAtHome:number;clubAWinRateAway:number;homeAdvantageDelta:number;shotChanceBonus:number;note:string};
  strengthGap:{weakClubId:number;strongClubId:number;weakStrength:number;strongStrength:number;strengthDifference:number;hasMeaningfulGap:boolean;note:string;strongWinRate:number;drawRate:number;weakWinRate:number;strongAverageGoals:number;weakAverageGoals:number};
+ eventProbabilities:typeof MATCH_EVENT_PROBABILITIES;
  persistedMatches:{checked:number;issues:string[];warnings:string[]};
 }
 export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=88421):MatchEngineDiagnostics {
@@ -255,24 +434,25 @@ export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=884
  const weak=ranked[0]!,strong=ranked[ranked.length-1]!;
  const baseline=runMonteCarlo(strong.team,weak.team,simulations,seed);
  const bands=[
-  {label:"0.00-0.05",min:0,max:.05,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
-  {label:"0.05-0.10",min:.05,max:.10,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
-  {label:"0.10-0.15",min:.10,max:.15,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
-  {label:"0.15-0.20",min:.15,max:.20,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
-  {label:"0.20+",min:.20,max:Infinity,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.00-0.05",min:0,max:.05,shots:0,xg:0,xgSquared:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.05-0.10",min:.05,max:.10,shots:0,xg:0,xgSquared:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.10-0.15",min:.10,max:.15,shots:0,xg:0,xgSquared:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.15-0.20",min:.15,max:.20,shots:0,xg:0,xgSquared:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.20+",min:.20,max:Infinity,shots:0,xg:0,xgSquared:0,onTarget:0,goals:0,saves:0,misses:0},
  ];
  for(let i=0;i<simulations;i++){
   const timeline=simulateMatchTimeline(strong.team,weak.team,seed+i*7919);
   for(const e of timeline.events){
+   if(!["GOAL","SAVE","MISS"].includes(e.eventType)) continue;
    const b=bands.find(item=>e.xg>=item.min&&e.xg<item.max)!;
-   b.shots++;b.xg+=e.xg;
+   b.shots++;b.xg+=e.xg;b.xgSquared+=e.xg*e.xg;
    if(e.eventType==="GOAL"){b.goals++;b.onTarget++;}
    else if(e.eventType==="SAVE"){b.saves++;b.onTarget++;}
    else b.misses++;
   }
  }
  
- const xgBands: XgBandDiagnostic[]=bands.filter(b=>b.shots>0).map(b=>({band:b.label,shots:b.shots,averageXg:b.xg/b.shots,onTargetRate:b.onTarget/b.shots,goalRate:b.goals/b.shots,saveRate:b.saves/b.shots,missRate:b.misses/b.shots,goals:b.goals,saves:b.saves,misses:b.misses}));
+ const xgBands: XgBandDiagnostic[]=bands.filter(b=>b.shots>0).map(b=>({band:b.label,shots:b.shots,averageXg:b.xg/b.shots,averageXgInterval:meanConfidenceInterval(b.xg,b.xgSquared,b.shots),onTargetRate:b.onTarget/b.shots,onTargetInterval:wilsonInterval(b.onTarget/b.shots,b.shots),goalRate:b.goals/b.shots,goalInterval:wilsonInterval(b.goals/b.shots,b.shots),saveRate:b.saves/b.shots,saveInterval:wilsonInterval(b.saves/b.shots,b.shots),missRate:b.misses/b.shots,missInterval:wilsonInterval(b.misses/b.shots,b.shots),goals:b.goals,saves:b.saves,misses:b.misses}));
  const ab=runMonteCarlo(strong.team,weak.team,simulations,seed+1700003);
  const ba=runMonteCarlo(weak.team,strong.team,simulations,seed+1700003);
  const persistedRows=db.prepare("SELECT f.id,f.home_club_id,f.away_club_id,f.home_score,f.away_score,f.current_minute, s.simulation_minute,s.state_json,(SELECT COUNT(*) FROM match_momentum m WHERE m.fixture_id=f.id) AS momentum_count,(SELECT COUNT(*) FROM match_event e WHERE e.fixture_id=f.id AND e.event_type='GOAL' AND e.club_id=f.home_club_id) AS event_home_goals,(SELECT COUNT(*) FROM match_event e WHERE e.fixture_id=f.id AND e.event_type='GOAL' AND e.club_id=f.away_club_id) AS event_away_goals FROM fixture f LEFT JOIN match_simulation_state s ON s.fixture_id=f.id WHERE f.status='COMPLETED' ORDER BY f.id DESC LIMIT 100").all() as Array<{id:number;home_score:number;away_score:number;current_minute:number;simulation_minute:number|null;state_json:string|null;momentum_count:number;event_home_goals:number;event_away_goals:number}>;
@@ -290,8 +470,21 @@ export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=884
    if(r.simulation_minute!==90||!checkpointCompleted)issues.push(`Fixture ${r.id}: final checkpoint exists but is malformed or incomplete`);
   }
  }
+ const outcomeRatesSum=baseline.homeWinRate+baseline.drawRate+baseline.awayWinRate;
  return {
-  simulations,baseline,xgBands,
+  simulations,baseline,
+  statisticalAcceptance:{
+   method:"Wilson score interval",confidenceLevel:0.95,
+   outcomes:{
+    homeWin:wilsonInterval(baseline.homeWinRate,simulations),
+    draw:wilsonInterval(baseline.drawRate,simulations),
+    awayWin:wilsonInterval(baseline.awayWinRate,simulations),
+   },
+   outcomeRatesSum,outcomeRatesPartition:Math.abs(outcomeRatesSum-1)<=1e-9,
+   interpretation:"These are Monte Carlo sampling-uncertainty intervals, not empirical football-calibration targets. Compare them with historical baselines before declaring the model calibrated.",
+  },
+  xgBands,
+  eventProbabilities:MATCH_EVENT_PROBABILITIES,
   homeAdvantage:{clubA:strong.team.clubId,clubB:weak.team.clubId,clubAWinRateAtHome:ab.homeWinRate,clubAWinRateAway:ba.awayWinRate,homeAdvantageDelta:ab.homeWinRate-ba.awayWinRate,shotChanceBonus:HOME_SHOT_CHANCE_BONUS,note:"Explicit home advantage: +0.004 absolute shot-creation probability per minute for the home side. The win-rate delta is a seeded Monte Carlo estimate, not a guarantee."},
   strengthGap:{weakClubId:weak.team.clubId,strongClubId:strong.team.clubId,weakStrength:weak.value,strongStrength:strong.value,strengthDifference:strong.value-weak.value,hasMeaningfulGap:strong.value-weak.value>=8,note:strong.value-weak.value>=8?"Club ratings provide a useful strength contrast.":"Available clubs are too similar for a meaningful favorite-versus-underdog test; use a save with a larger ratings spread.",strongWinRate:baseline.homeWinRate,drawRate:baseline.drawRate,weakWinRate:baseline.awayWinRate,strongAverageGoals:baseline.averageHomeGoals,weakAverageGoals:baseline.averageAwayGoals},
   persistedMatches:{checked:persistedRows.length,issues,warnings}
@@ -299,6 +492,134 @@ export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=884
 }
 
 
+
+export interface TacticalSensitivityScenario {
+ name:string;
+ changedVariable:string;
+ value:string|number;
+ homeWinRate:number;
+ homeWinRateDelta:number;
+ averageHomeGoals:number;
+ averageHomeGoalsDelta:number;
+ homeShotsPerMatch:number;
+ homeShotsDelta:number;
+ averageTotalXg:number;
+ averageTotalXgDelta:number;
+}
+export interface TacticalSensitivityReport {
+ homeClubId:number;
+ awayClubId:number;
+ simulations:number;
+ seed:number;
+ baseline:MonteCarloReport;
+ scenarios:TacticalSensitivityScenario[];
+}
+
+/** One-variable-at-a-time sensitivity analysis using common seeds for comparison. */
+export function runTacticalSensitivityAnalysis(
+ db:SqliteDatabase,homeClubId:number,awayClubId:number,simulations=1000,seed=73421,
+):TacticalSensitivityReport {
+ if(homeClubId===awayClubId) throw new Error("Sensitivity analysis requires two different clubs.");
+ if(!Number.isSafeInteger(simulations)||simulations<100) throw new Error("Sensitivity simulations must be an integer >= 100.");
+ const originalHome=loadTeam(db,-1,homeClubId,false),originalAway=loadTeam(db,-1,awayClubId,false);
+ const baseline=runMonteCarlo(originalHome,originalAway,simulations,seed);
+ const clone=(team:Team):Team=>({...team,tactic:{...team.tactic},lineup:team.lineup.map(player=>({...player})),...(team.context?{context:{...team.context}}:{})});
+ const scenarios:Array<{name:string;changedVariable:string;value:string|number;home:Team}>=[];
+ const tacticCase=(name:string,key:keyof Tactic,value:number|string)=>{
+  const home=clone(originalHome);home.tactic={...home.tactic,[key]:value} as Tactic;scenarios.push({name,changedVariable:String(key),value,home});
+ };
+ tacticCase("pressing_low","pressing",20);tacticCase("pressing_high","pressing",80);
+ tacticCase("tempo_low","tempo",20);tacticCase("tempo_high","tempo",80);
+ tacticCase("defensive_line_low","defensive_line",20);tacticCase("defensive_line_high","defensive_line",80);
+ tacticCase("width_low","width",20);tacticCase("width_high","width",80);
+ tacticCase("passing_directness_low","passing_directness",20);tacticCase("passing_directness_high","passing_directness",80);
+ tacticCase("counter_attack_off","counter_attack",0);tacticCase("counter_attack_on","counter_attack",1);
+ tacticCase("mentality_defensive","mentality","DEFENSIVE");tacticCase("mentality_very_attacking","mentality","VERY_ATTACKING");
+ for(const attribute of ["energy","morale","sharpness"] as const) for(const value of [20,80]) {
+  const home=clone(originalHome);
+  home.lineup=home.lineup.map(player=>player.isStarting?{...player,[attribute]:value}:player);
+  refreshTeamStrength(home);
+  scenarios.push({name:attribute+"_"+value,changedVariable:attribute,value,home});
+ }
+ for(const [name,contextPatch,value] of [
+  ["weather_clear",{weather:"CLEAR"},"CLEAR"],
+  ["weather_heavy_rain",{weather:"HEAVY_RAIN"},"HEAVY_RAIN"],
+  ["pitch_poor",{pitchCondition:35},35],
+  ["pitch_good",{pitchCondition:90},90],
+  ["rest_short",{restHours:24},24],
+  ["rest_full",{restHours:168},168],
+  ["travel_none",{travelKm:0},0],
+  ["travel_long",{travelKm:1200},1200],
+ ] as Array<[string,Partial<MatchContext>,string|number]>) {
+  const home=clone(originalHome);
+  home.context={...(home.context??{weather:"CLEAR",temperatureC:20,pitchCondition:70,restHours:168,travelKm:0,travelHours:0}),...contextPatch} as MatchContext;
+  scenarios.push({name,changedVariable:name.split("_")[0]!,value,home});
+ }
+ const keeperCase=clone(originalHome);
+ const keeper=keeperCase.lineup.find(player=>player.isStarting&&player.role==="GK");
+ if(keeper) {
+  keeper.reflexes=95;keeper.handling=95;keeper.positioning=95;keeper.concentration=95;refreshTeamStrength(keeperCase);
+  scenarios.push({name:"exceptional_goalkeeper",changedVariable:"goalkeeper attributes",value:95,home:keeperCase});
+ }
+ for(const value of [20,95]) {
+  const finishingCase=clone(originalHome);
+  const shooter=finishingCase.lineup.find(player=>player.isStarting&&player.role==="ST") ??
+    finishingCase.lineup.find(player=>player.isStarting&&player.role!=="GK");
+  if(shooter) {
+    shooter.finishing=value;
+    scenarios.push({name:"individual_finishing_"+value,changedVariable:"individual finishing",value,home:finishingCase});
+  }
+ }
+ for(const value of [20,90]) {
+  const defendingCase=clone(originalHome);
+  const defender=defendingCase.lineup.find(player=>player.isStarting&&["CB","LB","RB","DM"].includes(player.role));
+  if(defender) {
+    defender.tackling=value;defender.marking=value;defender.positioning=value;
+    refreshTeamStrength(defendingCase);
+    scenarios.push({name:"individual_defending_"+value,changedVariable:"individual defensive attributes",value,home:defendingCase});
+  }
+ }
+ const roleCase=clone(originalHome);
+ const striker=roleCase.lineup.find(player=>player.isStarting&&player.role==="ST");
+ if(striker) {
+  striker.role="CM";refreshTeamStrength(roleCase);
+  scenarios.push({name:"striker_role_changed_to_cm",changedVariable:"player role",value:"ST->CM",home:roleCase});
+ }
+ const alternateFormation=db.prepare("SELECT id FROM formation WHERE id<>? ORDER BY id LIMIT 1").get(originalHome.tactic.formation_id) as {id:number}|undefined;
+ const formationCase=clone(originalHome);
+ const starters=formationCase.lineup.filter(player=>player.isStarting);
+ const formationKeeper=starters.find(player=>player.role==="GK");
+ const outfield=starters.filter(player=>player.role!=="GK");
+ const alternateSlots=alternateFormation
+  ? db.prepare("SELECT slot_number AS slot,position_code AS role FROM formation_slot WHERE formation_id=? ORDER BY slot_number").all(alternateFormation.id) as Array<{slot:number;role:string}>
+  : [];
+ const slots=alternateSlots.length===11&&alternateSlots.some(slot=>slot.role==="GK")
+  ? alternateSlots
+  : ["GK","CB","CB","LB","RB","DM","CM","CM","LW","RW","ST"].map((role,index)=>({slot:index+1,role}));
+ const assigned:Array<{slot:number;role:string;player:MatchPlayer}>=[];
+ let outfieldIndex=0;
+ for(const slot of slots) {
+  const player=slot.role==="GK"?formationKeeper:outfield[outfieldIndex++];
+  if(!player) continue;
+  assigned.push({slot:slot.slot,role:slot.role,player});
+ }
+ if(assigned.length===11&&assigned.filter(item=>item.role==="GK"&&item.player.goalkeeper===1).length===1) {
+  for(const item of assigned) {item.player.slot=item.slot;item.player.role=item.role;}
+  formationCase.tactic={...formationCase.tactic,formation_id:alternateSlots.length===11&&alternateSlots.some(slot=>slot.role==="GK")?alternateFormation!.id:originalHome.tactic.formation_id+1};
+  refreshTeamStrength(formationCase);
+  scenarios.push({name:"alternate_formation",changedVariable:"formation",value:alternateFormation?.id??"synthetic-role-layout",home:formationCase});
+ }
+
+ const rows=scenarios.map(s=>{
+  const result=runMonteCarlo(s.home,originalAway,simulations,seed);
+  return {name:s.name,changedVariable:s.changedVariable,value:s.value,
+   homeWinRate:result.homeWinRate,homeWinRateDelta:result.homeWinRate-baseline.homeWinRate,
+   averageHomeGoals:result.averageHomeGoals,averageHomeGoalsDelta:result.averageHomeGoals-baseline.averageHomeGoals,
+   homeShotsPerMatch:result.homeShotRate,homeShotsDelta:result.homeShotRate-baseline.homeShotRate,
+   averageTotalXg:result.averageTotalXg,averageTotalXgDelta:result.averageTotalXg-baseline.averageTotalXg};
+ });
+ return {homeClubId,awayClubId,simulations,seed,baseline,scenarios:rows};
+}
 
 export interface SeasonBalanceClub {
  clubId:number; reputation:number; strength:number; tier:string;
@@ -421,6 +742,7 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
  persistMatchEnvironment(db,fixtureId,context);
  const home=loadTeam(db,fixtureId,f.home_club_id),away=loadTeam(db,fixtureId,f.away_club_id);
  const changes=db.prepare("SELECT id,minute,club_id,change_type,payload FROM match_tactical_change WHERE fixture_id=? ORDER BY minute,id").all(fixtureId) as TacticalChange[];
+ const initiallyStartingPlayerIds=new Set([...home.lineup,...away.lineup].filter(player=>player.isStarting).map(player=>player.id));
  const timeline=simulateMatchTimeline(home,away,seed,changes);
  const simulationConfig = {
   home: {clubId:home.clubId,tactic:home.tactic,context:home.context,
@@ -489,8 +811,12 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
   for(const team of [home,away])for(const p of team.lineup){
    const substitutionOut=timeline.events.find(e=>e.eventType==="SUBSTITUTION"&&e.playerId===p.id);
    const substitutionIn=timeline.events.find(e=>e.eventType==="SUBSTITUTION"&&e.secondaryPlayerId===p.id);
-   const loss=p.isStarting?(substitutionOut?9:14):(substitutionIn?7:2);
-   const minutesPlayed=p.isStarting?(substitutionOut?substitutionOut.minute:90):(substitutionIn?90-substitutionIn.minute:0);
+   const injury=timeline.events.find(e=>e.eventType==="INJURY"&&e.playerId===p.id);
+   const redCard=timeline.events.find(e=>e.eventType==="RED_CARD"&&e.playerId===p.id);
+   const wasStarter=initiallyStartingPlayerIds.has(p.id);
+   const exitEvent=substitutionOut??injury??redCard;
+   const loss=wasStarter?(exitEvent?9:14):(substitutionIn?7:2);
+   const minutesPlayed=wasStarter?(exitEvent?exitEvent.minute:90):(substitutionIn?Math.max(0,(exitEvent&&exitEvent.minute>substitutionIn.minute?exitEvent.minute:90)-substitutionIn.minute):0);
    state.run(fixtureId,p.id,team.clubId,Math.max(0,p.energy-loss),p.isStarting?6.3:6,minutesPlayed);
    db.prepare("UPDATE player_condition SET energy=MAX(0,energy-?) WHERE player_id=?").run(loss,p.id);
    if(p.isStarting){
@@ -501,6 +827,23 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
    }
   }
   db.prepare("UPDATE player_condition SET suspension_matches=MAX(0,suspension_matches-1) WHERE player_id IN (SELECT player_id FROM squad_membership WHERE club_id IN (?,?)) AND suspension_matches>0").run(f.home_club_id,f.away_club_id);
+  for(const incident of timeline.events.filter(event=>event.eventType==="INJURY"&&event.playerId>0)) {
+   db.prepare("UPDATE player_condition SET injured_until=COALESCE(date((SELECT substr(scheduled_at,1,10) FROM fixture WHERE id=?),'+'||?||' days'),date('now','+'||?||' days')) WHERE player_id=?")
+    .run(fixtureId,incident.injuryDays??7,incident.injuryDays??7,incident.playerId);
+  }
+  for(const incident of timeline.events.filter(event=>event.eventType==="RED_CARD"&&event.playerId>0)) {
+   db.prepare("UPDATE player_condition SET suspension_matches=MAX(suspension_matches,1) WHERE player_id=?").run(incident.playerId);
+  }
+  const yellowPlayers=[...new Set(timeline.events.filter(event=>event.eventType==="YELLOW_CARD"&&event.playerId>0).map(event=>event.playerId))];
+  for(const playerId of yellowPlayers) {
+   const count=(db.prepare(`SELECT COUNT(*) AS count FROM match_event e
+    JOIN fixture f ON f.id=e.fixture_id JOIN competition_round r ON r.id=f.round_id
+    JOIN competition_stage st ON st.id=r.stage_id
+    WHERE e.player_id=? AND e.event_type='YELLOW_CARD'
+      AND st.season_id=(SELECT st2.season_id FROM fixture f2 JOIN competition_round r2 ON r2.id=f2.round_id JOIN competition_stage st2 ON st2.id=r2.stage_id WHERE f2.id=?)
+      AND (f.status='COMPLETED' OR f.id=?)`).get(playerId,fixtureId,fixtureId) as {count:number}).count;
+   if(count>0&&count%5===0) db.prepare("UPDATE player_condition SET suspension_matches=MAX(suspension_matches,1) WHERE player_id=?").run(playerId);
+  }
   db.prepare("UPDATE fixture SET status='COMPLETED',current_minute=90,home_score=?,away_score=? WHERE id=?")
    .run(timeline.result.homeScore,timeline.result.awayScore,fixtureId);
   checkpoint.run(90,JSON.stringify({engineVersion:"1.0.0",seed,config:simulationConfig,minute:90,homeScore:timeline.result.homeScore,
@@ -517,4 +860,60 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
   homeShots:metric(f.home_club_id,["GOAL","SAVE","MISS"]),awayShots:metric(f.away_club_id,["GOAL","SAVE","MISS"]),
   homeShotsOnTarget:metric(f.home_club_id,["GOAL","SAVE"]),awayShotsOnTarget:metric(f.away_club_id,["GOAL","SAVE"]),
   homeXg:xg(f.home_club_id),awayXg:xg(f.away_club_id),events:count,minutes:90};
+}
+
+
+export interface SyntheticScaleBenchmark {
+  clubs: number;
+  matches: number;
+  seed: number;
+  durationMs: number;
+  matchesPerSecond: number;
+  averageGoalsPerMatch: number;
+  drawRate: number;
+}
+
+/**
+ * Reproducible CPU-only scalability benchmark. Teams beyond the real save size
+ * reuse immutable squad/tactic profiles from that save, with unique synthetic
+ * club IDs. It measures engine throughput, not the cost of generating 256 real
+ * squads or persisting a 256-club database.
+ */
+export function runSyntheticSeasonScaleBenchmarks(
+  db: SqliteDatabase,
+  sizes: number[] = [16, 64, 256],
+  seed = 90210,
+): SyntheticScaleBenchmark[] {
+  if (!sizes.length || sizes.some(size => !Number.isSafeInteger(size) || size < 4 || size > 512)) {
+    throw new Error("Benchmark scales must contain club counts between 4 and 512.");
+  }
+  if (!Number.isSafeInteger(seed) || seed < 0) throw new Error("Benchmark seed must be a non-negative integer.");
+  const ids = (db.prepare("SELECT id FROM club ORDER BY id").all() as Array<{id:number}>).map(row => row.id);
+  if (ids.length < 4) throw new Error("Scalability benchmarks require at least four source clubs.");
+  const templates = ids.map(id => loadTeam(db, -1, id, false));
+  return [...new Set(sizes)].sort((a,b)=>a-b).map(clubs => {
+    const teams: Team[] = Array.from({length:clubs}, (_,index) => {
+      const template = templates[index % templates.length]!;
+      return {...template, clubId:index + 1, tactic:{...template.tactic}, lineup:template.lineup.map(player=>({...player}))};
+    });
+    let state = 0, goals = 0, draws = 0;
+    const matches = clubs * (clubs - 1);
+    const started = performance.now();
+    let matchIndex = 0;
+    for (let homeIndex=0;homeIndex<clubs;homeIndex++) {
+      for (let awayIndex=0;awayIndex<clubs;awayIndex++) {
+        if (homeIndex === awayIndex) continue;
+        const result = simulateMatchKernel(teams[homeIndex]!,teams[awayIndex]!,
+          (seed + clubs * 1000003 + matchIndex * 7919) >>> 0);
+        goals += result.homeScore + result.awayScore;
+        if (result.homeScore === result.awayScore) draws++;
+        matchIndex++;
+      }
+    }
+    const durationMs = performance.now() - started;
+    state = matchIndex;
+    if (state !== matches) throw new Error("Synthetic benchmark match-count invariant failed.");
+    return {clubs,matches,seed,durationMs,matchesPerSecond:durationMs > 0 ? matches/(durationMs/1000) : matches,
+      averageGoalsPerMatch:goals/matches,drawRate:draws/matches};
+  });
 }
