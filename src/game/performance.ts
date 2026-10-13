@@ -155,7 +155,7 @@ function benchmarkLeagueSeason(db:SqliteDatabase):{stageId:number;rounds:number;
     JOIN competition_round r ON r.id=f.round_id
     WHERE r.stage_id=? GROUP BY e.event_type ORDER BY e.event_type
   `).all(stage.stageId) as Array<{type:string;count:number}>;
-  const injuredPlayers=(db.prepare("SELECT COUNT(*) AS count FROM player_condition WHERE injured_until IS NOT NULL AND date(injured_until)>=date('now')").get() as {count:number}).count;
+  const injuredPlayers=(db.prepare("SELECT COUNT(*) AS count FROM player_condition WHERE injured_until IS NOT NULL").get() as {count:number}).count;
   return {stageId:stage.stageId,rounds:processedRounds,fixtures:processedFixtures,eventCounts,injuredPlayers};
 }
 
