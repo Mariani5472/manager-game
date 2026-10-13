@@ -536,9 +536,12 @@ function advanceRoundById(db: SqliteDatabase, roundId: number, stageId: number):
     if (state.total > 0 && (state.completed ?? 0) === state.total) {
       // Recover post-match bookkeeping if the process stopped after the final
       // fixture committed but before knockout progression/standings/season status.
-      progressKnockoutStage(db, stageId, roundId);
-      rebuildStandings(db, stageId);
-      finishSeasonIfComplete(db, stageId);
+      const recoverRound = db.transaction(() => {
+        progressKnockoutStage(db, stageId, roundId);
+        rebuildStandings(db, stageId);
+        finishSeasonIfComplete(db, stageId);
+      });
+      recoverRound.immediate();
       throw new Error(`Round ${round.roundNumber} (${round.name}) is already completed; post-match state was verified.`);
     }
     throw new Error(`Round ${round.roundNumber} (${round.name}) has no playable fixtures.`);
@@ -554,9 +557,12 @@ function advanceRoundById(db: SqliteDatabase, roundId: number, stageId: number):
       failures.push(`fixture ${fixture.id}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  progressKnockoutStage(db, stageId, roundId);
-  rebuildStandings(db,stageId);
-  finishSeasonIfComplete(db,stageId);
+  const finalizeRound = db.transaction(() => {
+    progressKnockoutStage(db, stageId, roundId);
+    rebuildStandings(db,stageId);
+    finishSeasonIfComplete(db,stageId);
+  });
+  finalizeRound.immediate();
   if (failures.length) {
     throw new Error(`Round ${round.roundNumber} simulated ${results.length}/${fixtures.length} matches. Failures: ${failures.join(" | ")}`);
   }
