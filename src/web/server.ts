@@ -61,7 +61,7 @@ export function startManagerWebServer(): void {
           const fixtures = listFixtures(db);
           const stages = getSeasonStatus(db);
           const selectedStage = Number(url.searchParams.get("stageId")) || stages.find(s => s.stageStatus === "IN_PROGRESS")?.stageId || stages[0]?.stageId;
-          const standings = selectedStage ? getStandings(db, selectedStage) : [];
+          const standings = selectedStage ? getStandings(db, selectedStage, false) : [];
           const upcoming = fixtures.filter(f => f.status === "SCHEDULED").slice(0, 8);
           const recent = fixtures.filter(f => f.status === "COMPLETED").slice(-8).reverse();
           const requestedFixtureId = Number(url.searchParams.get("fixtureId")) || 0;
