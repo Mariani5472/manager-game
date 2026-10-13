@@ -141,6 +141,46 @@ test("match processing resumes after an injected minute write failure without du
   }
 });
 
+test("identical fixture seeds and inputs reproduce event, xG and momentum output across isolated saves", async () => {
+  const root = tempRoot();
+  let first: ReturnType<typeof openDatabase> | undefined;
+  let second: ReturnType<typeof openDatabase> | undefined;
+  try {
+    const masterPath = createMaster(root);
+    const manager = new SaveManager(masterPath, join(root, "saves"));
+    const a = await manager.create({ name: "Replay A", managerName: "Alex", clubId: 1 });
+    const b = await manager.create({ name: "Replay B", managerName: "Bea", clubId: 1 });
+    first = manager.open(a.filePath);
+    second = manager.open(b.filePath);
+    const seedA = (first.prepare("SELECT random_seed AS seed FROM fixture WHERE id=1").get() as {seed:number|null}).seed;
+    const seedB = (second.prepare("SELECT random_seed AS seed FROM fixture WHERE id=1").get() as {seed:number|null}).seed;
+    assert.equal(seedA, seedB);
+    advanceNextFixture(first, 1);
+    advanceNextFixture(second, 1);
+    const events = (db: ReturnType<typeof openDatabase>) => db.prepare(`
+      SELECT minute,club_id AS clubId,player_id AS playerId,secondary_player_id AS secondaryPlayerId,
+        event_type AS type,ROUND(COALESCE(xg,0),8) AS xg,description
+      FROM match_event WHERE fixture_id=1 ORDER BY minute,id
+    `).all();
+    const momentum = (db: ReturnType<typeof openDatabase>) => db.prepare(`
+      SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,
+        home_score AS homeScore,away_score AS awayScore
+      FROM match_momentum WHERE fixture_id=1 ORDER BY minute
+    `).all();
+    assert.deepEqual(events(first), events(second));
+    assert.deepEqual(momentum(first), momentum(second));
+    const stateA = JSON.parse((first.prepare("SELECT state_json FROM match_simulation_state WHERE fixture_id=1").get() as {state_json:string}).state_json) as {engineVersion:string;seed:number;config:unknown};
+    const stateB = JSON.parse((second.prepare("SELECT state_json FROM match_simulation_state WHERE fixture_id=1").get() as {state_json:string}).state_json) as {engineVersion:string;seed:number;config:unknown};
+    assert.equal(stateA.engineVersion, stateB.engineVersion);
+    assert.equal(stateA.seed, stateB.seed);
+    assert.deepEqual(stateA.config, stateB.config);
+  } finally {
+    if (first?.open) first.close();
+    if (second?.open) second.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("online backup captures master WAL state and a played save does not mutate master or another save", async () => {
   const root = tempRoot();
   let masterDb: ReturnType<typeof openDatabase> | undefined;
