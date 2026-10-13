@@ -83,12 +83,12 @@ function shotCreationProbability(
   (tactic.passing_directness-50)*.000055+(tactic.width-50)*.000025+
   (tactic.counter_attack?.004:0)+(isHome?HOME_SHOT_CHANCE_BONUS:0)-fatigue-weatherPenalty-pitchPenalty,.05,.205);
 }
-function sampleChanceQuality(team:Team,tactic:Tactic,random:()=>number):number {
+function sampleChanceQuality(team:Team,tactic:Tactic,finishing:number,random:()=>number):number {
  const ctx=team.context??{weather:"CLEAR",temperatureC:20,pitchCondition:70,restHours:168,travelKm:0,travelHours:0};
  const qualityRoll=random();
  const baseXg=qualityRoll<.56 ? .035+random()*.06 :
   qualityRoll<.92 ? .095+random()*.075 : .17+random()*.15;
- return clamp(baseXg+(team.attacking-50)*.00042+
+ return clamp(baseXg+(team.attacking-50)*.00042+(finishing-50)*.00018+
   (tactic.tempo-50)*.00004+(tactic.passing_directness-50)*.00006+
   (tactic.width-50)*.000035-
   Math.max(0,70-ctx.pitchCondition)*.00025-
@@ -168,8 +168,7 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
    const keeperSkill=mean([keeper.reflexes,keeper.handling,keeper.positioning,keeper.concentration]);
    // Sample shot quality from low-, medium-, and high-quality chance profiles.
    // The mixture retains a similar average xG while making clear chances observable in diagnostics.
-   const xg=clamp(sampleChanceQuality(side.team,tactic,side.random)+
-    (shooter.finishing-50)*.00018,.02,.38);
+   const xg=sampleChanceQuality(side.team,tactic,shooter.finishing,side.random);
    const onTargetChance=onTargetProbability(xg);
    const onTarget=side.random()<onTargetChance;
    const goal=onTarget&&side.random()<goalConversionProbability(xg,onTargetChance,keeperSkill);
