@@ -579,7 +579,7 @@ export function runTacticalSensitivityAnalysis(
  const alternateFormation=db.prepare("SELECT id FROM formation WHERE id<>? ORDER BY id LIMIT 1").get(originalHome.tactic.formation_id) as {id:number}|undefined;
  const formationCase=clone(originalHome);
  const starters=formationCase.lineup.filter(player=>player.isStarting);
- const keeper=starters.find(player=>player.role==="GK");
+ const formationKeeper=starters.find(player=>player.role==="GK");
  const outfield=starters.filter(player=>player.role!=="GK");
  const slots=alternateFormation
   ? db.prepare("SELECT slot_number AS slot,position_code AS role FROM formation_slot WHERE formation_id=? ORDER BY slot_number").all(alternateFormation.id) as Array<{slot:number;role:string}>
@@ -587,7 +587,7 @@ export function runTacticalSensitivityAnalysis(
  const assigned:Array<{slot:number;role:string;player:MatchPlayer}>=[];
  let outfieldIndex=0;
  for(const slot of slots) {
-  const player=slot.role==="GK"?keeper:outfield[outfieldIndex++];
+  const player=slot.role==="GK"?formationKeeper:outfield[outfieldIndex++];
   if(!player) continue;
   assigned.push({slot:slot.slot,role:slot.role,player});
  }
