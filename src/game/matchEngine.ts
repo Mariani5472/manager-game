@@ -422,14 +422,24 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
  const home=loadTeam(db,fixtureId,f.home_club_id),away=loadTeam(db,fixtureId,f.away_club_id);
  const changes=db.prepare("SELECT id,minute,club_id,change_type,payload FROM match_tactical_change WHERE fixture_id=? ORDER BY minute,id").all(fixtureId) as TacticalChange[];
  const timeline=simulateMatchTimeline(home,away,seed,changes);
+ const simulationConfig = {
+  home: {clubId:home.clubId,tactic:home.tactic,context:home.context,
+   lineup:home.lineup.map(p=>({id:p.id,role:p.role,slot:p.slot,isStarting:p.isStarting,positionRating:p.positionRating}))},
+  away: {clubId:away.clubId,tactic:away.tactic,context:away.context,
+   lineup:away.lineup.map(p=>({id:p.id,role:p.role,slot:p.slot,isStarting:p.isStarting,positionRating:p.positionRating}))},
+  tacticalChanges:changes.map(change=>({id:change.id,minute:change.minute,clubId:change.club_id,type:change.change_type,payload:change.payload})),
+ };
  const existing=db.prepare("SELECT simulation_minute,state_json FROM match_simulation_state WHERE fixture_id=?")
   .get(fixtureId) as {simulation_minute:number;state_json:string}|undefined;
  let startMinute=existing?.simulation_minute??0;
  if(existing){
-  let checkpoint:{seed?:number;completed?:boolean};
+  let checkpoint:{seed?:number;completed?:boolean;config?:unknown};
   try{checkpoint=JSON.parse(existing.state_json) as {seed?:number;completed?:boolean};}
   catch{throw new Error(`Fixture ${fixtureId} has an invalid simulation checkpoint; refusing to overwrite it.`);}
   if(checkpoint.seed!==seed)throw new Error(`Fixture ${fixtureId} checkpoint seed does not match its fixture seed.`);
+  if(checkpoint.config!==undefined && JSON.stringify(checkpoint.config)!==JSON.stringify(simulationConfig)) {
+   throw new Error(`Fixture ${fixtureId} simulation inputs changed after its checkpoint; refusing a non-deterministic resume.`);
+  }
   if(startMinute<0||startMinute>90)throw new Error(`Fixture ${fixtureId} checkpoint minute is invalid.`);
  }else if(f.status==="IN_PROGRESS"){
   throw new Error(`Fixture ${fixtureId} is IN_PROGRESS but has no checkpoint; manual repair is required.`);
@@ -445,7 +455,7 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
    }
    db.prepare("INSERT INTO match_event(fixture_id,minute,event_type,xg,description) VALUES(?,0,'KICK_OFF',0,'Partida iniciada')").run(fixtureId);
    db.prepare("INSERT INTO match_simulation_state(fixture_id,state_version,simulation_minute,state_json) VALUES(?,1,0,?)")
-    .run(fixtureId,JSON.stringify({engineVersion:"1.0.0",seed,minute:0,homeScore:0,awayScore:0,completed:false}));
+    .run(fixtureId,JSON.stringify({engineVersion:"1.0.0",seed,config:simulationConfig,minute:0,homeScore:0,awayScore:0,completed:false}));
    const claimed=db.prepare("UPDATE fixture SET status='IN_PROGRESS',random_seed=?,current_minute=0,home_score=0,away_score=0 WHERE id=? AND status='SCHEDULED'").run(seed,fixtureId);
    if(claimed.changes!==1) throw new Error(`Fixture ${fixtureId} could not be claimed for simulation.`);
   });
@@ -457,7 +467,7 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
  const minuteUpdate=db.transaction((m:KernelMinute)=>{
   for(const e of m.events)insertEvent.run(fixtureId,e.minute,e.clubId,e.playerId||null,e.secondaryPlayerId,e.eventType,e.xg,e.description);
   insertMomentum.run(fixtureId,m.minute,m.homePressure,m.awayPressure,m.homeScore,m.awayScore);
-  checkpoint.run(m.minute,JSON.stringify({engineVersion:"1.0.0",seed,minute:m.minute,homeScore:m.homeScore,awayScore:m.awayScore,
+  checkpoint.run(m.minute,JSON.stringify({engineVersion:"1.0.0",seed,config:simulationConfig,minute:m.minute,homeScore:m.homeScore,awayScore:m.awayScore,
    homeShots:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id&&["GOAL","SAVE","MISS"].includes(e.eventType)).length,
    awayShots:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.away_club_id&&["GOAL","SAVE","MISS"].includes(e.eventType)).length,
    homeShotsOnTarget:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id&&(e.eventType==="GOAL"||e.eventType==="SAVE")).length,
@@ -493,7 +503,7 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
   db.prepare("UPDATE player_condition SET suspension_matches=MAX(0,suspension_matches-1) WHERE player_id IN (SELECT player_id FROM squad_membership WHERE club_id IN (?,?)) AND suspension_matches>0").run(f.home_club_id,f.away_club_id);
   db.prepare("UPDATE fixture SET status='COMPLETED',current_minute=90,home_score=?,away_score=? WHERE id=?")
    .run(timeline.result.homeScore,timeline.result.awayScore,fixtureId);
-  checkpoint.run(90,JSON.stringify({engineVersion:"1.0.0",seed,minute:90,homeScore:timeline.result.homeScore,
+  checkpoint.run(90,JSON.stringify({engineVersion:"1.0.0",seed,config:simulationConfig,minute:90,homeScore:timeline.result.homeScore,
    awayScore:timeline.result.awayScore,homeShots:timeline.result.homeShots,awayShots:timeline.result.awayShots,
    homeXg:timeline.result.homeXg,awayXg:timeline.result.awayXg,completed:true}),fixtureId);
  });
