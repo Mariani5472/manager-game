@@ -397,3 +397,27 @@ Essa separação torna as dependências inspecionáveis, mas não prova que todo
 - Adicionar bases históricas versionadas para gols/xG/finalizações e pré-registrar intervalos de aceitação por competição e período.
 - Validar os cenários com seeds distintas e intervalos de confiança, incluindo favoritos, azarões, goleiros excepcionais, mando e alterações táticas.
 - Só otimizar ou alterar a arquitetura quando as métricas identificarem o gargalo e houver benchmark antes/depois reproduzível.
+
+
+## Calibração histórica fora da amostra
+
+O comando `calibration-report` transforma um JSONL versionado de partidas reais em metas empíricas separadas cronologicamente. Cada linha deve conter `date` (`YYYY-MM-DD`), `competition`, `homeGoals` e `awayGoals`. Os campos `homeShots`, `awayShots`, `homeShotsOnTarget`, `awayShotsOnTarget`, `homeXg` e `awayXg` são opcionais; uma métrica só é calculada quando ambos os lados estão disponíveis. Não derive xG a partir de gols.
+
+```bash
+npm run build
+node dist/cli.js calibration-report --file data/historical/matches.jsonl --dataset-version "league-data-2024-v1" --split-date 2024-01-01 --sha256 <sha256-do-arquivo>
+```
+
+A partição `training` contém partidas anteriores à data de corte; `validation` contém partidas na data de corte ou posteriores. Use a primeira para explorar parâmetros e preserve a segunda para avaliação final. O relatório registra cobertura por métrica, datas, competições, tamanho das amostras e avisos de dados ausentes. O comando **não ajusta coeficientes automaticamente**: uma base real, licenciada e versionada ainda precisa ser fornecida, e os resultados do motor devem ser comparados aos alvos antes de declarar calibração empírica.
+
+## Benchmark de mundos SQLite persistidos
+
+O benchmark CPU-only isola o kernel de partidas. Para medir a geração e persistência em escala, use o comando separado, que trabalha em cópias descartáveis do save e gera uma liga de ida e volta com elencos clonados dos perfis disponíveis.
+
+```bash
+node dist/cli.js benchmark-world --save-id <save-id> --seed 90210 --scales 16,64
+# Carga pesada opcional: 256 clubes = 65.280 partidas
+node dist/cli.js benchmark-world --save-id <save-id> --seed 90210 --scales 256
+```
+
+O relatório separa preparação do mundo, temporada completa, contagem de clubes/jogadores/fixtures, partidas concluídas e tamanho do SQLite. Cada escala executa em um backup temporário e valida a integridade do banco ao final. Os perfis de jogadores são reutilizados intencionalmente: isso mede o custo de uma temporada persistida, mas não substitui a validação de diversidade dos elencos ou o custo de instalação de Data Packages reais. Execute cada escala pelo menos cinco vezes em hardware fixo e compare mediana e p95 antes de definir budgets de CI.
