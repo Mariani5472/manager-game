@@ -33,6 +33,13 @@ test("Monte Carlo diagnostics expose reproducible Wilson confidence intervals",(
       assert.equal(interval.confidenceLevel,0.95);
     }
     assert.match(first.statisticalAcceptance.interpretation,/not empirical football-calibration targets/);
+    for(const band of first.xgBands) {
+      assert.ok(band.goalInterval.lower<=band.goalRate&&band.goalRate<=band.goalInterval.upper);
+      assert.ok(band.onTargetInterval.lower<=band.onTargetRate&&band.onTargetRate<=band.onTargetInterval.upper);
+      assert.ok(band.averageXgInterval.lower<=band.averageXg&&band.averageXg<=band.averageXgInterval.upper);
+    }
+    assert.equal(first.eventProbabilities.foulPerTeamMinute,0.12);
+    assert.equal(first.eventProbabilities.injuryPerTeamMinute,0.0015);
   } finally { db.close(); rmSync(root,{recursive:true,force:true}); }
 });
 
