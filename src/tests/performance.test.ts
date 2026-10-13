@@ -46,11 +46,13 @@ test("Monte Carlo diagnostics expose reproducible Wilson confidence intervals",(
 test("engine scalability benchmarks reproduce double-round-robin match counts",()=>{
   const {root,db}=fixtureDb();
   try {
-    const first=runSyntheticSeasonScaleBenchmarks(db,[16,64],24680);
-    const second=runSyntheticSeasonScaleBenchmarks(db,[16,64],24680);
-    assert.deepEqual(first.map(row=>({clubs:row.clubs,matches:row.matches,seed:row.seed,averageGoalsPerMatch:row.averageGoalsPerMatch,drawRate:row.drawRate})),
-      second.map(row=>({clubs:row.clubs,matches:row.matches,seed:row.seed,averageGoalsPerMatch:row.averageGoalsPerMatch,drawRate:row.drawRate})));
-    assert.deepEqual(first.map(row=>[row.clubs,row.matches]),[[16,240],[64,4032]]);
+    const first=runSyntheticSeasonScaleBenchmarks(db,[16,64,256],24680);
+    const repeat16=runSyntheticSeasonScaleBenchmarks(db,[16],24680);
+    assert.deepEqual(
+      first.filter(row=>row.clubs===16).map(row=>({clubs:row.clubs,matches:row.matches,seed:row.seed,averageGoalsPerMatch:row.averageGoalsPerMatch,drawRate:row.drawRate})),
+      repeat16.map(row=>({clubs:row.clubs,matches:row.matches,seed:row.seed,averageGoalsPerMatch:row.averageGoalsPerMatch,drawRate:row.drawRate})),
+    );
+    assert.deepEqual(first.map(row=>[row.clubs,row.matches]),[[16,240],[64,4032],[256,65280]]);
     assert.ok(first.every(row=>Number.isFinite(row.durationMs)&&row.durationMs>=0&&row.matchesPerSecond>0));
   } finally { db.close(); rmSync(root,{recursive:true,force:true}); }
 });
@@ -108,6 +110,7 @@ test("performance harness measures representative operations on disposable copie
     assert.ok(report.samples.some(sample=>sample.name==="transferMarketOffer"));
     assert.ok(report.samples.some(sample=>sample.name==="sqliteValidationAndPersistence"));
     assert.ok(report.samples.every(sample=>sample.durationMs>=0&&sample.sqlQueryCount>=0&&sample.databaseBytes>=0));
+    assert.ok(report.samples.find(sample=>sample.name==="singleMatchAndPersistence")!.sqlQueryCount>0);
     assert.deepEqual(report.scalability.map(row=>row.clubs),[16]);
   } finally { db.close(); rmSync(root,{recursive:true,force:true}); }
 });
