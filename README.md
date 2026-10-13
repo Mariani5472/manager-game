@@ -274,6 +274,18 @@ Substituições dinâmicas durante o jogo e a influência completa de clima e vi
 
 
 
+### Confiabilidade P0 — contratos de persistência
+
+A implementação de confiabilidade está em evolução. As proteções atuais são:
+
+- **Partida:** a inicialização reivindica a fixture dentro de uma transação imediata e recusa reinicializar uma partida que já possui checkpoint. Cada minuto grava eventos, momentum, placar e checkpoint atomicamente. A seed é persistida na fixture e o checkpoint registra a versão do motor e a configuração inicial relevante; uma retomada com entradas alteradas é recusada em vez de produzir um replay misto.
+- **Retomada:** se uma gravação de minuto falhar, minutos já confirmados são mantidos e o processamento pode ser retomado do último checkpoint. A finalização da partida atualiza evento de fim, condições dos jogadores, suspensões, placar e checkpoint em uma transação.
+- **Rodada:** a progressão eliminatória, reconstrução da classificação e atualização do status da temporada são agrupadas em uma transação. Reinvocar uma rodada já concluída também revalida esse pós-processamento antes de informar que não havia partidas para simular.
+- **Finanças:** renovação de contrato, criação de proposta e resolução de negociação são executadas sob transações imediatas, para serializar validações de saldo/orçamento com as gravações. Uma falha ao vincular o jogador deve reverter as movimentações financeiras e o estado da proposta.
+- **Web:** o servidor local agora escuta somente em `127.0.0.1`. A leitura de estado não persiste escalações sugeridas e pode consultar a classificação sem reconstruir o cache durante um GET.
+
+Esses contratos não equivalem a uma auditoria formal completa. A suíte contém testes de falha induzida para retomada de partida e rollback de transferência, mas ainda é necessário executar o CI e ampliar os testes de concorrência, virada de temporada, integridade de inscrições e vínculos, migrações e análise estatística de probabilidades/xG. Não exponha a interface web à rede: ela não possui autenticação.
+
 ### Auditoria de integridade do save
 
 O comando `integrity-audit` executa uma verificação **somente de leitura** em uma campanha. Ele não corrige nem apaga dados automaticamente: inconsistências precisam ser investigadas antes de qualquer reparo.
