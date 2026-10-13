@@ -238,9 +238,33 @@ export function runTacticalImpactAnalysis(db:SqliteDatabase,homeClubId:number,aw
 export interface XgBandDiagnostic {
  band:string;shots:number;averageXg:number;onTargetRate:number;goalRate:number;saveRate:number;missRate:number;goals:number;saves:number;misses:number;
 }
+export interface BinomialConfidenceInterval {
+ estimate:number;
+ lower:number;
+ upper:number;
+ successes:number;
+ trials:number;
+ confidenceLevel:number;
+}
+function wilsonInterval(rate:number,trials:number,confidenceLevel=0.95):BinomialConfidenceInterval {
+ const successes=Math.round(clamp(rate,0,1)*trials);
+ const z=confidenceLevel===0.95?1.959963984540054:confidenceLevel===0.99?2.5758293035489004:1.959963984540054;
+ const p=successes/trials,z2=z*z,denominator=1+z2/trials;
+ const center=(p+z2/(2*trials))/denominator;
+ const margin=(z*Math.sqrt((p*(1-p)+z2/(4*trials))/trials))/denominator;
+ return {estimate:p,lower:Math.max(0,center-margin),upper:Math.min(1,center+margin),successes,trials,confidenceLevel};
+}
 export interface MatchEngineDiagnostics {
  simulations:number;
  baseline:MonteCarloReport;
+ statisticalAcceptance:{
+  method:"Wilson score interval";
+  confidenceLevel:number;
+  outcomes:{homeWin:BinomialConfidenceInterval;draw:BinomialConfidenceInterval;awayWin:BinomialConfidenceInterval};
+  outcomeRatesSum:number;
+  outcomeRatesPartition:boolean;
+  interpretation:string;
+ };
  xgBands:XgBandDiagnostic[];
  homeAdvantage:{clubA:number;clubB:number;clubAWinRateAtHome:number;clubAWinRateAway:number;homeAdvantageDelta:number;shotChanceBonus:number;note:string};
  strengthGap:{weakClubId:number;strongClubId:number;weakStrength:number;strongStrength:number;strengthDifference:number;hasMeaningfulGap:boolean;note:string;strongWinRate:number;drawRate:number;weakWinRate:number;strongAverageGoals:number;weakAverageGoals:number};
@@ -291,8 +315,20 @@ export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=884
    if(r.simulation_minute!==90||!checkpointCompleted)issues.push(`Fixture ${r.id}: final checkpoint exists but is malformed or incomplete`);
   }
  }
+ const outcomeRatesSum=baseline.homeWinRate+baseline.drawRate+baseline.awayWinRate;
  return {
-  simulations,baseline,xgBands,
+  simulations,baseline,
+  statisticalAcceptance:{
+   method:"Wilson score interval",confidenceLevel:0.95,
+   outcomes:{
+    homeWin:wilsonInterval(baseline.homeWinRate,simulations),
+    draw:wilsonInterval(baseline.drawRate,simulations),
+    awayWin:wilsonInterval(baseline.awayWinRate,simulations),
+   },
+   outcomeRatesSum,outcomeRatesPartition:Math.abs(outcomeRatesSum-1)<=1e-9,
+   interpretation:"These are Monte Carlo sampling-uncertainty intervals, not empirical football-calibration targets. Compare them with historical baselines before declaring the model calibrated.",
+  },
+  xgBands,
   homeAdvantage:{clubA:strong.team.clubId,clubB:weak.team.clubId,clubAWinRateAtHome:ab.homeWinRate,clubAWinRateAway:ba.awayWinRate,homeAdvantageDelta:ab.homeWinRate-ba.awayWinRate,shotChanceBonus:HOME_SHOT_CHANCE_BONUS,note:"Explicit home advantage: +0.004 absolute shot-creation probability per minute for the home side. The win-rate delta is a seeded Monte Carlo estimate, not a guarantee."},
   strengthGap:{weakClubId:weak.team.clubId,strongClubId:strong.team.clubId,weakStrength:weak.value,strongStrength:strong.value,strengthDifference:strong.value-weak.value,hasMeaningfulGap:strong.value-weak.value>=8,note:strong.value-weak.value>=8?"Club ratings provide a useful strength contrast.":"Available clubs are too similar for a meaningful favorite-versus-underdog test; use a save with a larger ratings spread.",strongWinRate:baseline.homeWinRate,drawRate:baseline.drawRate,weakWinRate:baseline.awayWinRate,strongAverageGoals:baseline.averageHomeGoals,weakAverageGoals:baseline.averageAwayGoals},
   persistedMatches:{checked:persistedRows.length,issues,warnings}
