@@ -46,6 +46,7 @@ function summarize(records: HistoricalMatchRecord[]): HistoricalMetricSummary {
   const sot=records.filter(m=>m.homeShotsOnTarget!==undefined&&m.awayShotsOnTarget!==undefined).map(m=>m.homeShotsOnTarget!+m.awayShotsOnTarget!);
   const xg=records.filter(m=>m.homeXg!==undefined&&m.awayXg!==undefined).map(m=>m.homeXg!+m.awayXg!);
   const avgGoals=goals.reduce((s,v)=>s+v,0)/n;
+  const averageShots=average(shots),averageSot=average(sot),averageXg=average(xg);
   return {
     matches:n,firstDate:records[0]!.date,lastDate:records[n-1]!.date,
     homeWinRate:home/n,drawRate:draws/n,awayWinRate:(n-home-draws)/n,
@@ -54,9 +55,9 @@ function summarize(records: HistoricalMatchRecord[]): HistoricalMetricSummary {
     goallessRate:goals.filter(v=>v===0).length/n,sixPlusTotalGoalsRate:goals.filter(v=>v>=6).length/n,
     homeWinByThreePlusRate:records.filter(m=>m.homeGoals-m.awayGoals>=3).length/n,
     awayWinByThreePlusRate:records.filter(m=>m.awayGoals-m.homeGoals>=3).length/n,
-    ...(average(shots)===undefined?{}:{averageTotalShots:average(shots)}),
-    ...(average(sot)===undefined?{}:{averageTotalShotsOnTarget:average(sot)}),
-    ...(average(xg)===undefined?{}:{averageTotalXg:average(xg)}),
+    ...(averageShots===undefined?{}:{averageTotalShots:averageShots}),
+    ...(averageSot===undefined?{}:{averageTotalShotsOnTarget:averageSot}),
+    ...(averageXg===undefined?{}:{averageTotalXg:averageXg}),
     coverage:{shots:shots.length,shotsOnTarget:sot.length,xg:xg.length},
   };
 }
