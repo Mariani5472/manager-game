@@ -166,8 +166,9 @@ export function auditGameIntegrity(db: SqliteDatabase, fixtureLimit = 500): Inte
 
   const invalidParticipants = db.prepare(`
     SELECT sp.stage_id, sp.club_id FROM stage_participant sp
+    JOIN competition_stage st ON st.id=sp.stage_id
     LEFT JOIN stage_standing ss ON ss.stage_id=sp.stage_id AND ss.club_id=sp.club_id
-    WHERE ss.club_id IS NULL LIMIT 100
+    WHERE st.stage_kind IN ('LEAGUE','GROUPS') AND ss.club_id IS NULL LIMIT 100
   `).all() as Array<{stage_id:number;club_id:number}>;
   for (const row of invalidParticipants) {
     findings.push({ severity: "ERROR", code: "PARTICIPANT_WITHOUT_STANDING", entity: "stage",
