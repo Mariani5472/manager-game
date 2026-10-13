@@ -59,6 +59,14 @@ interface KernelMinute { minute:number; homePressure:number; awayPressure:number
 interface TacticalChange {id:number;minute:number;club_id:number;change_type:string;payload:string;}
 interface KernelTimeline {result:SimulatedMatchResult; events:KernelShotEvent[]; minutes:KernelMinute[];}
 const HOME_SHOT_CHANCE_BONUS=0.004; // +0.4 percentage points per minute: modest, isolated home advantage.
+export const MATCH_EVENT_PROBABILITIES = {
+ foulPerTeamMinute:0.12,
+ yellowCardPerTeamMinute:0.022,
+ redCardPerTeamMinute:0.0005,
+ injuryPerTeamMinute:0.0015,
+ defensiveErrorPerDefendingTeamMinute:0.0015,
+ substitutionAttemptPerTeamMinuteAfter60:0.035,
+} as const;
 function mentalityShotModifier(value:string):number {
  return ({"VERY_DEFENSIVE":-.018,"DEFENSIVE":-.009,"BALANCED":0,"ATTACKING":.009,"VERY_ATTACKING":.018}[value]??0);
 }
@@ -163,26 +171,37 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
     {team:home,random:homeEventRandom},
     {team:away,random:awayEventRandom},
   ]) {
-   const active=incident.team.lineup.filter(player=>player.isStarting&&player.role!=="GK");
-   if(!active.length) continue;
-   const chooseActive=()=>active[Math.floor(incident.random()*active.length)]!;
-   if(incident.random()<.12) {
+   const chooseActive=()=>{
+    const active=incident.team.lineup.filter(player=>player.isStarting&&player.role!=="GK");
+    return active.length?active[Math.floor(incident.random()*active.length)]:undefined;
+   };
+   if(!chooseActive()) continue;
+   if(incident.random()<MATCH_EVENT_PROBABILITIES.foulPerTeamMinute) {
+    const player=chooseActive();
+    if(player) {
     const player=chooseActive();
     const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:player.id,secondaryPlayerId:null,eventType:"FOUL",xg:0,description:`Falta cometida por ${player.name}`};
     minuteEvents.push(event);events.push(event);
+    }
    }
-   if(incident.random()<.022) {
+   if(incident.random()<MATCH_EVENT_PROBABILITIES.yellowCardPerTeamMinute) {
     const player=chooseActive();
-    const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:player.id,secondaryPlayerId:null,eventType:"YELLOW_CARD",xg:0,description:`Cartão amarelo para ${player.name}`};
-    minuteEvents.push(event);events.push(event);
+    if(player) {
+     const secondYellow=events.some(event=>event.clubId===incident.team.clubId&&event.playerId===player.id&&event.eventType==="YELLOW_CARD");
+     if(secondYellow) { player.isStarting=false;refreshTeamStrength(incident.team); }
+     const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:player.id,secondaryPlayerId:null,eventType:secondYellow?"RED_CARD":"YELLOW_CARD",xg:0,description:secondYellow?`Segundo amarelo e expulsão para ${player.name}`:`Cartão amarelo para ${player.name}`};
+     minuteEvents.push(event);events.push(event);
+    }
    }
-   if(incident.random()<.0005) {
+   if(incident.random()<MATCH_EVENT_PROBABILITIES.redCardPerTeamMinute) {
     const player=chooseActive();
-    player.isStarting=false;refreshTeamStrength(incident.team);
-    const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:player.id,secondaryPlayerId:null,eventType:"RED_CARD",xg:0,description:`Cartão vermelho para ${player.name}`};
-    minuteEvents.push(event);events.push(event);
+    if(player) {
+     player.isStarting=false;refreshTeamStrength(incident.team);
+     const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:player.id,secondaryPlayerId:null,eventType:"RED_CARD",xg:0,description:`Cartão vermelho para ${player.name}`};
+     minuteEvents.push(event);events.push(event);
+    }
    }
-   if(incident.random()<.0015) {
+   if(incident.random()<MATCH_EVENT_PROBABILITIES.injuryPerTeamMinute) {
     const currentlyActive=incident.team.lineup.filter(player=>player.isStarting&&player.role!=="GK");
     if(currentlyActive.length) {
      const injured=currentlyActive[Math.floor(incident.random()*currentlyActive.length)]!;
@@ -200,6 +219,19 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
      refreshTeamStrength(incident.team);
     }
    }
+   const substitutionsUsed=events.filter(event=>event.clubId===incident.team.clubId&&event.eventType==="SUBSTITUTION").length;
+   if(minute>=60&&substitutionsUsed<3&&incident.random()<MATCH_EVENT_PROBABILITIES.substitutionAttemptPerTeamMinuteAfter60) {
+    const activeNow=incident.team.lineup.filter(player=>player.isStarting&&player.role!=="GK");
+    const bench=incident.team.lineup.filter(player=>!player.isStarting&&player.role!=="GK");
+    if(activeNow.length&&bench.length) {
+     const outgoing=activeNow[Math.floor(incident.random()*activeNow.length)]!;
+     const incoming=bench[Math.floor(incident.random()*bench.length)]!;
+     outgoing.isStarting=false;incoming.isStarting=true;incoming.role=outgoing.role;incoming.slot=outgoing.slot;
+     refreshTeamStrength(incident.team);
+     const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição tática: ${outgoing.name} sai, ${incoming.name} entra`};
+     minuteEvents.push(event);events.push(event);
+    }
+   }
   }
   const hp=teamPressure(home,homeRandom),ap=teamPressure(away,awayRandom);
   for(const side of [
@@ -208,7 +240,7 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
   ]){
    const tactic=side.team.tactic;
    const ctx=side.team.context??{weather:"CLEAR",temperatureC:20,pitchCondition:70,restHours:168,travelKm:0,travelHours:0};
-   const defensiveError=side.opponentErrorRandom()<.0015;
+   const defensiveError=side.opponentErrorRandom()<MATCH_EVENT_PROBABILITIES.defensiveErrorPerDefendingTeamMinute;
    const chance=shotCreationProbability(side.team,side.opponent,side.isHome,side.pressure,side.opponentPressure);
    if(!defensiveError&&side.random()>=chance)continue;
    if(defensiveError) {
