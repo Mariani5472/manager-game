@@ -175,12 +175,11 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
     const active=incident.team.lineup.filter(player=>player.isStarting&&player.role!=="GK");
     return active.length?active[Math.floor(incident.random()*active.length)]:undefined;
    };
-   if(!chooseActive()) continue;
+   if(!incident.team.lineup.some(player=>player.isStarting&&player.role!=="GK")) continue;
    if(incident.random()<MATCH_EVENT_PROBABILITIES.foulPerTeamMinute) {
     const player=chooseActive();
     if(player) {
-    const player=chooseActive();
-    const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:player.id,secondaryPlayerId:null,eventType:"FOUL",xg:0,description:`Falta cometida por ${player.name}`};
+     const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:player.id,secondaryPlayerId:null,eventType:"FOUL",xg:0,description:`Falta cometida por ${player.name}`};
     minuteEvents.push(event);events.push(event);
     }
    }
