@@ -5,7 +5,7 @@ import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import type { SqliteDatabase } from "../db/database.js";
 import { openDatabase, validateDatabase } from "../db/database.js";
 import { advanceStageRound } from "./gameService.js";
-import { runSyntheticSeasonScaleBenchmarks } from "./matchEngine.js";
+import { runSyntheticSeasonScaleBenchmarks, simulateMatch } from "./matchEngine.js";
 import { applyRosterSeason, createTransferOffer } from "./rosterLifecycle.js";
 
 export interface BenchmarkSample {
@@ -173,10 +173,7 @@ export async function runPerformanceBenchmark(
   const scalability=scaleSample.details as ReturnType<typeof runSyntheticSeasonScaleBenchmarks>;
   samples.push({...scaleSample,details:{scales:scalability.map(row=>({clubs:row.clubs,matches:row.matches}))}});
 
-  samples.push(await withDisposableCopy(source,async(db,path)=>measure(db,path,"singleMatchAndPersistence",async()=>{
-    const {simulateMatch}=await import("./matchEngine.js");
-    return simulateMatch(db,nextScheduledFixture(db));
-  })));
+  samples.push(await withDisposableCopy(source,(db,path)=>measure(db,path,"singleMatchAndPersistence",()=>simulateMatch(db,nextScheduledFixture(db)))));
 
   samples.push(await withDisposableCopy(source,dbPath=>measure(dbPath,dbPath.name,"roundAndStandings",()=>benchmarkRound(dbPath))));
 
