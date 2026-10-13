@@ -370,6 +370,7 @@ export interface MatchEngineDiagnostics {
  xgBands:XgBandDiagnostic[];
  homeAdvantage:{clubA:number;clubB:number;clubAWinRateAtHome:number;clubAWinRateAway:number;homeAdvantageDelta:number;shotChanceBonus:number;note:string};
  strengthGap:{weakClubId:number;strongClubId:number;weakStrength:number;strongStrength:number;strengthDifference:number;hasMeaningfulGap:boolean;note:string;strongWinRate:number;drawRate:number;weakWinRate:number;strongAverageGoals:number;weakAverageGoals:number};
+ eventProbabilities:typeof MATCH_EVENT_PROBABILITIES;
  persistedMatches:{checked:number;issues:string[];warnings:string[]};
 }
 export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=88421):MatchEngineDiagnostics {
@@ -432,6 +433,7 @@ export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=884
    interpretation:"These are Monte Carlo sampling-uncertainty intervals, not empirical football-calibration targets. Compare them with historical baselines before declaring the model calibrated.",
   },
   xgBands,
+  eventProbabilities:MATCH_EVENT_PROBABILITIES,
   homeAdvantage:{clubA:strong.team.clubId,clubB:weak.team.clubId,clubAWinRateAtHome:ab.homeWinRate,clubAWinRateAway:ba.awayWinRate,homeAdvantageDelta:ab.homeWinRate-ba.awayWinRate,shotChanceBonus:HOME_SHOT_CHANCE_BONUS,note:"Explicit home advantage: +0.004 absolute shot-creation probability per minute for the home side. The win-rate delta is a seeded Monte Carlo estimate, not a guarantee."},
   strengthGap:{weakClubId:weak.team.clubId,strongClubId:strong.team.clubId,weakStrength:weak.value,strongStrength:strong.value,strengthDifference:strong.value-weak.value,hasMeaningfulGap:strong.value-weak.value>=8,note:strong.value-weak.value>=8?"Club ratings provide a useful strength contrast.":"Available clubs are too similar for a meaningful favorite-versus-underdog test; use a save with a larger ratings spread.",strongWinRate:baseline.homeWinRate,drawRate:baseline.drawRate,weakWinRate:baseline.awayWinRate,strongAverageGoals:baseline.averageHomeGoals,weakAverageGoals:baseline.averageAwayGoals},
   persistedMatches:{checked:persistedRows.length,issues,warnings}
@@ -664,6 +666,7 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
  persistMatchEnvironment(db,fixtureId,context);
  const home=loadTeam(db,fixtureId,f.home_club_id),away=loadTeam(db,fixtureId,f.away_club_id);
  const changes=db.prepare("SELECT id,minute,club_id,change_type,payload FROM match_tactical_change WHERE fixture_id=? ORDER BY minute,id").all(fixtureId) as TacticalChange[];
+ const initiallyStartingPlayerIds=new Set([...home.lineup,...away.lineup].filter(player=>player.isStarting).map(player=>player.id));
  const timeline=simulateMatchTimeline(home,away,seed,changes);
  const simulationConfig = {
   home: {clubId:home.clubId,tactic:home.tactic,context:home.context,
@@ -732,8 +735,12 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
   for(const team of [home,away])for(const p of team.lineup){
    const substitutionOut=timeline.events.find(e=>e.eventType==="SUBSTITUTION"&&e.playerId===p.id);
    const substitutionIn=timeline.events.find(e=>e.eventType==="SUBSTITUTION"&&e.secondaryPlayerId===p.id);
-   const loss=p.isStarting?(substitutionOut?9:14):(substitutionIn?7:2);
-   const minutesPlayed=p.isStarting?(substitutionOut?substitutionOut.minute:90):(substitutionIn?90-substitutionIn.minute:0);
+   const injury=timeline.events.find(e=>e.eventType==="INJURY"&&e.playerId===p.id);
+   const redCard=timeline.events.find(e=>e.eventType==="RED_CARD"&&e.playerId===p.id);
+   const wasStarter=initiallyStartingPlayerIds.has(p.id);
+   const exitEvent=substitutionOut??injury??redCard;
+   const loss=wasStarter?(exitEvent?9:14):(substitutionIn?7:2);
+   const minutesPlayed=wasStarter?(exitEvent?exitEvent.minute:90):(substitutionIn?90-substitutionIn.minute:0);
    state.run(fixtureId,p.id,team.clubId,Math.max(0,p.energy-loss),p.isStarting?6.3:6,minutesPlayed);
    db.prepare("UPDATE player_condition SET energy=MAX(0,energy-?) WHERE player_id=?").run(loss,p.id);
    if(p.isStarting){
