@@ -100,6 +100,46 @@ test("init-master repair restores six factory league rounds without touching the
   } finally { rmSync(root,{recursive:true,force:true}); }
 });
 
+test("match processing resumes after an injected minute write failure without duplicate events or momentum", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof openDatabase> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Interrupted Match", 1);
+    db = manager.open(save.filePath);
+    db.exec(`
+      CREATE TRIGGER test_injected_minute_failure
+      BEFORE INSERT ON match_momentum
+      WHEN NEW.minute = 45
+      BEGIN SELECT RAISE(ABORT, 'injected interruption'); END;
+    `);
+    assert.throws(() => advanceNextFixture(db!, 1), /injected interruption/);
+    const interrupted = db.prepare("SELECT status,current_minute,random_seed AS seed FROM fixture WHERE id=1")
+      .get() as {status:string;current_minute:number;seed:number|null};
+    assert.equal(interrupted.status, "IN_PROGRESS");
+    assert.equal(interrupted.current_minute, 44);
+    assert.ok(interrupted.seed !== null);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number}).n, 44);
+
+    db.exec("DROP TRIGGER test_injected_minute_failure");
+    const summary = advanceNextFixture(db, 1);
+    assert.equal(summary.minutes, 90);
+    assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number}).n, 90);
+    assert.equal((db.prepare("SELECT COUNT(DISTINCT minute) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number}).n, 90);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_event WHERE fixture_id=1 AND event_type='KICK_OFF'").get() as {n:number}).n, 1);
+    const checkpoint = db.prepare("SELECT state_json FROM match_simulation_state WHERE fixture_id=1").get() as {state_json:string};
+    const state = JSON.parse(checkpoint.state_json) as {engineVersion:string;seed:number;completed:boolean;minute:number};
+    assert.equal(state.engineVersion, "1.0.0");
+    assert.equal(state.seed, interrupted.seed);
+    assert.equal(state.completed, true);
+    assert.equal(state.minute, 90);
+    assert.equal((db.prepare("SELECT random_seed AS seed FROM fixture WHERE id=1").get() as {seed:number}).seed, interrupted.seed);
+  } finally {
+    if (db?.open) db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("online backup captures master WAL state and a played save does not mutate master or another save", async () => {
   const root = tempRoot();
   let masterDb: ReturnType<typeof openDatabase> | undefined;
