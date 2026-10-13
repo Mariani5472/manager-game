@@ -534,6 +534,27 @@ export function runTacticalSensitivityAnalysis(
   striker.role="CM";refreshTeamStrength(roleCase);
   scenarios.push({name:"striker_role_changed_to_cm",changedVariable:"player role",value:"ST->CM",home:roleCase});
  }
+ const alternateFormation=db.prepare("SELECT id FROM formation WHERE id<>? ORDER BY id LIMIT 1").get(originalHome.tactic.formation_id) as {id:number}|undefined;
+ if(alternateFormation) {
+  const slots=db.prepare("SELECT slot_number AS slot,position_code AS role FROM formation_slot WHERE formation_id=? ORDER BY slot_number").all(alternateFormation.id) as Array<{slot:number;role:string}>;
+  const formationCase=clone(originalHome);
+  const starters=formationCase.lineup.filter(player=>player.isStarting);
+  const keeper=starters.find(player=>player.role==="GK");
+  const outfield=starters.filter(player=>player.role!=="GK");
+  const assigned:Array<{slot:number;role:string;player:MatchPlayer}>=[];
+  let outfieldIndex=0;
+  for(const slot of slots) {
+   const player=slot.role==="GK"?keeper:outfield[outfieldIndex++];
+   if(!player) continue;
+   assigned.push({slot:slot.slot,role:slot.role,player});
+  }
+  if(assigned.length===11&&assigned.filter(item=>item.role==="GK"&&item.player.goalkeeper===1).length===1) {
+   for(const item of assigned) {item.player.slot=item.slot;item.player.role=item.role;}
+   formationCase.tactic={...formationCase.tactic,formation_id:alternateFormation.id};
+   refreshTeamStrength(formationCase);
+   scenarios.push({name:"alternate_formation",changedVariable:"formation",value:alternateFormation.id,home:formationCase});
+  }
+ }
  const rows=scenarios.map(s=>{
   const result=runMonteCarlo(s.home,originalAway,simulations,seed);
   return {name:s.name,changedVariable:s.changedVariable,value:s.value,
