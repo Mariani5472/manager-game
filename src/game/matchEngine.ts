@@ -337,8 +337,14 @@ export function runTacticalImpactAnalysis(db:SqliteDatabase,homeClubId:number,aw
  return {homeClubId,awayClubId,simulations,seed,scenarios};
 }
 
+export interface MeanConfidenceInterval {estimate:number;lower:number;upper:number;observations:number;confidenceLevel:number;}
 export interface XgBandDiagnostic {
- band:string;shots:number;averageXg:number;onTargetRate:number;goalRate:number;saveRate:number;missRate:number;goals:number;saves:number;misses:number;
+ band:string;shots:number;averageXg:number;averageXgInterval:MeanConfidenceInterval;
+ onTargetRate:number;onTargetInterval:BinomialConfidenceInterval;
+ goalRate:number;goalInterval:BinomialConfidenceInterval;
+ saveRate:number;saveInterval:BinomialConfidenceInterval;
+ missRate:number;missInterval:BinomialConfidenceInterval;
+ goals:number;saves:number;misses:number;
 }
 export interface BinomialConfidenceInterval {
  estimate:number;
@@ -347,6 +353,13 @@ export interface BinomialConfidenceInterval {
  successes:number;
  trials:number;
  confidenceLevel:number;
+}
+function meanConfidenceInterval(sum:number,sumSquares:number,observations:number,confidenceLevel=0.95):MeanConfidenceInterval {
+ const estimate=observations?sum/observations:0;
+ if(observations<2) return {estimate,lower:0,upper:.38,observations,confidenceLevel};
+ const variance=Math.max(0,(sumSquares-sum*sum/observations)/(observations-1));
+ const margin=1.959963984540054*Math.sqrt(variance/observations);
+ return {estimate,lower:Math.max(0,estimate-margin),upper:Math.min(.38,estimate+margin),observations,confidenceLevel};
 }
 function wilsonInterval(rate:number,trials:number,confidenceLevel=0.95):BinomialConfidenceInterval {
  const successes=Math.round(clamp(rate,0,1)*trials);
@@ -383,25 +396,25 @@ export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=884
  const weak=ranked[0]!,strong=ranked[ranked.length-1]!;
  const baseline=runMonteCarlo(strong.team,weak.team,simulations,seed);
  const bands=[
-  {label:"0.00-0.05",min:0,max:.05,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
-  {label:"0.05-0.10",min:.05,max:.10,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
-  {label:"0.10-0.15",min:.10,max:.15,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
-  {label:"0.15-0.20",min:.15,max:.20,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
-  {label:"0.20+",min:.20,max:Infinity,shots:0,xg:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.00-0.05",min:0,max:.05,shots:0,xg:0,xgSquared:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.05-0.10",min:.05,max:.10,shots:0,xg:0,xgSquared:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.10-0.15",min:.10,max:.15,shots:0,xg:0,xgSquared:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.15-0.20",min:.15,max:.20,shots:0,xg:0,xgSquared:0,onTarget:0,goals:0,saves:0,misses:0},
+  {label:"0.20+",min:.20,max:Infinity,shots:0,xg:0,xgSquared:0,onTarget:0,goals:0,saves:0,misses:0},
  ];
  for(let i=0;i<simulations;i++){
   const timeline=simulateMatchTimeline(strong.team,weak.team,seed+i*7919);
   for(const e of timeline.events){
    if(!["GOAL","SAVE","MISS"].includes(e.eventType)) continue;
    const b=bands.find(item=>e.xg>=item.min&&e.xg<item.max)!;
-   b.shots++;b.xg+=e.xg;
+   b.shots++;b.xg+=e.xg;b.xgSquared+=e.xg*e.xg;
    if(e.eventType==="GOAL"){b.goals++;b.onTarget++;}
    else if(e.eventType==="SAVE"){b.saves++;b.onTarget++;}
    else b.misses++;
   }
  }
  
- const xgBands: XgBandDiagnostic[]=bands.filter(b=>b.shots>0).map(b=>({band:b.label,shots:b.shots,averageXg:b.xg/b.shots,onTargetRate:b.onTarget/b.shots,goalRate:b.goals/b.shots,saveRate:b.saves/b.shots,missRate:b.misses/b.shots,goals:b.goals,saves:b.saves,misses:b.misses}));
+ const xgBands: XgBandDiagnostic[]=bands.filter(b=>b.shots>0).map(b=>({band:b.label,shots:b.shots,averageXg:b.xg/b.shots,averageXgInterval:meanConfidenceInterval(b.xg,b.xgSquared,b.shots),onTargetRate:b.onTarget/b.shots,onTargetInterval:wilsonInterval(b.onTarget/b.shots,b.shots),goalRate:b.goals/b.shots,goalInterval:wilsonInterval(b.goals/b.shots,b.shots),saveRate:b.saves/b.shots,saveInterval:wilsonInterval(b.saves/b.shots,b.shots),missRate:b.misses/b.shots,missInterval:wilsonInterval(b.misses/b.shots,b.shots),goals:b.goals,saves:b.saves,misses:b.misses}));
  const ab=runMonteCarlo(strong.team,weak.team,simulations,seed+1700003);
  const ba=runMonteCarlo(weak.team,strong.team,simulations,seed+1700003);
  const persistedRows=db.prepare("SELECT f.id,f.home_club_id,f.away_club_id,f.home_score,f.away_score,f.current_minute, s.simulation_minute,s.state_json,(SELECT COUNT(*) FROM match_momentum m WHERE m.fixture_id=f.id) AS momentum_count,(SELECT COUNT(*) FROM match_event e WHERE e.fixture_id=f.id AND e.event_type='GOAL' AND e.club_id=f.home_club_id) AS event_home_goals,(SELECT COUNT(*) FROM match_event e WHERE e.fixture_id=f.id AND e.event_type='GOAL' AND e.club_id=f.away_club_id) AS event_away_goals FROM fixture f LEFT JOIN match_simulation_state s ON s.fixture_id=f.id WHERE f.status='COMPLETED' ORDER BY f.id DESC LIMIT 100").all() as Array<{id:number;home_score:number;away_score:number;current_minute:number;simulation_minute:number|null;state_json:string|null;momentum_count:number;event_home_goals:number;event_away_goals:number}>;
