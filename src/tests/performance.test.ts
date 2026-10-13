@@ -91,6 +91,7 @@ test("performance harness measures representative operations on disposable copie
     assert.equal(report.seed,777);
     assert.equal(report.sourceClubCount,16);
     assert.ok(report.samples.some(sample=>sample.name==="singleMatchAndPersistence"));
+    assert.ok(report.samples.some(sample=>sample.name==="aiMatchAndPersistence"));
     assert.ok(report.samples.some(sample=>sample.name==="roundAndStandings"));
     const seasonSample=report.samples.find(sample=>sample.name==="completeCampaignSeason");
     assert.ok(seasonSample);
