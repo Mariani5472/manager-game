@@ -337,6 +337,85 @@ export function runEngineDiagnostics(db:SqliteDatabase,simulations=2000,seed=884
 
 
 
+export interface TacticalSensitivityScenario {
+ name:string;
+ changedVariable:string;
+ value:string|number;
+ homeWinRate:number;
+ homeWinRateDelta:number;
+ averageHomeGoals:number;
+ averageHomeGoalsDelta:number;
+ homeShotsPerMatch:number;
+ homeShotsDelta:number;
+ averageTotalXg:number;
+ averageTotalXgDelta:number;
+}
+export interface TacticalSensitivityReport {
+ homeClubId:number;
+ awayClubId:number;
+ simulations:number;
+ seed:number;
+ baseline:MonteCarloReport;
+ scenarios:TacticalSensitivityScenario[];
+}
+
+/** One-variable-at-a-time sensitivity analysis using common seeds for comparison. */
+export function runTacticalSensitivityAnalysis(
+ db:SqliteDatabase,homeClubId:number,awayClubId:number,simulations=1000,seed=73421,
+):TacticalSensitivityReport {
+ if(homeClubId===awayClubId) throw new Error("Sensitivity analysis requires two different clubs.");
+ if(!Number.isSafeInteger(simulations)||simulations<100) throw new Error("Sensitivity simulations must be an integer >= 100.");
+ const originalHome=loadTeam(db,-1,homeClubId,false),originalAway=loadTeam(db,-1,awayClubId,false);
+ const baseline=runMonteCarlo(originalHome,originalAway,simulations,seed);
+ const clone=(team:Team):Team=>({...team,tactic:{...team.tactic},lineup:team.lineup.map(player=>({...player})),context:team.context?{...team.context}:undefined});
+ const scenarios:Array<{name:string;changedVariable:string;value:string|number;home:Team}>=[];
+ const tacticCase=(name:string,key:keyof Tactic,value:number|string)=>{
+  const home=clone(originalHome);home.tactic={...home.tactic,[key]:value};scenarios.push({name,changedVariable:String(key),value,home});
+ };
+ tacticCase("pressing_low","pressing",20);tacticCase("pressing_high","pressing",80);
+ tacticCase("tempo_low","tempo",20);tacticCase("tempo_high","tempo",80);
+ tacticCase("defensive_line_low","defensive_line",20);tacticCase("defensive_line_high","defensive_line",80);
+ tacticCase("width_low","width",20);tacticCase("width_high","width",80);
+ tacticCase("passing_directness_low","passing_directness",20);tacticCase("passing_directness_high","passing_directness",80);
+ tacticCase("counter_attack_off","counter_attack",0);tacticCase("counter_attack_on","counter_attack",1);
+ tacticCase("mentality_defensive","mentality","DEFENSIVE");tacticCase("mentality_very_attacking","mentality","VERY_ATTACKING");
+ for(const attribute of ["energy","morale","sharpness"] as const) for(const value of [20,80]) {
+  const home=clone(originalHome);
+  home.lineup=home.lineup.map(player=>player.isStarting?{...player,[attribute]:value}:player);
+  refreshTeamStrength(home);
+  scenarios.push({name:attribute+"_"+value,changedVariable:attribute,value,home});
+ }
+ for(const [name,contextPatch,value] of [
+  ["weather_clear",{weather:"CLEAR"},"CLEAR"],
+  ["weather_heavy_rain",{weather:"HEAVY_RAIN"},"HEAVY_RAIN"],
+  ["pitch_poor",{pitchCondition:35},35],
+  ["pitch_good",{pitchCondition:90},90],
+  ["rest_short",{restHours:24},24],
+  ["rest_full",{restHours:168},168],
+  ["travel_none",{travelKm:0},0],
+  ["travel_long",{travelKm:1200},1200],
+ ] as Array<[string,Partial<MatchContext>,string|number]>) {
+  const home=clone(originalHome);
+  home.context={...(home.context??{weather:"CLEAR",temperatureC:20,pitchCondition:70,restHours:168,travelKm:0,travelHours:0}),...contextPatch} as MatchContext;
+  scenarios.push({name,changedVariable:name.split("_")[0]!,value,home});
+ }
+ const keeperCase=clone(originalHome);
+ const keeper=keeperCase.lineup.find(player=>player.isStarting&&player.role==="GK");
+ if(keeper) {
+  keeper.reflexes=95;keeper.handling=95;keeper.positioning=95;keeper.concentration=95;refreshTeamStrength(keeperCase);
+  scenarios.push({name:"exceptional_goalkeeper",changedVariable:"goalkeeper attributes",value:95,home:keeperCase});
+ }
+ const rows=scenarios.map(s=>{
+  const result=runMonteCarlo(s.home,originalAway,simulations,seed);
+  return {name:s.name,changedVariable:s.changedVariable,value:s.value,
+   homeWinRate:result.homeWinRate,homeWinRateDelta:result.homeWinRate-baseline.homeWinRate,
+   averageHomeGoals:result.averageHomeGoals,averageHomeGoalsDelta:result.averageHomeGoals-baseline.averageHomeGoals,
+   homeShotsPerMatch:result.homeShotRate,homeShotsDelta:result.homeShotRate-baseline.homeShotRate,
+   averageTotalXg:result.averageTotalXg,averageTotalXgDelta:result.averageTotalXg-baseline.averageTotalXg};
+ });
+ return {homeClubId,awayClubId,simulations,seed,baseline,scenarios:rows};
+}
+
 export interface SeasonBalanceClub {
  clubId:number; reputation:number; strength:number; tier:string;
  averagePoints:number; averageGoalDifference:number; averageGoalsFor:number; averageGoalsAgainst:number;
