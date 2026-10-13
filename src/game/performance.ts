@@ -72,22 +72,60 @@ async function measure(
   name:string,
   operation:()=>unknown|Promise<unknown>,
 ):Promise<BenchmarkSample> {
-  let sqlQueryCount=0,sqlDurationNs=0;
+  let sqlQueryCount=0,sqlDurationMs=0;
   const slowQueries:Array<{sql:string;durationMs:number}>=[];
-  const onProfile=(sql:string,nanoseconds:number)=>{
+  const recordQuery=(sql:string,durationMs:number)=>{
     sqlQueryCount++;
-    sqlDurationNs+=nanoseconds;
-    const durationMs=nanoseconds/1_000_000;
+    sqlDurationMs+=durationMs;
     if(durationMs>=2) {
       slowQueries.push({sql:sql.slice(0,240),durationMs});
       slowQueries.sort((a,b)=>b.durationMs-a.durationMs);
       if(slowQueries.length>10) slowQueries.length=10;
     }
   };
+  // better-sqlite3 has no public query-profile event. Instrument prepared-statement
+  // execution for the duration of this isolated benchmark instead of relying on an
+  // unsupported EventEmitter API.
+  const mutableDb=db as unknown as {prepare:(sql:string)=>unknown};
+  const originalPrepare=db.prepare.bind(db);
+  mutableDb.prepare=(sql:string):unknown=>{
+    const statement=originalPrepare(sql);
+    return new Proxy(statement as object,{
+      get(target,property) {
+        const value=Reflect.get(target,property,target) as unknown;
+        if(typeof value!=="function") return value;
+        if(property==="run"||property==="get"||property==="all") {
+          return (...args:unknown[])=>{
+            const started=performance.now();
+            try { return (value as (...parameters:unknown[])=>unknown).apply(target,args); }
+            finally { recordQuery(sql,performance.now()-started); }
+          };
+        }
+        if(property==="iterate") {
+          return (...args:unknown[])=>{
+            const iterator=(value as (...parameters:unknown[])=>IterableIterator<unknown>).apply(target,args);
+            return new Proxy(iterator,{
+              get(iterable,iteratorProperty) {
+                const method=Reflect.get(iterable,iteratorProperty,iterable) as unknown;
+                if(iteratorProperty==="next"&&typeof method==="function") {
+                  return (...nextArgs:unknown[])=>{
+                    const started=performance.now();
+                    try { return (method as (...parameters:unknown[])=>unknown).apply(iterable,nextArgs); }
+                    finally { recordQuery(sql,performance.now()-started); }
+                  };
+                }
+                return typeof method==="function"?(method as (...parameters:unknown[])=>unknown).bind(iterable):method;
+              },
+            });
+          };
+        }
+        return (value as (...parameters:unknown[])=>unknown).bind(target);
+      },
+    });
+  };
   const delay=monitorEventLoopDelay({resolution:10});
   const before=memory();
   delay.enable();
-  db.on("profile",onProfile);
   await immediate();
   const started=performance.now();
   let syncDurationMs=0;
@@ -103,14 +141,14 @@ async function measure(
   }
   const durationMs=performance.now()-started;
   await immediate();
-  db.removeListener("profile",onProfile);
+  mutableDb.prepare=originalPrepare;
   delay.disable();
   const after=memory();
   const sample:BenchmarkSample={
     name,durationMs,synchronousBlockMs:syncDurationMs,
     heapDeltaBytes:after.heapUsedBytes-before.heapUsedBytes,
     rssDeltaBytes:after.rssBytes-before.rssBytes,
-    sqlQueryCount,sqlDurationMs:sqlDurationNs/1_000_000,
+    sqlQueryCount,sqlDurationMs,
     slowQueries,eventLoopDelayMaxMs:Number(delay.max)/1_000_000,
     databaseBytes:databaseBytes(path),details,
   };
