@@ -274,6 +274,19 @@ Substituições dinâmicas durante o jogo e a influência completa de clima e vi
 
 
 
+### Auditoria de integridade do save
+
+O comando `integrity-audit` executa uma verificação **somente de leitura** em uma campanha. Ele não corrige nem apaga dados automaticamente: inconsistências precisam ser investigadas antes de qualquer reparo.
+
+```bash
+npm run dev -- integrity-audit --save-id <save-id>
+npm run dev -- integrity-audit --save <caminho-do-save.sqlite> --limit 1000
+```
+
+A auditoria compara o placar persistido com os eventos `GOAL`, exige 90 amostras de momentum e minuto final 90 para partidas concluídas, valida o checkpoint de conclusão, sinaliza seeds ausentes, confere os onze titulares e o slot de goleiro persistidos e detecta participantes sem linha de classificação. O relatório JSON inclui códigos estáveis por achado e severidade `ERROR`/`WARNING`; o comando retorna código de saída diferente de zero quando encontra erros. Checkpoints ausentes são avisos para não classificar automaticamente saves legados como corrompidos.
+
+Esta auditoria é uma camada de diagnóstico, não prova a correção de todas as regras de domínio nem substitui testes de interrupção, análise financeira ou calibração estatística. A auditoria de placar considera eventos `GOAL`; qualquer mudança de representação de gols (por exemplo, gols contra) deve atualizar explicitamente esse contrato.
+
 ### Match engine diagnostics
 
 Run a read-only diagnostic report against a save to inspect shot-level xG, conversion outcomes, side-swapped results, strength differences, and persisted-match integrity:
