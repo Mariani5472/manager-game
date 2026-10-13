@@ -5,6 +5,7 @@ import { performance } from "node:perf_hooks";
 import type { SqliteDatabase } from "../db/database.js";
 import { openDatabase, validateDatabase } from "../db/database.js";
 import { advanceStageRound, ensureFactoryWorld16 } from "./gameService.js";
+import { installDataPackage, type DataPackage } from "./dataPackages.js";
 
 export interface PersistedWorldScaleResult {
   clubs:number; players:number; rounds:number; fixtures:number; completedFixtures:number;
@@ -29,7 +30,8 @@ function roundRobin(ids:number[]):Array<Array<{home:number;away:number}>> {
   return [...firstLeg,...firstLeg.map(games=>games.map(m=>({home:m.away,away:m.home})))];
 }
 function createPersistedWorld(db:SqliteDatabase,target:number,seed:number):{stageId:number;clubIds:number[];players:number;fixtures:number;rounds:number}{
-  ensureFactoryWorld16(db);
+  const currentClubCount=(db.prepare("SELECT COUNT(*) AS n FROM club").get() as {n:number}).n;
+  if(currentClubCount<=16) ensureFactoryWorld16(db);
   const original=(db.prepare("SELECT id FROM club ORDER BY id").all() as Array<{id:number}>).map(c=>c.id);
   if(original.length>target)throw new Error(`Source save has ${original.length} clubs; requested benchmark scale is ${target}. Use a save with no more than the target club count.`);
   const firstClub=(db.prepare("SELECT COALESCE(MAX(id),0)+1 AS id FROM club").get() as {id:number}).id;
@@ -84,11 +86,13 @@ function createPersistedWorld(db:SqliteDatabase,target:number,seed:number):{stag
   const playerCount=(db.prepare("SELECT COUNT(*) AS n FROM squad_membership WHERE club_id IN ("+ids.map(()=>"?").join(",")+")").get(...ids) as {n:number}).n;
   return {stageId,clubIds:ids,players:playerCount,fixtures:schedule.reduce((sum,r)=>sum+r.length,0),rounds:schedule.length};
 }
-async function benchmarkOne(source:SqliteDatabase,clubs:number,seed:number):Promise<PersistedWorldScaleResult>{
+async function benchmarkOne(source:SqliteDatabase,clubs:number,seed:number,packages:DataPackage[]):Promise<PersistedWorldScaleResult>{
   const dir=mkdtempSync(join(tmpdir(),"gm-persisted-world-")),path=join(dir,"world.sqlite"),started=performance.now();
   let db:SqliteDatabase|undefined;
   try{
     await source.backup(path);db=openDatabase(path);
+    ensureFactoryWorld16(db);
+    for(const pkg of packages) installDataPackage(db,pkg);
     const world=createPersistedWorld(db,clubs,seed),setupMs=performance.now()-started,seasonStart=performance.now();
     for(let round=1;round<=world.rounds;round++)advanceStageRound(db,world.stageId,round);
     const fullSeasonMs=performance.now()-seasonStart;
@@ -104,6 +108,6 @@ export async function runPersistedWorldBenchmarks(source:SqliteDatabase,scales=[
   const unique=[...new Set(scales)];
   if(!unique.length||unique.some(n=>!Number.isSafeInteger(n)||n<16||n%2!==0))throw new Error("Persisted world scales must be unique even integers >= 16.");
   const results:PersistedWorldScaleResult[]=[];
-  for(const scale of unique)results.push(await benchmarkOne(source,scale,seed));
+  for(const scale of unique)results.push(await benchmarkOne(source,scale,seed,packages));
   return results;
 }
