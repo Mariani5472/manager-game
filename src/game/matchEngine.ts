@@ -69,6 +69,36 @@ function teamPressure(team:Team, random:()=>number):number {
  return clamp(team.attacking*.43+team.tactic.pressing*.16+team.tactic.tempo*.10+
   team.tactic.defensive_line*.04+mentality-fatigue+random()*8,0,100);
 }
+function shotCreationProbability(
+ team:Team,opponent:Team,isHome:boolean,pressure:number,opponentPressure:number,
+):number {
+ const tactic=team.tactic;
+ const ctx=team.context??{weather:"CLEAR",temperatureC:20,pitchCondition:70,restHours:168,travelKm:0,travelHours:0};
+ const fatigue=Math.min(.035,Math.max(0,72-ctx.restHours)*.00020+ctx.travelKm/500*.004);
+ const weatherPenalty=ctx.weather==="HEAVY_RAIN"?.012:ctx.weather==="RAIN"?.006:ctx.weather==="WIND"?(tactic.passing_directness<60?.008:.003):ctx.weather==="HEAT"?.004:0;
+ const pitchPenalty=Math.max(0,70-ctx.pitchCondition)*.00012;
+ return clamp(.095+(team.attacking-50)*.00135+(50-opponent.defending)*.00060+
+  mentalityShotModifier(tactic.mentality)+(tactic.pressing-50)*.00012+
+  (tactic.tempo-50)*.00012+(pressure-opponentPressure)*.00012+
+  (tactic.passing_directness-50)*.000055+(tactic.width-50)*.000025+
+  (tactic.counter_attack?.004:0)+(isHome?HOME_SHOT_CHANCE_BONUS:0)-fatigue-weatherPenalty-pitchPenalty,.05,.205);
+}
+function sampleChanceQuality(team:Team,tactic:Tactic,random:()=>number):number {
+ const ctx=team.context??{weather:"CLEAR",temperatureC:20,pitchCondition:70,restHours:168,travelKm:0,travelHours:0};
+ const qualityRoll=random();
+ const baseXg=qualityRoll<.56 ? .035+random()*.06 :
+  qualityRoll<.92 ? .095+random()*.075 : .17+random()*.15;
+ return clamp(baseXg+(team.attacking-50)*.00042+
+  (tactic.tempo-50)*.00004+(tactic.passing_directness-50)*.00006+
+  (tactic.width-50)*.000035-
+  Math.max(0,70-ctx.pitchCondition)*.00025-
+  (ctx.weather==="HEAVY_RAIN"?.012:ctx.weather==="RAIN"?.006:ctx.weather==="WIND"?.004:0),.02,.38);
+}
+function onTargetProbability(xg:number):number { return clamp(.29+xg*.5,.30,.48); }
+function goalConversionProbability(xg:number,onTargetChance:number,keeperSkill:number):number {
+ const keeperFactor=clamp(1+(50-keeperSkill)*.0075,.66,1.34);
+ return clamp((xg/onTargetChance)*keeperFactor,.015,.82);
+}
 function refreshTeamStrength(team:Team):void{const starters=team.lineup.filter(p=>p.isStarting);team.attacking=mean(starters.map(p=>skill(p,p.role)*.72+p.positionRating*.28+p.energy*.18+p.morale*.08+p.sharpness*.08))+(mean(starters.map(p=>p.positionRating))-50)*.15;team.defending=mean(starters.map(p=>mean([p.tackling,p.marking,p.positioning,p.concentration,p.strength])));const keeper=starters.find(p=>p.role==="GK");team.goalkeeping=keeper?mean([keeper.reflexes,keeper.handling,keeper.aerial_reach,keeper.positioning]):45;team.energy=mean(starters.map(p=>p.energy));team.fitness=mean(starters.map(p=>p.stamina));}
 function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalChange[]=[]):KernelTimeline {
  home={...home,tactic:{...home.tactic},lineup:home.lineup.map(p=>({...p}))};
@@ -128,14 +158,7 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
                       {team:away,opponent:home,isHome:false,pressure:ap,opponentPressure:hp,random:awayRandom}]){
    const tactic=side.team.tactic;
    const ctx=side.team.context??{weather:"CLEAR",temperatureC:20,pitchCondition:70,restHours:168,travelKm:0,travelHours:0};
-   const fatigue=Math.min(.035,Math.max(0,72-ctx.restHours)*.00020+ctx.travelKm/500*.004);
-   const weatherPenalty=ctx.weather==="HEAVY_RAIN"?.012:ctx.weather==="RAIN"?.006:ctx.weather==="WIND"?(tactic.passing_directness<60?.008:.003):ctx.weather==="HEAT"?.004:0;
-   const pitchPenalty=Math.max(0,70-ctx.pitchCondition)*.00012;
-   const chance=clamp(.095+(side.team.attacking-50)*.00135+(50-side.opponent.defending)*.00060+
-    mentalityShotModifier(tactic.mentality)+(tactic.pressing-50)*.00012+
-    (tactic.tempo-50)*.00012+(side.pressure-side.opponentPressure)*.00012+
-    (tactic.passing_directness-50)*.000055+(tactic.width-50)*.000025+
-    (tactic.counter_attack?.004:0)+(side.isHome?HOME_SHOT_CHANCE_BONUS:0)-fatigue-weatherPenalty-pitchPenalty,.05,.205);
+   const chance=shotCreationProbability(side.team,side.opponent,side.isHome,side.pressure,side.opponentPressure);
    if(side.random()>=chance)continue;
    const attackers=side.team.lineup.filter(p=>p.isStarting&&p.role!=="GK");
    if(!attackers.length)throw new Error(`Club ${side.team.clubId} has no available outfield starters.`);
@@ -145,18 +168,11 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
    const keeperSkill=mean([keeper.reflexes,keeper.handling,keeper.positioning,keeper.concentration]);
    // Sample shot quality from low-, medium-, and high-quality chance profiles.
    // The mixture retains a similar average xG while making clear chances observable in diagnostics.
-   const qualityRoll=side.random();
-   const baseXg=qualityRoll<.56 ? .035+side.random()*.06 :
-    qualityRoll<.92 ? .095+side.random()*.075 : .17+side.random()*.15;
-   const xg=clamp(baseXg+(side.team.attacking-50)*.00042+
-    (shooter.finishing-50)*.00018+(tactic.tempo-50)*.00004+
-    (tactic.passing_directness-50)*.00006+(tactic.width-50)*.000035-
-    Math.max(0,70-ctx.pitchCondition)*.00025-
-    (ctx.weather==="HEAVY_RAIN"?.012:ctx.weather==="RAIN"?.006:ctx.weather==="WIND"?.004:0),.02,.38);
-   const onTargetChance=clamp(.29+xg*.5,.30,.48);
+   const xg=clamp(sampleChanceQuality(side.team,tactic,side.random)+
+    (shooter.finishing-50)*.00018,.02,.38);
+   const onTargetChance=onTargetProbability(xg);
    const onTarget=side.random()<onTargetChance;
-   const keeperFactor=clamp(1+(50-keeperSkill)*.0075,.66,1.34);
-   const goal=onTarget&&side.random()<clamp((xg/onTargetChance)*keeperFactor,.015,.82);
+   const goal=onTarget&&side.random()<goalConversionProbability(xg,onTargetChance,keeperSkill);
    const event:KernelShotEvent={
     minute,clubId:side.team.clubId,playerId:shooter.id,secondaryPlayerId:onTarget?keeper.id:null,
     eventType:goal?"GOAL":onTarget?"SAVE":"MISS",xg,
