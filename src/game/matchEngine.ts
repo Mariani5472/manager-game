@@ -581,9 +581,12 @@ export function runTacticalSensitivityAnalysis(
  const starters=formationCase.lineup.filter(player=>player.isStarting);
  const formationKeeper=starters.find(player=>player.role==="GK");
  const outfield=starters.filter(player=>player.role!=="GK");
- const slots=alternateFormation
+ const alternateSlots=alternateFormation
   ? db.prepare("SELECT slot_number AS slot,position_code AS role FROM formation_slot WHERE formation_id=? ORDER BY slot_number").all(alternateFormation.id) as Array<{slot:number;role:string}>
-  : ["CB","CB","LB","RB","DM","CM","CM","LW","RW","ST"].map((role,index)=>({slot:index+2,role}));
+  : [];
+ const slots=alternateSlots.length===11&&alternateSlots.some(slot=>slot.role==="GK")
+  ? alternateSlots
+  : ["GK","CB","CB","LB","RB","DM","CM","CM","LW","RW","ST"].map((role,index)=>({slot:index+1,role}));
  const assigned:Array<{slot:number;role:string;player:MatchPlayer}>=[];
  let outfieldIndex=0;
  for(const slot of slots) {
@@ -593,7 +596,7 @@ export function runTacticalSensitivityAnalysis(
  }
  if(assigned.length===11&&assigned.filter(item=>item.role==="GK"&&item.player.goalkeeper===1).length===1) {
   for(const item of assigned) {item.player.slot=item.slot;item.player.role=item.role;}
-  formationCase.tactic={...formationCase.tactic,formation_id:alternateFormation?.id??(originalHome.tactic.formation_id+1)};
+  formationCase.tactic={...formationCase.tactic,formation_id:alternateSlots.length===11&&alternateSlots.some(slot=>slot.role==="GK")?alternateFormation!.id:originalHome.tactic.formation_id+1};
   refreshTeamStrength(formationCase);
   scenarios.push({name:"alternate_formation",changedVariable:"formation",value:alternateFormation?.id??"synthetic-role-layout",home:formationCase});
  }
