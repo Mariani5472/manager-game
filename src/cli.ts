@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { openDatabase, validateDatabase } from "./db/database.js";
+import { auditGameIntegrity } from "./game/integrityAudit.js";
 import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis, runSeasonBalanceAnalysis, scheduleMatchTacticalChange } from "./game/matchEngine.js";
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
@@ -309,6 +310,15 @@ async function main(): Promise<void> {
       const seasons = parsePositiveId(parseOption(args, "--seasons") ?? "20", "--seasons");
       const seed = parsePositiveId(parseOption(args, "--seed") ?? "90210", "--seed");
       withSave(args, db => console.log(JSON.stringify(runSeasonBalanceAnalysis(db, seasons, seed), null, 2)));
+      return;
+    }
+    case "integrity-audit": {
+      const limit = parsePositiveId(parseOption(args, "--limit") ?? "500", "--limit");
+      withSave(args, db => {
+        const report = auditGameIntegrity(db, limit);
+        console.log(JSON.stringify(report, null, 2));
+        if (!report.ok) process.exitCode = 1;
+      });
       return;
     }
     case "diagnostics": {
