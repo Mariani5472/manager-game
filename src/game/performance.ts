@@ -46,7 +46,9 @@ function memory(): {heapUsedBytes:number;rssBytes:number} {
   return {heapUsedBytes:usage.heapUsed,rssBytes:usage.rss};
 }
 function databaseBytes(path: string): number {
-  try { return statSync(path).size; } catch { return 0; }
+  return [path,path+"-wal",path+"-shm"].reduce((total,file)=>{
+    try { return total+statSync(file).size; } catch { return total; }
+  },0);
 }
 function nextSeasonYear(db: SqliteDatabase): number {
   return ((db.prepare("SELECT COALESCE(MAX(season_year),2026)+1 AS year FROM competition_season").get() as {year:number}).year);
