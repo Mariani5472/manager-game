@@ -340,7 +340,7 @@ async function main(): Promise<void> {
         seed, scales, includeSeason: !args.includes("--no-season"),
       }));
       console.log(JSON.stringify(report, null, 2));
-      const season = report.samples.find(sample => sample.name === "completeLeagueSeason");
+      const season = report.samples.find(sample => sample.name === "completeCampaignSeason");
       if (season && season.durationMs > 7_200_000) process.exitCode = 1;
       return;
     }
