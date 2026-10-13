@@ -90,8 +90,9 @@ export function auditGameIntegrity(db: SqliteDatabase, fixtureLimit = 500): Inte
         entityId: fixture.id, message: "Completed fixture has no simulation checkpoint (may be legacy data)." });
     } else {
       let completed = false;
+      let parsed: {completed?:unknown;engineVersion?:unknown;seed?:unknown;config?:unknown} = {};
       try {
-        const parsed = JSON.parse(state.state_json) as {completed?:unknown};
+        parsed = JSON.parse(state.state_json) as typeof parsed;
         completed = parsed.completed === true;
       } catch {
         // JSON validity is also checked by SQLite's schema, but older schemas may not enforce it.
@@ -99,6 +100,14 @@ export function auditGameIntegrity(db: SqliteDatabase, fixtureLimit = 500): Inte
       if (state.state_version < 1 || state.simulation_minute !== 90 || !completed) {
         findings.push({ severity: "ERROR", code: "INVALID_COMPLETION_CHECKPOINT", entity: "fixture",
           entityId: fixture.id, message: "Completed fixture checkpoint must be versioned, at minute 90, and marked completed." });
+      }
+      if (parsed.engineVersion === undefined || parsed.config === undefined) {
+        findings.push({ severity: "WARNING", code: "LEGACY_SIMULATION_METADATA", entity: "fixture",
+          entityId: fixture.id, message: "Checkpoint does not contain engine version and full simulation configuration metadata." });
+      }
+      if (parsed.seed !== undefined && fixture.random_seed !== null && parsed.seed !== fixture.random_seed) {
+        findings.push({ severity: "ERROR", code: "CHECKPOINT_SEED_MISMATCH", entity: "fixture",
+          entityId: fixture.id, message: "Checkpoint seed differs from the fixture's persisted seed." });
       }
     }
 
