@@ -85,10 +85,10 @@ test("performance harness measures representative operations on disposable copie
     assert.equal(report.sourceClubCount,16);
     assert.ok(report.samples.some(sample=>sample.name==="singleMatchAndPersistence"));
     assert.ok(report.samples.some(sample=>sample.name==="roundAndStandings"));
-    const seasonSample=report.samples.find(sample=>sample.name==="completeLeagueSeason");
+    const seasonSample=report.samples.find(sample=>sample.name==="completeCampaignSeason");
     assert.ok(seasonSample);
     const seasonDetails=seasonSample.details as {fixtures:number;eventCounts:Array<{type:string;count:number}>;injuredPlayers:number};
-    assert.equal(seasonDetails.fixtures,240);
+    assert.equal(seasonDetails.fixtures,255);
     const eventTypes=new Set(seasonDetails.eventCounts.map(row=>row.type));
     assert.ok(eventTypes.has("FOUL"));
     assert.ok(eventTypes.has("YELLOW_CARD"));
