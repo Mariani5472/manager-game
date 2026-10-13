@@ -195,7 +195,7 @@ export async function runPerformanceBenchmark(
   samples.push(await withDisposableCopy(source,dbPath=>measure(dbPath,dbPath.name,"roundAndStandings",()=>benchmarkRound(dbPath))));
 
   if(options.includeSeason!==false) {
-    samples.push(await withDisposableCopy(source,db=>measure(db,db.name,"completeCampaignSeason",()=>benchmarkLeagueSeason(db))));
+    samples.push(await withDisposableCopy(source,db=>measure(db,db.name,"completeCampaignSeason",()=>benchmarkCampaignSeason(db))));
   }
 
   samples.push(await withDisposableCopy(source,db=>measure(db,db.name,"playerEvolution",()=>applyRosterSeason(db,nextSeasonYear(db)))));
