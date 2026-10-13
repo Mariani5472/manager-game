@@ -170,8 +170,8 @@ const standingFields: Record<string, keyof StandingRow> = {
 
 type StandingTieBreak = { points: number; goalDifference: number; goalsFor: number };
 
-export function getStandings(db: SqliteDatabase, stageId: number): StandingRow[] {
-  rebuildStandings(db, stageId);
+export function getStandings(db: SqliteDatabase, stageId: number, refreshCache = true): StandingRow[] {
+  if (refreshCache) rebuildStandings(db, stageId);
   const rules = db.prepare("SELECT rule_key FROM stage_standing_rule WHERE stage_id=? ORDER BY rule_order")
     .all(stageId) as Array<{rule_key:string}>;
   const rows = db.prepare(`
