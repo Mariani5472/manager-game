@@ -420,6 +420,30 @@ export function runTacticalSensitivityAnalysis(
   keeper.reflexes=95;keeper.handling=95;keeper.positioning=95;keeper.concentration=95;refreshTeamStrength(keeperCase);
   scenarios.push({name:"exceptional_goalkeeper",changedVariable:"goalkeeper attributes",value:95,home:keeperCase});
  }
+ for(const value of [20,95]) {
+  const finishingCase=clone(originalHome);
+  const shooter=finishingCase.lineup.find(player=>player.isStarting&&player.role==="ST") ??
+    finishingCase.lineup.find(player=>player.isStarting&&player.role!=="GK");
+  if(shooter) {
+    shooter.finishing=value;
+    scenarios.push({name:"individual_finishing_"+value,changedVariable:"individual finishing",value,home:finishingCase});
+  }
+ }
+ for(const value of [20,90]) {
+  const defendingCase=clone(originalHome);
+  const defender=defendingCase.lineup.find(player=>player.isStarting&&["CB","LB","RB","DM"].includes(player.role));
+  if(defender) {
+    defender.tackling=value;defender.marking=value;defender.positioning=value;
+    refreshTeamStrength(defendingCase);
+    scenarios.push({name:"individual_defending_"+value,changedVariable:"individual defensive attributes",value,home:defendingCase});
+  }
+ }
+ const roleCase=clone(originalHome);
+ const striker=roleCase.lineup.find(player=>player.isStarting&&player.role==="ST");
+ if(striker) {
+  striker.role="CM";refreshTeamStrength(roleCase);
+  scenarios.push({name:"striker_role_changed_to_cm",changedVariable:"player role",value:"ST->CM",home:roleCase});
+ }
  const rows=scenarios.map(s=>{
   const result=runMonteCarlo(s.home,originalAway,simulations,seed);
   return {name:s.name,changedVariable:s.changedVariable,value:s.value,
