@@ -68,7 +68,7 @@ export function startManagerWebServer(): void {
           const selectedFixture = fixtures.find(f => f.id === requestedFixtureId) ?? fixtures.find(f => f.status === "SCHEDULED" && (f.homeClub === managed.name || f.awayClub === managed.name)) ?? upcoming[0];
           const squad = listSquad(db, managed.id);
           const tactics = getTactics(db, managed.id);
-          let lineup = null;
+          let lineup: { starters: number[]; bench: number[] } | null = null;
           if (selectedFixture && selectedFixture.status === "SCHEDULED" &&
               (selectedFixture.homeClub === managed.name || selectedFixture.awayClub === managed.name)) {
             const savedLineup = db.prepare("SELECT player_id AS playerId, is_starting AS isStarting FROM match_lineup WHERE fixture_id=? AND club_id=? ORDER BY slot_number")
