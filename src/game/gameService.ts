@@ -534,7 +534,12 @@ function advanceRoundById(db: SqliteDatabase, roundId: number, stageId: number):
     .all(roundId) as Array<{id:number}>;
   if (!fixtures.length) {
     if (state.total > 0 && (state.completed ?? 0) === state.total) {
-      throw new Error(`Round ${round.roundNumber} (${round.name}) is already completed; no matches were simulated.`);
+      // Recover post-match bookkeeping if the process stopped after the final
+      // fixture committed but before knockout progression/standings/season status.
+      progressKnockoutStage(db, stageId, roundId);
+      rebuildStandings(db, stageId);
+      finishSeasonIfComplete(db, stageId);
+      throw new Error(`Round ${round.roundNumber} (${round.name}) is already completed; post-match state was verified.`);
     }
     throw new Error(`Round ${round.roundNumber} (${round.name}) has no playable fixtures.`);
   }
