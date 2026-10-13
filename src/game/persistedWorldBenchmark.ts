@@ -103,7 +103,7 @@ async function benchmarkOne(source:SqliteDatabase,clubs:number,seed:number,packa
   }finally{if(db?.open)db.close();rmSync(dir,{recursive:true,force:true});}
 }
 /** Full SQLite seasons with generated persistent squads, fixtures, events, conditions and standings. */
-export async function runPersistedWorldBenchmarks(source:SqliteDatabase,scales=[16,64,256],seed=90210):Promise<PersistedWorldScaleResult[]>{
+export async function runPersistedWorldBenchmarks(source:SqliteDatabase,scales=[16,64,256],seed=90210,packages:DataPackage[]=[]):Promise<PersistedWorldScaleResult[]>{
   if(!Number.isSafeInteger(seed)||seed<0)throw new Error("Seed must be a non-negative integer.");
   const unique=[...new Set(scales)];
   if(!unique.length||unique.some(n=>!Number.isSafeInteger(n)||n<16||n%2!==0))throw new Error("Persisted world scales must be unique even integers >= 16.");
