@@ -542,7 +542,7 @@ function advanceRoundById(db: SqliteDatabase, roundId: number, stageId: number):
         finishSeasonIfComplete(db, stageId);
       });
       recoverRound.immediate();
-      throw new Error(`Round ${round.roundNumber} (${round.name}) is already completed; post-match state was verified.`);
+      throw new Error(`Round ${round.roundNumber} (${round.name}) is already completed; no matches were simulated.`);
     }
     throw new Error(`Round ${round.roundNumber} (${round.name}) has no playable fixtures.`);
   }
