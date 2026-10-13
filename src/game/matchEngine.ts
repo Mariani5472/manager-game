@@ -382,7 +382,7 @@ export function runTacticalSensitivityAnalysis(
  if(!Number.isSafeInteger(simulations)||simulations<100) throw new Error("Sensitivity simulations must be an integer >= 100.");
  const originalHome=loadTeam(db,-1,homeClubId,false),originalAway=loadTeam(db,-1,awayClubId,false);
  const baseline=runMonteCarlo(originalHome,originalAway,simulations,seed);
- const clone=(team:Team):Team=>({...team,tactic:{...team.tactic},lineup:team.lineup.map(player=>({...player})),context:team.context?{...team.context}:undefined});
+ const clone=(team:Team):Team=>({...team,tactic:{...team.tactic},lineup:team.lineup.map(player=>({...player})),...(team.context?{context:{...team.context}}:{})});
  const scenarios:Array<{name:string;changedVariable:string;value:string|number;home:Team}>=[];
  const tacticCase=(name:string,key:keyof Tactic,value:number|string)=>{
   const home=clone(originalHome);home.tactic={...home.tactic,[key]:value} as Tactic;scenarios.push({name,changedVariable:String(key),value,home});
