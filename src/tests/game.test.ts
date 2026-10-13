@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { openDatabase, validateDatabase } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
 import { auditGameIntegrity } from "../game/integrityAudit.js";
+import { createTransferOffer, respondToTransferOffer } from "../game/rosterLifecycle.js";
 import {
   advanceNextFixture, advanceRound, advanceStageRound, ensureFactoryLeagueCalendar,
   resolveKnockoutFixtureWinner, getManagedClub, getSeasonStatus, getStandings,
@@ -166,6 +167,34 @@ test("online backup captures master WAL state and a played save does not mutate 
     if (saveA?.open) saveA.close();
     if (saveB?.open) saveB.close();
     if (masterDb?.open) masterDb.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("failed transfer acceptance rolls back money, contract links and negotiation status", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof openDatabase> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Transfer Rollback", 1);
+    db = manager.open(save.filePath);
+    const offerId = createTransferOffer(db, 1, 2, 1000, 250, 2);
+    const beforeBuyer = db.prepare("SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=2")
+      .get() as {balance:number;budget:number};
+    const beforeSeller = db.prepare("SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=1")
+      .get() as {balance:number;budget:number};
+    db.exec(`
+      CREATE TRIGGER test_reject_transfer_membership
+      BEFORE INSERT ON squad_membership
+      WHEN NEW.player_id = 1 AND NEW.club_id = 2
+      BEGIN SELECT RAISE(ABORT, 'injected transfer failure'); END;
+    `);
+    assert.throws(() => respondToTransferOffer(db!, offerId, "ACCEPT"), /injected transfer failure/);
+    assert.deepEqual(db.prepare("SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=2").get(), beforeBuyer);
+    assert.deepEqual(db.prepare("SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=1").get(), beforeSeller);
+    assert.equal((db.prepare("SELECT club_id AS clubId FROM squad_membership WHERE player_id=1").get() as {clubId:number}).clubId, 1);
+    assert.equal((db.prepare("SELECT status FROM transfer_negotiation WHERE id=?").get(offerId) as {status:string}).status, "OPEN");
+  } finally {
+    if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });
   }
 });
