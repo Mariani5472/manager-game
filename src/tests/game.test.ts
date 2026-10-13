@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { openDatabase, validateDatabase } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
 import { auditGameIntegrity } from "../game/integrityAudit.js";
-import { createTransferOffer, respondToTransferOffer } from "../game/rosterLifecycle.js";
+import { applyRosterSeason, createTransferOffer, respondToTransferOffer } from "../game/rosterLifecycle.js";
 import {
   advanceNextFixture, advanceRound, advanceStageRound, ensureFactoryLeagueCalendar,
   resolveKnockoutFixtureWinner, getManagedClub, getSeasonStatus, getStandings,
@@ -167,6 +167,35 @@ test("online backup captures master WAL state and a played save does not mutate 
     if (saveA?.open) saveA.close();
     if (saveB?.open) saveB.close();
     if (masterDb?.open) masterDb.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("failed roster processing rolls back next-season creation and can be retried", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof openDatabase> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Season Rollback", 1);
+    db = manager.open(save.filePath);
+    applyRosterSeason(db, 2026);
+    db.prepare("UPDATE competition_season SET status='COMPLETED' WHERE id=1").run();
+    db.exec(`
+      CREATE TRIGGER test_reject_roster_season
+      BEFORE INSERT ON roster_season_run
+      WHEN NEW.season_year = 2027
+      BEGIN SELECT RAISE(ABORT, 'injected season failure'); END;
+    `);
+    assert.throws(() => prepareNextLeagueSeason(db!, 1), /injected season failure/);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM competition_season WHERE competition_id=1 AND season_year=2027").get() as {n:number}).n, 0);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM roster_season_run WHERE season_year=2027").get() as {n:number}).n, 0);
+
+    db.exec("DROP TRIGGER test_reject_roster_season");
+    const next = prepareNextLeagueSeason(db, 1);
+    assert.equal(next.year, 2027);
+    assert.equal(next.fixtures, 12);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM roster_season_run WHERE season_year=2027").get() as {n:number}).n, 1);
+  } finally {
+    if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });
   }
 });
