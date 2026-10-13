@@ -88,26 +88,32 @@ async function measure(
   db.on("profile",onProfile);
   await immediate();
   const started=performance.now();
-  const syncStarted=performance.now();
+  let syncDurationMs=0;
   let details:unknown;
+  let thrown:unknown;
   try {
-    details=await operation();
-  } finally {
-    const synchronousBlockMs=performance.now()-syncStarted;
-    const durationMs=performance.now()-started;
-    await immediate();
-    db.removeListener("profile",onProfile);
-    delay.disable();
-    const after=memory();
-    return {
-      name,durationMs,synchronousBlockMs,
-      heapDeltaBytes:after.heapUsedBytes-before.heapUsedBytes,
-      rssDeltaBytes:after.rssBytes-before.rssBytes,
-      sqlQueryCount,sqlDurationMs:sqlDurationNs/1_000_000,
-      slowQueries,eventLoopDelayMaxMs:Number(delay.max)/1_000_000,
-      databaseBytes:databaseBytes(path),details,
-    };
+    const syncStarted=performance.now();
+    const result=operation();
+    syncDurationMs=performance.now()-syncStarted;
+    details=await result;
+  } catch(error) {
+    thrown=error;
   }
+  const durationMs=performance.now()-started;
+  await immediate();
+  db.removeListener("profile",onProfile);
+  delay.disable();
+  const after=memory();
+  const sample:BenchmarkSample={
+    name,durationMs,synchronousBlockMs:syncDurationMs,
+    heapDeltaBytes:after.heapUsedBytes-before.heapUsedBytes,
+    rssDeltaBytes:after.rssBytes-before.rssBytes,
+    sqlQueryCount,sqlDurationMs:sqlDurationNs/1_000_000,
+    slowQueries,eventLoopDelayMaxMs:Number(delay.max)/1_000_000,
+    databaseBytes:databaseBytes(path),details,
+  };
+  if(thrown!==undefined) throw thrown;
+  return sample;
 }
 function nextScheduledFixture(db:SqliteDatabase):number {
   const row=db.prepare("SELECT id FROM fixture WHERE status='SCHEDULED' ORDER BY scheduled_at,id LIMIT 1").get() as {id:number}|undefined;
