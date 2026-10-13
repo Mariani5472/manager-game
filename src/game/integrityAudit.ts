@@ -121,6 +121,40 @@ export function auditGameIntegrity(db: SqliteDatabase, fixtureLimit = 500): Inte
     }
   }
 
+  if (tableExists(db, "player_contract") && tableExists(db, "squad_membership")) {
+    const contractMismatches = db.prepare(`
+      SELECT pc.player_id AS playerId, pc.club_id AS contractClub, sm.club_id AS membershipClub
+      FROM player_contract pc
+      LEFT JOIN squad_membership sm ON sm.player_id=pc.player_id
+      WHERE pc.status='ACTIVE' AND (pc.club_id IS NULL OR sm.player_id IS NULL OR sm.club_id<>pc.club_id)
+      LIMIT 100
+    `).all() as Array<{playerId:number;contractClub:number|null;membershipClub:number|null}>;
+    for (const row of contractMismatches) {
+      findings.push({ severity: "ERROR", code: "ACTIVE_CONTRACT_MEMBERSHIP_MISMATCH", entity: "player",
+        entityId: row.playerId, message: `Active contract club ${row.contractClub ?? "NULL"} does not match squad membership ${row.membershipClub ?? "missing"}.` });
+    }
+  }
+
+  if (tableExists(db, "club_finance") && tableExists(db, "player_contract")) {
+    const financeRows = db.prepare(`
+      SELECT f.club_id AS clubId, f.balance, f.transfer_budget AS transferBudget,
+        f.weekly_wage_budget AS wageBudget,
+        COALESCE(SUM(CASE WHEN pc.status='ACTIVE' THEN pc.weekly_wage ELSE 0 END),0) AS wageBill
+      FROM club_finance f LEFT JOIN player_contract pc ON pc.club_id=f.club_id
+      GROUP BY f.club_id
+    `).all() as Array<{clubId:number;balance:number;transferBudget:number;wageBudget:number;wageBill:number}>;
+    for (const row of financeRows) {
+      if (row.transferBudget > row.balance) {
+        findings.push({ severity: "WARNING", code: "TRANSFER_BUDGET_EXCEEDS_BALANCE", entity: "club",
+          entityId: row.clubId, message: `Transfer budget ${row.transferBudget} exceeds balance ${row.balance}.` });
+      }
+      if (row.wageBill > row.wageBudget) {
+        findings.push({ severity: "WARNING", code: "WAGE_BILL_EXCEEDS_BUDGET", entity: "club",
+          entityId: row.clubId, message: `Active weekly wage bill ${row.wageBill} exceeds budget ${row.wageBudget}.` });
+      }
+    }
+  }
+
   const invalidParticipants = db.prepare(`
     SELECT sp.stage_id, sp.club_id FROM stage_participant sp
     LEFT JOIN stage_standing ss ON ss.stage_id=sp.stage_id AND ss.club_id=sp.club_id
