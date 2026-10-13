@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { openDatabase } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
 import { advanceNextFixture, advanceRound, getManagedClub, getSeasonStatus, getStandings, listClubs, listFixtures, listSquad, getTactics } from "../game/gameService.js";
-import { saveLineup } from "../game/lineupService.js";
+import { previewLineup, saveLineup } from "../game/lineupService.js";
 
 const root = process.cwd();
 const masterPath = resolve(process.env.GMF_MASTER_DB ?? "data/master.sqlite");
@@ -66,8 +66,17 @@ export function startManagerWebServer(): void {
           const recent = fixtures.filter(f => f.status === "COMPLETED").slice(-8).reverse();
           const requestedFixtureId = Number(url.searchParams.get("fixtureId")) || 0;
           const selectedFixture = fixtures.find(f => f.id === requestedFixtureId) ?? fixtures.find(f => f.status === "SCHEDULED" && (f.homeClub === managed.name || f.awayClub === managed.name)) ?? upcoming[0];
-          const squad = selectedFixture ? listSquad(db, managed.id) : listSquad(db, managed.id);
+          const squad = listSquad(db, managed.id);
           const tactics = getTactics(db, managed.id);
+          let lineup = null;
+          if (selectedFixture && selectedFixture.status === "SCHEDULED" &&
+              (selectedFixture.homeClub === managed.name || selectedFixture.awayClub === managed.name)) {
+            const savedLineup = db.prepare("SELECT player_id AS playerId, is_starting AS isStarting FROM match_lineup WHERE fixture_id=? AND club_id=? ORDER BY slot_number")
+              .all(selectedFixture.id, managed.id) as Array<{playerId:number;isStarting:number}>;
+            lineup = savedLineup.length
+              ? { starters: savedLineup.filter(p => p.isStarting === 1).map(p => p.playerId), bench: savedLineup.filter(p => p.isStarting === 0).map(p => p.playerId) }
+              : (() => { const preview = previewLineup(db, managed.id, selectedFixture.id); return { starters: preview.starters.map(p => p.playerId), bench: preview.bench.map(p => p.playerId) }; })();
+          }
           const matchDetails = selectedFixture ? {
             fixture: selectedFixture,
             momentum: db.prepare("SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,home_score AS homeScore,away_score AS awayScore FROM match_momentum WHERE fixture_id=? ORDER BY minute").all(selectedFixture.id),
@@ -75,7 +84,7 @@ export function startManagerWebServer(): void {
             stats: db.prepare("SELECT club_id AS clubId, SUM(CASE WHEN event_type IN ('GOAL','SAVE','MISS') THEN 1 ELSE 0 END) AS shots, SUM(CASE WHEN event_type IN ('GOAL','SAVE') THEN 1 ELSE 0 END) AS shotsOnTarget, ROUND(COALESCE(SUM(xg),0),2) AS xg FROM match_event WHERE fixture_id=? GROUP BY club_id ORDER BY CASE club_id WHEN (SELECT home_club_id FROM fixture WHERE id=?) THEN 0 ELSE 1 END").all(selectedFixture.id, selectedFixture.id)
           } : null;
           const formations = db.prepare("SELECT id,name FROM formation ORDER BY name").all();
-          return { managed, fixtures, stages, selectedStage, standings, upcoming, recent, squad, tactics, formations, selectedFixture, matchDetails };
+          return { managed, fixtures, stages, selectedStage, standings, upcoming, recent, squad, tactics, formations, selectedFixture, matchDetails, lineup };
         });
         json(res, 200, state); return;
       }
