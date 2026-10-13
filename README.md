@@ -346,3 +346,54 @@ Para aplicar os novos perfis a um save existente de 16 clubes, execute explicita
 ```bash
 npm run dev -- recalibrate-squads --save-id <save-id>
 ```
+
+
+## Fase P0 — desempenho, observabilidade e calibração
+
+### Benchmark reproduzível
+
+O comando `benchmark` mede operações reais em cópias descartáveis criadas por backup online do SQLite. A campanha de origem não é avançada nem alterada.
+
+```bash
+npm run build
+node dist/cli.js benchmark --save-id <save-id> --seed 90210 --scales 16,64,256
+```
+
+Para uma execução rápida, sem a temporada completa:
+
+```bash
+node dist/cli.js benchmark --save-id <save-id> --seed 90210 --scales 16,64 --no-season
+```
+
+O JSON inclui duração de partida com persistência, rodada com reconstrução da classificação, temporada de liga, evolução de jogadores, criação de oferta de mercado e validação/persistência SQLite. Cada amostra informa tempo total, trecho síncrono, delta de heap/RSS, número e duração acumulada das consultas perfiladas, até dez consultas lentas, atraso máximo observado do event loop e tamanho do arquivo SQLite. A medição da temporada completa é comparada com o limite de **7.200.000 ms (duas horas)**; exceder o limite faz o comando retornar código diferente de zero.
+
+As escalas 16/64/256 executam temporadas sintéticas de ida e volta com `n × (n − 1)` partidas. Para isolar o custo do motor, os clubes sintéticos reutilizam perfis de elencos/táticas existentes e recebem IDs únicos. **Isso não mede** a geração de 64/256 elencos reais, a importação de pacotes de dados ou a amplificação de escrita de um banco com esse volume; esses pontos exigem fixtures de carga com pacotes reais. Use a mesma máquina, versão do Node, seed e configuração de banco para comparar execuções. Não interprete uma execução isolada como benchmark estatístico.
+
+O banco permanece SQLite e o motor usa `better-sqlite3` síncrono. O benchmark mede o bloqueio síncrono e o atraso amostrado do event loop; não presume que a migração para outro banco, workers ou arquitetura distribuída seja necessária. Primeiro identifique o gargalo com as métricas e repita a medição após cada otimização.
+
+### Sensibilidade e intervalos estatísticos
+
+```bash
+node dist/cli.js diagnostics --save-id <save-id> --simulations 5000
+node dist/cli.js sensitivity --save-id <save-id> --home 1 --away 2 --simulations 2000 --seed 73421
+node dist/cli.js tactics-impact --save-id <save-id> --home 1 --away 2 --simulations 5000 --seed 73421
+node dist/cli.js season-balance --save-id <save-id> --seasons 20 --seed 90210
+```
+
+`diagnostics` agora apresenta intervalos de confiança de 95% de Wilson para vitória do mandante, empate e vitória do visitante, além das taxas Monte Carlo observadas. Esses intervalos quantificam **incerteza amostral**, não comprovam aderência ao futebol real. Para declarar calibração, compare gols, xG, finalizações, conversão, empates e goleadas com um conjunto histórico versionado, fora da amostra de ajuste, e defina tolerâncias por métrica antes de alterar coeficientes.
+
+`sensitivity` muda uma variável por vez e usa a mesma seed para facilitar comparações: pressão, ritmo, linha defensiva, largura, estilo de passe, contra-ataque, mentalidade, energia, moral, sharpness, clima, gramado, descanso, viagem e atributos de goleiro. O relatório mostra diferenças em vitórias, gols, finalizações e xG total. Um delta pequeno não significa automaticamente ausência de efeito: verifique o intervalo de confiança e aumente a amostra. A análise é somente leitura e não persiste táticas ou condições.
+
+### Contrato atual do modelo e lacunas
+
+O motor separa explicitamente quatro etapas no código: probabilidade de criação da finalização, amostragem da qualidade da chance (xG), probabilidade de acertar o alvo e conversão condicionada ao goleiro. A criação de chances considera força ofensiva/defensiva, mentalidade, pressão, ritmo, linha defensiva, estilo de passe, largura, contra-ataque, mando, fadiga, clima e gramado. O xG considera força ofensiva, finalização individual, ritmo, estilo de passe, largura, gramado e clima; a conversão considera xG e atributos do goleiro.
+
+Essa separação torna as dependências inspecionáveis, mas não prova que todos os coeficientes estejam calibrados. Em particular, estilo de passe e largura influenciam tanto a frequência de finalizações quanto o xG; isso pode ser intencional, porém deve ser confrontado com dados para evitar dupla contagem. Eventos como cartões e lesões precisam de diagnósticos e taxas de ocorrência próprios antes de serem considerados calibrados. Alterações táticas persistidas durante a partida devem continuar sendo testadas quanto ao efeito nos minutos seguintes.
+
+### Critérios para fechar o P0
+
+- Executar os benchmarks em ambiente de referência e guardar os JSON com commit, Node, hardware, seed e tamanho do mundo.
+- Repetir 16/64/256 clubes em pelo menos cinco execuções; reportar mediana e p95, não apenas a melhor duração.
+- Adicionar bases históricas versionadas para gols/xG/finalizações e pré-registrar intervalos de aceitação por competição e período.
+- Validar os cenários com seeds distintas e intervalos de confiança, incluindo favoritos, azarões, goleiros excepcionais, mando e alterações táticas.
+- Só otimizar ou alterar a arquitetura quando as métricas identificarem o gargalo e houver benchmark antes/depois reproduzível.
