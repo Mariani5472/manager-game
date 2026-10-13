@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { createHash } from "node:crypto";
 import { openDatabase, validateDatabase } from "./db/database.js";
 import { auditGameIntegrity } from "./game/integrityAudit.js";
 import { runPerformanceBenchmark } from "./game/performance.js";
@@ -355,8 +356,12 @@ async function main(): Promise<void> {
       const splitDate = parseOption(args, "--split-date");
       const datasetVersion = parseOption(args, "--dataset-version");
       if (!file || !splitDate || !datasetVersion) throw new Error("Required: calibration-report --file <historical.jsonl> --dataset-version <version> --split-date YYYY-MM-DD [--sha256 <hash>].");
-      const report = buildHistoricalCalibrationReport(parseHistoricalJsonl(readFileSync(resolve(file), "utf8")), {
-        datasetVersion, splitDate, sha256: parseOption(args, "--sha256"),
+      const source = readFileSync(resolve(file), "utf8");
+      const sha256 = createHash("sha256").update(source, "utf8").digest("hex");
+      const expectedSha256 = parseOption(args, "--sha256");
+      if (expectedSha256 && expectedSha256.toLowerCase() !== sha256) throw new Error("Historical dataset SHA-256 does not match --sha256.");
+      const report = buildHistoricalCalibrationReport(parseHistoricalJsonl(source), {
+        datasetVersion, splitDate, sha256,
       });
       console.log(JSON.stringify(report, null, 2));
       return;
