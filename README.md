@@ -416,8 +416,10 @@ O benchmark CPU-only isola o kernel de partidas. Para medir a geração e persis
 
 ```bash
 node dist/cli.js benchmark-world --save-id <save-id> --seed 90210 --scales 16,64
+# Inclua a instalação de um pacote de dados no tempo de preparação
+node dist/cli.js benchmark-world --save-id <save-id> --package-file data/packages/example.json --scales 64
 # Carga pesada opcional: 256 clubes = 65.280 partidas
 node dist/cli.js benchmark-world --save-id <save-id> --seed 90210 --scales 256
 ```
 
-O relatório separa preparação do mundo, temporada completa, contagem de clubes/jogadores/fixtures, partidas concluídas e tamanho do SQLite. Cada escala executa em um backup temporário e valida a integridade do banco ao final. Os perfis de jogadores são reutilizados intencionalmente: isso mede o custo de uma temporada persistida, mas não substitui a validação de diversidade dos elencos ou o custo de instalação de Data Packages reais. Execute cada escala pelo menos cinco vezes em hardware fixo e compare mediana e p95 antes de definir budgets de CI.
+O relatório separa preparação do mundo, temporada completa, contagem de clubes/jogadores/fixtures, partidas concluídas e tamanho do SQLite. Cada escala executa em um backup temporário e valida a integridade do banco ao final. Os perfis de jogadores são reutilizados intencionalmente. A opção `--package-file` instala um pacote de dados dentro da cópia temporária antes de gerar a liga e inclui esse custo no tempo de preparação; use pacotes com dependências resolvidas e execute-os na ordem necessária. O relatório mede o pipeline persistido, mas não substitui a validação da diversidade/realismo dos elencos. Execute cada escala pelo menos cinco vezes em hardware fixo e compare mediana e p95 antes de definir budgets de CI.
