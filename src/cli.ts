@@ -339,14 +339,16 @@ async function main(): Promise<void> {
       const seed = parsePositiveId(parseOption(args, "--seed") ?? "90210", "--seed");
       const rawScales = parseOption(args, "--scales") ?? "16,64,256";
       const scales = rawScales.split(",").map(value => parsePositiveId(value.trim(), "scale"));
-      const results = await withSaveAsync(args, db => runPersistedWorldBenchmarks(db, scales, seed));
+      const packageFile = parseOption(args, "--package-file");
+      const dataPackages = packageFile ? [parseDataPackage(readFileSync(resolve(packageFile), "utf8"))] : [];
+      const results = await withSaveAsync(args, db => runPersistedWorldBenchmarks(db, scales, seed, dataPackages));
       console.log(JSON.stringify({
         generatedAt: new Date().toISOString(), seed, results,
         notes: [
           "Each scale is built and simulated in a disposable SQLite backup; the selected save is not mutated.",
           "This includes persistent squads, stadiums, tactics, generated fixtures, match events, player conditions and standings.",
           "Run each scale at least five times on a reference machine and compare median/p95. The 256-club season contains 65,280 fixtures and may take a long time.",
-          "Squads reuse source player profiles; this measures persistence/season throughput, not player-attribute realism or Data Package import cost."
+          "Squads reuse source player profiles. Pass --package-file to include installation of one Data Package in setup time; multiple package dependencies should be bundled in a package or installed in dependency order."
         ]
       }, null, 2));
       return;
