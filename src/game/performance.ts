@@ -161,7 +161,10 @@ function nextScheduledFixture(db:SqliteDatabase):number {
   return row.id;
 }
 function nextScheduledAiFixture(db:SqliteDatabase):number {
-  const metadata=db.prepare("SELECT selected_club_id AS clubId FROM game_save_metadata LIMIT 1").get() as {clubId:number}|undefined;
+  const hasMetadata=Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_save_metadata'").get());
+  const metadata=hasMetadata
+    ? db.prepare("SELECT selected_club_id AS clubId FROM game_save_metadata LIMIT 1").get() as {clubId:number}|undefined
+    : undefined;
   if(metadata) {
     const row=db.prepare("SELECT id FROM fixture WHERE status='SCHEDULED' AND home_club_id<>? AND away_club_id<>? ORDER BY scheduled_at,id LIMIT 1")
       .get(metadata.clubId,metadata.clubId) as {id:number}|undefined;
