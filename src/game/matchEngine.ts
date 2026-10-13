@@ -807,7 +807,7 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
    const wasStarter=initiallyStartingPlayerIds.has(p.id);
    const exitEvent=substitutionOut??injury??redCard;
    const loss=wasStarter?(exitEvent?9:14):(substitutionIn?7:2);
-   const minutesPlayed=wasStarter?(exitEvent?exitEvent.minute:90):(substitutionIn?90-substitutionIn.minute:0);
+   const minutesPlayed=wasStarter?(exitEvent?exitEvent.minute:90):(substitutionIn?Math.max(0,(exitEvent&&exitEvent.minute>substitutionIn.minute?exitEvent.minute:90)-substitutionIn.minute):0);
    state.run(fixtureId,p.id,team.clubId,Math.max(0,p.energy-loss),p.isStarting?6.3:6,minutesPlayed);
    db.prepare("UPDATE player_condition SET energy=MAX(0,energy-?) WHERE player_id=?").run(loss,p.id);
    if(p.isStarting){
