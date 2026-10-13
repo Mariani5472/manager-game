@@ -436,13 +436,18 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
  }
  if(!existing){
   const begin=db.transaction(()=>{
-   db.prepare("DELETE FROM match_event WHERE fixture_id=?").run(fixtureId);
-   db.prepare("DELETE FROM match_momentum WHERE fixture_id=?").run(fixtureId);
-   db.prepare("DELETE FROM match_player_state WHERE fixture_id=?").run(fixtureId);
+   // Acquire the write lock before checking the transition. A concurrent caller
+   // must never reset another worker's checkpoint/events after it has started.
+   const current=db.prepare("SELECT status FROM fixture WHERE id=?").get(fixtureId) as {status:string}|undefined;
+   if(!current || current.status!=="SCHEDULED") throw new Error(`Fixture ${fixtureId} changed state before simulation could start.`);
+   if(db.prepare("SELECT 1 FROM match_simulation_state WHERE fixture_id=?").get(fixtureId)) {
+    throw new Error(`Fixture ${fixtureId} already has a simulation checkpoint; refusing destructive reinitialization.`);
+   }
    db.prepare("INSERT INTO match_event(fixture_id,minute,event_type,xg,description) VALUES(?,0,'KICK_OFF',0,'Partida iniciada')").run(fixtureId);
    db.prepare("INSERT INTO match_simulation_state(fixture_id,state_version,simulation_minute,state_json) VALUES(?,1,0,?)")
-    .run(fixtureId,JSON.stringify({seed,minute:0,homeScore:0,awayScore:0,completed:false}));
-   db.prepare("UPDATE fixture SET status='IN_PROGRESS',current_minute=0,home_score=0,away_score=0 WHERE id=?").run(fixtureId);
+    .run(fixtureId,JSON.stringify({engineVersion:"1.0.0",seed,minute:0,homeScore:0,awayScore:0,completed:false}));
+   const claimed=db.prepare("UPDATE fixture SET status='IN_PROGRESS',random_seed=?,current_minute=0,home_score=0,away_score=0 WHERE id=? AND status='SCHEDULED'").run(seed,fixtureId);
+   if(claimed.changes!==1) throw new Error(`Fixture ${fixtureId} could not be claimed for simulation.`);
   });
   begin.immediate();
  }
@@ -452,7 +457,7 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
  const minuteUpdate=db.transaction((m:KernelMinute)=>{
   for(const e of m.events)insertEvent.run(fixtureId,e.minute,e.clubId,e.playerId||null,e.secondaryPlayerId,e.eventType,e.xg,e.description);
   insertMomentum.run(fixtureId,m.minute,m.homePressure,m.awayPressure,m.homeScore,m.awayScore);
-  checkpoint.run(m.minute,JSON.stringify({seed,minute:m.minute,homeScore:m.homeScore,awayScore:m.awayScore,
+  checkpoint.run(m.minute,JSON.stringify({engineVersion:"1.0.0",seed,minute:m.minute,homeScore:m.homeScore,awayScore:m.awayScore,
    homeShots:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id&&["GOAL","SAVE","MISS"].includes(e.eventType)).length,
    awayShots:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.away_club_id&&["GOAL","SAVE","MISS"].includes(e.eventType)).length,
    homeShotsOnTarget:timeline.events.filter(e=>e.minute<=m.minute&&e.clubId===f.home_club_id&&(e.eventType==="GOAL"||e.eventType==="SAVE")).length,
@@ -488,7 +493,7 @@ export function simulateMatch(db:SqliteDatabase,fixtureId:number):MatchSummary {
   db.prepare("UPDATE player_condition SET suspension_matches=MAX(0,suspension_matches-1) WHERE player_id IN (SELECT player_id FROM squad_membership WHERE club_id IN (?,?)) AND suspension_matches>0").run(f.home_club_id,f.away_club_id);
   db.prepare("UPDATE fixture SET status='COMPLETED',current_minute=90,home_score=?,away_score=? WHERE id=?")
    .run(timeline.result.homeScore,timeline.result.awayScore,fixtureId);
-  checkpoint.run(90,JSON.stringify({seed,minute:90,homeScore:timeline.result.homeScore,
+  checkpoint.run(90,JSON.stringify({engineVersion:"1.0.0",seed,minute:90,homeScore:timeline.result.homeScore,
    awayScore:timeline.result.awayScore,homeShots:timeline.result.homeShots,awayShots:timeline.result.awayShots,
    homeXg:timeline.result.homeXg,awayXg:timeline.result.awayXg,completed:true}),fixtureId);
  });
