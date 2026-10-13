@@ -122,41 +122,49 @@ function nextScheduledFixture(db:SqliteDatabase):number {
   if(!row) throw new Error("Performance benchmark requires at least one scheduled fixture in the selected save.");
   return row.id;
 }
-function nextPlayableLeagueStage(db:SqliteDatabase):{stageId:number;roundNumber:number}|undefined {
-  return db.prepare(`
-    SELECT st.id AS stageId, MIN(r.round_number) AS roundNumber
-    FROM competition_stage st
-    JOIN competition_round r ON r.stage_id=st.id
+function benchmarkRound(db:SqliteDatabase):unknown {
+  const stage=db.prepare(`
+    SELECT st.id AS stageId,MIN(r.round_number) AS roundNumber
+    FROM competition_stage st JOIN competition_round r ON r.stage_id=st.id
     JOIN fixture f ON f.round_id=r.id
-    WHERE st.stage_kind='LEAGUE' AND f.status='SCHEDULED'
+    WHERE st.stage_kind='LEAGUE' AND f.status IN ('SCHEDULED','IN_PROGRESS')
     GROUP BY st.id ORDER BY COUNT(f.id) DESC LIMIT 1
   `).get() as {stageId:number;roundNumber:number}|undefined;
-}
-function benchmarkRound(db:SqliteDatabase):unknown {
-  const stage=nextPlayableLeagueStage(db);
   if(!stage) throw new Error("Round benchmark requires a league stage with scheduled fixtures.");
   return advanceStageRound(db,stage.stageId,stage.roundNumber);
 }
-function benchmarkLeagueSeason(db:SqliteDatabase):{stageId:number;rounds:number;fixtures:number;eventCounts:Array<{type:string;count:number}>;injuredPlayers:number} {
-  const stage=nextPlayableLeagueStage(db);
-  if(!stage) throw new Error("Season benchmark requires a league stage with scheduled fixtures.");
-  const rounds=db.prepare("SELECT round_number AS number FROM competition_round WHERE stage_id=? ORDER BY round_number").all(stage.stageId) as Array<{number:number}>;
+function benchmarkCampaignSeason(db:SqliteDatabase):{stages:number;rounds:number;fixtures:number;eventCounts:Array<{type:string;count:number}>;injuredPlayers:number} {
+  const stageIds=(db.prepare(`
+    SELECT DISTINCT st.id AS id
+    FROM competition_stage st JOIN competition_season cs ON cs.id=st.season_id
+    JOIN competition_round r ON r.stage_id=st.id JOIN fixture f ON f.round_id=r.id
+    WHERE f.status IN ('SCHEDULED','IN_PROGRESS')
+    ORDER BY cs.season_year,cs.id,st.stage_order
+  `).all() as Array<{id:number}>).map(row=>row.id);
+  if(!stageIds.length) throw new Error("Campaign-season benchmark requires scheduled league or cup fixtures.");
   let processedRounds=0,processedFixtures=0;
-  for(const round of rounds) {
-    const pending=(db.prepare("SELECT COUNT(*) AS count FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=? AND r.round_number=? AND f.status='SCHEDULED'").get(stage.stageId,round.number) as {count:number}).count;
-    if(!pending) continue;
-    const results=advanceStageRound(db,stage.stageId,round.number);
-    processedRounds++;
-    processedFixtures+=results.length;
+  for(const stageId of stageIds) {
+    for(;;) {
+      const round=db.prepare(`
+        SELECT r.round_number AS number FROM competition_round r JOIN fixture f ON f.round_id=r.id
+        WHERE r.stage_id=? AND f.status IN ('SCHEDULED','IN_PROGRESS')
+        ORDER BY r.round_number LIMIT 1
+      `).get(stageId) as {number:number}|undefined;
+      if(!round) break;
+      const results=advanceStageRound(db,stageId,round.number);
+      processedRounds++;
+      processedFixtures+=results.length;
+    }
   }
+  const placeholders=stageIds.map(()=>"?").join(",");
   const eventCounts=db.prepare(`
     SELECT e.event_type AS type,COUNT(*) AS count
     FROM match_event e JOIN fixture f ON f.id=e.fixture_id
     JOIN competition_round r ON r.id=f.round_id
-    WHERE r.stage_id=? GROUP BY e.event_type ORDER BY e.event_type
-  `).all(stage.stageId) as Array<{type:string;count:number}>;
+    WHERE r.stage_id IN (${placeholders}) GROUP BY e.event_type ORDER BY e.event_type
+  `).all(...stageIds) as Array<{type:string;count:number}>;
   const injuredPlayers=(db.prepare("SELECT COUNT(*) AS count FROM player_condition WHERE injured_until IS NOT NULL").get() as {count:number}).count;
-  return {stageId:stage.stageId,rounds:processedRounds,fixtures:processedFixtures,eventCounts,injuredPlayers};
+  return {stages:stageIds.length,rounds:processedRounds,fixtures:processedFixtures,eventCounts,injuredPlayers};
 }
 
 /**
@@ -187,7 +195,7 @@ export async function runPerformanceBenchmark(
   samples.push(await withDisposableCopy(source,dbPath=>measure(dbPath,dbPath.name,"roundAndStandings",()=>benchmarkRound(dbPath))));
 
   if(options.includeSeason!==false) {
-    samples.push(await withDisposableCopy(source,db=>measure(db,db.name,"completeLeagueSeason",()=>benchmarkLeagueSeason(db))));
+    samples.push(await withDisposableCopy(source,db=>measure(db,db.name,"completeCampaignSeason",()=>benchmarkLeagueSeason(db))));
   }
 
   samples.push(await withDisposableCopy(source,db=>measure(db,db.name,"playerEvolution",()=>applyRosterSeason(db,nextSeasonYear(db)))));
@@ -215,7 +223,7 @@ export async function runPerformanceBenchmark(
       "The single-match sample includes the real persistence path, including events, momentum, checkpoint, and player-condition writes.",
       "Scalability rows are CPU-only double-round-robin simulations using repeated source-club profiles; they do not measure 64/256-club data-package generation or database write amplification.",
       "better-sqlite3 statements are synchronous. synchronousBlockMs is the wall time during which the benchmark callback holds the main thread; eventLoopDelayMaxMs is a sampled histogram, not a hard real-time guarantee.",
-      "A two-hour season target is met when a representative full-season sample is below 7,200,000 ms. Use a production-like 16/64/256-club save and compare repeated runs before setting CI performance budgets.",
+      "The two-hour target applies to a representative campaign sample containing every scheduled league and cup stage; synthetic scale rows are engine-only. Compare repeated runs before setting CI performance budgets.",
     ],
   };
 }
