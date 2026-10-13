@@ -170,8 +170,8 @@ const standingFields: Record<string, keyof StandingRow> = {
 
 type StandingTieBreak = { points: number; goalDifference: number; goalsFor: number };
 
-export function getStandings(db: SqliteDatabase, stageId: number): StandingRow[] {
-  rebuildStandings(db, stageId);
+export function getStandings(db: SqliteDatabase, stageId: number, refreshCache = true): StandingRow[] {
+  if (refreshCache) rebuildStandings(db, stageId);
   const rules = db.prepare("SELECT rule_key FROM stage_standing_rule WHERE stage_id=? ORDER BY rule_order")
     .all(stageId) as Array<{rule_key:string}>;
   const rows = db.prepare(`
@@ -534,6 +534,14 @@ function advanceRoundById(db: SqliteDatabase, roundId: number, stageId: number):
     .all(roundId) as Array<{id:number}>;
   if (!fixtures.length) {
     if (state.total > 0 && (state.completed ?? 0) === state.total) {
+      // Recover post-match bookkeeping if the process stopped after the final
+      // fixture committed but before knockout progression/standings/season status.
+      const recoverRound = db.transaction(() => {
+        progressKnockoutStage(db, stageId, roundId);
+        rebuildStandings(db, stageId);
+        finishSeasonIfComplete(db, stageId);
+      });
+      recoverRound.immediate();
       throw new Error(`Round ${round.roundNumber} (${round.name}) is already completed; no matches were simulated.`);
     }
     throw new Error(`Round ${round.roundNumber} (${round.name}) has no playable fixtures.`);
@@ -549,9 +557,12 @@ function advanceRoundById(db: SqliteDatabase, roundId: number, stageId: number):
       failures.push(`fixture ${fixture.id}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  progressKnockoutStage(db, stageId, roundId);
-  rebuildStandings(db,stageId);
-  finishSeasonIfComplete(db,stageId);
+  const finalizeRound = db.transaction(() => {
+    progressKnockoutStage(db, stageId, roundId);
+    rebuildStandings(db,stageId);
+    finishSeasonIfComplete(db,stageId);
+  });
+  finalizeRound.immediate();
   if (failures.length) {
     throw new Error(`Round ${round.roundNumber} simulated ${results.length}/${fixtures.length} matches. Failures: ${failures.join(" | ")}`);
   }
@@ -913,9 +924,10 @@ export function prepareNextLeagueSeason(db: SqliteDatabase, stageId: number): {s
         fixtureCount++;
       });
     });
+    // Keep new-season creation and roster/finance lifecycle in one transaction.
+    // applyRosterSeason is idempotent, and its transaction becomes a savepoint here.
+    applyRosterSeason(db,year);
     return {seasonId,year,fixtures:fixtureCount};
   });
-  const result=create();
-  applyRosterSeason(db,result.year);
-  return result;
+  return create.immediate();
 }

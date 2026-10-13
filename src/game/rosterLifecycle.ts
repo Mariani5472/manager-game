@@ -258,6 +258,7 @@ export function listRosterPlayers(db:SqliteDatabase,seasonYear=seasonYearForPlay
 
 export function renewPlayerContract(db:SqliteDatabase,playerId:number,clubId:number,weeklyWage:number,years:number,seasonYear=seasonYearForPlayer(db)):void {
   ensureRosterLifecycleSchema(db);
+  const renew=db.transaction(()=>{
   if(!Number.isSafeInteger(weeklyWage)||weeklyWage<0)throw new Error("Weekly wage must be a non-negative integer.");
   if(!Number.isSafeInteger(years)||years<1||years>5)throw new Error("Contract duration must be 1–5 seasons.");
   const membership=db.prepare("SELECT 1 FROM squad_membership WHERE player_id=? AND club_id=?").get(playerId,clubId);
@@ -268,10 +269,13 @@ export function renewPlayerContract(db:SqliteDatabase,playerId:number,clubId:num
   db.prepare(`INSERT INTO player_contract(player_id,club_id,start_season,end_season,weekly_wage,status)
     VALUES(?,?,?,?,?,'ACTIVE') ON CONFLICT(player_id) DO UPDATE SET club_id=excluded.club_id,start_season=excluded.start_season,end_season=excluded.end_season,weekly_wage=excluded.weekly_wage,status='ACTIVE',updated_at=CURRENT_TIMESTAMP`)
     .run(playerId,clubId,seasonYear,seasonYear+years-1,weeklyWage);
+  });
+  renew.immediate();
 }
 
 export function createTransferOffer(db:SqliteDatabase,playerId:number,buyingClubId:number,fee:number,weeklyWage:number,years:number,seasonYear=seasonYearForPlayer(db)):number {
   ensureRosterLifecycleSchema(db);
+  const createOffer=db.transaction(()=>{
   if(!Number.isSafeInteger(fee)||fee<0)throw new Error("Transfer fee must be a non-negative integer.");
   if(!Number.isSafeInteger(weeklyWage)||weeklyWage<0)throw new Error("Weekly wage must be a non-negative integer.");
   if(!Number.isSafeInteger(years)||years<1||years>5)throw new Error("Contract duration must be 1–5 seasons.");
@@ -287,10 +291,13 @@ export function createTransferOffer(db:SqliteDatabase,playerId:number,buyingClub
   if(currentWages+weeklyWage>buying.weekly_wage_budget)throw new Error("Offered wage exceeds the remaining weekly wage budget.");
   return Number(db.prepare(`INSERT INTO transfer_negotiation(player_id,selling_club_id,buying_club_id,offer_fee,offered_weekly_wage,contract_years,status,last_message)
     VALUES(?,?,?,?,?,?,'OPEN','Oferta inicial enviada')`).run(playerId,player.clubId,buyingClubId,fee,weeklyWage,years).lastInsertRowid);
+  });
+  return createOffer.immediate();
 }
 
 export function respondToTransferOffer(db:SqliteDatabase,offerId:number,action:"ACCEPT"|"REJECT"|"COUNTER",counter?:{fee:number;weeklyWage:number;years:number},seasonYear=seasonYearForPlayer(db)):void {
   ensureRosterLifecycleSchema(db);
+  const respond=db.transaction(()=>{
   const offer=db.prepare("SELECT * FROM transfer_negotiation WHERE id=?").get(offerId) as {id:number;player_id:number;selling_club_id:number|null;buying_club_id:number;offer_fee:number;offered_weekly_wage:number;contract_years:number;status:string}|undefined;
   if(!offer||!["OPEN","COUNTERED"].includes(offer.status))throw new Error("Offer is not open for negotiation.");
   if(action==="REJECT") { db.prepare("UPDATE transfer_negotiation SET status='REJECTED',resolved_at=CURRENT_TIMESTAMP,last_message='Oferta rejeitada' WHERE id=?").run(offerId); return; }
@@ -318,6 +325,8 @@ export function respondToTransferOffer(db:SqliteDatabase,offerId:number,action:"
     db.prepare("UPDATE transfer_negotiation SET status='COMPLETED',resolved_at=CURRENT_TIMESTAMP,last_message='Transferência concluída' WHERE id=?").run(offerId);
   });
   transaction();
+  });
+  respond.immediate();
 }
 
 export function listPlayerHistory(db:SqliteDatabase,playerId:number):Array<Record<string,unknown>> {

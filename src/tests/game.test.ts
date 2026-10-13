@@ -6,6 +6,8 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { openDatabase, validateDatabase } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
+import { auditGameIntegrity } from "../game/integrityAudit.js";
+import { applyRosterSeason, createTransferOffer, respondToTransferOffer } from "../game/rosterLifecycle.js";
 import {
   advanceNextFixture, advanceRound, advanceStageRound, ensureFactoryLeagueCalendar,
   resolveKnockoutFixtureWinner, getManagedClub, getSeasonStatus, getStandings,
@@ -54,6 +56,26 @@ test("complete schema executes and passes SQLite integrity and foreign-key check
   }
 });
 
+test("integrity audit is read-only and reports a clean campaign without completed fixtures", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof openDatabase> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Audit Campaign", 1);
+    db = manager.open(save.filePath);
+    const before = db.prepare("SELECT COUNT(*) AS count FROM fixture WHERE status='COMPLETED'").get() as {count:number};
+    const report = auditGameIntegrity(db);
+    const after = db.prepare("SELECT COUNT(*) AS count FROM fixture WHERE status='COMPLETED'").get() as {count:number};
+    assert.equal(report.completedFixtures, 0);
+    assert.equal(report.ok, true);
+    assert.deepEqual(report.findings, []);
+    assert.equal(after.count, before.count);
+    assert.throws(() => auditGameIntegrity(db!, 0), /between 1 and 100000/);
+  } finally {
+    if (db?.open) db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("init-master repair restores six factory league rounds without touching the cup", () => {
   const root = tempRoot();
   try {
@@ -77,6 +99,86 @@ test("init-master repair restores six factory league rounds without touching the
       assert.equal(ensureFactoryLeagueCalendar(db).repaired,false);
     } finally { db.close(); }
   } finally { rmSync(root,{recursive:true,force:true}); }
+});
+
+test("match processing resumes after an injected minute write failure without duplicate events or momentum", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof openDatabase> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Interrupted Match", 1);
+    db = manager.open(save.filePath);
+    db.exec(`
+      CREATE TRIGGER test_injected_minute_failure
+      BEFORE INSERT ON match_momentum
+      WHEN NEW.minute = 45
+      BEGIN SELECT RAISE(ABORT, 'injected interruption'); END;
+    `);
+    assert.throws(() => advanceNextFixture(db!, 1), /injected interruption/);
+    const interrupted = db.prepare("SELECT status,current_minute,random_seed AS seed FROM fixture WHERE id=1")
+      .get() as {status:string;current_minute:number;seed:number|null};
+    assert.equal(interrupted.status, "IN_PROGRESS");
+    assert.equal(interrupted.current_minute, 44);
+    assert.ok(interrupted.seed !== null);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number}).n, 44);
+
+    db.exec("DROP TRIGGER test_injected_minute_failure");
+    const summary = advanceNextFixture(db, 1);
+    assert.equal(summary.minutes, 90);
+    assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number}).n, 90);
+    assert.equal((db.prepare("SELECT COUNT(DISTINCT minute) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number}).n, 90);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_event WHERE fixture_id=1 AND event_type='KICK_OFF'").get() as {n:number}).n, 1);
+    const checkpoint = db.prepare("SELECT state_json FROM match_simulation_state WHERE fixture_id=1").get() as {state_json:string};
+    const state = JSON.parse(checkpoint.state_json) as {engineVersion:string;seed:number;completed:boolean;minute:number};
+    assert.equal(state.engineVersion, "1.0.0");
+    assert.equal(state.seed, interrupted.seed);
+    assert.equal(state.completed, true);
+    assert.equal(state.minute, 90);
+    assert.equal((db.prepare("SELECT random_seed AS seed FROM fixture WHERE id=1").get() as {seed:number}).seed, interrupted.seed);
+  } finally {
+    if (db?.open) db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("identical fixture seeds and inputs reproduce event, xG and momentum output across isolated saves", async () => {
+  const root = tempRoot();
+  let first: ReturnType<typeof openDatabase> | undefined;
+  let second: ReturnType<typeof openDatabase> | undefined;
+  try {
+    const masterPath = createMaster(root);
+    const manager = new SaveManager(masterPath, join(root, "saves"));
+    const a = await manager.create({ name: "Replay A", managerName: "Alex", clubId: 1 });
+    const b = await manager.create({ name: "Replay B", managerName: "Bea", clubId: 1 });
+    first = manager.open(a.filePath);
+    second = manager.open(b.filePath);
+    const seedA = (first.prepare("SELECT random_seed AS seed FROM fixture WHERE id=1").get() as {seed:number|null}).seed;
+    const seedB = (second.prepare("SELECT random_seed AS seed FROM fixture WHERE id=1").get() as {seed:number|null}).seed;
+    assert.equal(seedA, seedB);
+    advanceNextFixture(first, 1);
+    advanceNextFixture(second, 1);
+    const events = (db: ReturnType<typeof openDatabase>) => db.prepare(`
+      SELECT minute,club_id AS clubId,player_id AS playerId,secondary_player_id AS secondaryPlayerId,
+        event_type AS type,ROUND(COALESCE(xg,0),8) AS xg,description
+      FROM match_event WHERE fixture_id=1 ORDER BY minute,id
+    `).all();
+    const momentum = (db: ReturnType<typeof openDatabase>) => db.prepare(`
+      SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,
+        home_score AS homeScore,away_score AS awayScore
+      FROM match_momentum WHERE fixture_id=1 ORDER BY minute
+    `).all();
+    assert.deepEqual(events(first), events(second));
+    assert.deepEqual(momentum(first), momentum(second));
+    const stateA = JSON.parse((first.prepare("SELECT state_json FROM match_simulation_state WHERE fixture_id=1").get() as {state_json:string}).state_json) as {engineVersion:string;seed:number;config:unknown};
+    const stateB = JSON.parse((second.prepare("SELECT state_json FROM match_simulation_state WHERE fixture_id=1").get() as {state_json:string}).state_json) as {engineVersion:string;seed:number;config:unknown};
+    assert.equal(stateA.engineVersion, stateB.engineVersion);
+    assert.equal(stateA.seed, stateB.seed);
+    assert.deepEqual(stateA.config, stateB.config);
+  } finally {
+    if (first?.open) first.close();
+    if (second?.open) second.close();
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("online backup captures master WAL state and a played save does not mutate master or another save", async () => {
@@ -105,6 +207,82 @@ test("online backup captures master WAL state and a played save does not mutate 
     if (saveA?.open) saveA.close();
     if (saveB?.open) saveB.close();
     if (masterDb?.open) masterDb.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("failed roster processing rolls back next-season creation and can be retried", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof openDatabase> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Season Rollback", 1);
+    db = manager.open(save.filePath);
+    applyRosterSeason(db, 2026);
+    db.prepare("UPDATE competition_season SET status='COMPLETED' WHERE id=1").run();
+    db.exec(`
+      CREATE TRIGGER test_reject_roster_season
+      BEFORE INSERT ON roster_season_run
+      WHEN NEW.season_year = 2027
+      BEGIN SELECT RAISE(ABORT, 'injected season failure'); END;
+    `);
+    assert.throws(() => prepareNextLeagueSeason(db!, 1), /injected season failure/);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM competition_season WHERE competition_id=1 AND season_year=2027").get() as {n:number}).n, 0);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM roster_season_run WHERE season_year=2027").get() as {n:number}).n, 0);
+
+    db.exec("DROP TRIGGER test_reject_roster_season");
+    const next = prepareNextLeagueSeason(db, 1);
+    assert.equal(next.year, 2027);
+    assert.equal(next.fixtures, 12);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM roster_season_run WHERE season_year=2027").get() as {n:number}).n, 1);
+  } finally {
+    if (db?.open) db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("web-safe standings query does not write the derived standings cache", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof openDatabase> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Read Only Standings", 1);
+    db = manager.open(save.filePath);
+    db.exec(`
+      CREATE TRIGGER test_block_standing_writes
+      BEFORE DELETE ON stage_standing
+      BEGIN SELECT RAISE(ABORT, 'standing cache write blocked'); END;
+    `);
+    assert.equal(getStandings(db, 1, false).length, 4);
+    assert.throws(() => getStandings(db!, 1), /standing cache write blocked/);
+  } finally {
+    if (db?.open) db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("failed transfer acceptance rolls back money, contract links and negotiation status", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof openDatabase> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Transfer Rollback", 1);
+    db = manager.open(save.filePath);
+    const offerId = createTransferOffer(db, 1, 2, 1000, 250, 2);
+    const beforeBuyer = db.prepare("SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=2")
+      .get() as {balance:number;budget:number};
+    const beforeSeller = db.prepare("SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=1")
+      .get() as {balance:number;budget:number};
+    db.exec(`
+      CREATE TRIGGER test_reject_transfer_membership
+      BEFORE INSERT ON squad_membership
+      WHEN NEW.player_id = 1 AND NEW.club_id = 2
+      BEGIN SELECT RAISE(ABORT, 'injected transfer failure'); END;
+    `);
+    assert.throws(() => respondToTransferOffer(db!, offerId, "ACCEPT"), /injected transfer failure/);
+    assert.deepEqual(db.prepare("SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=2").get(), beforeBuyer);
+    assert.deepEqual(db.prepare("SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=1").get(), beforeSeller);
+    assert.equal((db.prepare("SELECT club_id AS clubId FROM squad_membership WHERE player_id=1").get() as {clubId:number}).clubId, 1);
+    assert.equal((db.prepare("SELECT status FROM transfer_negotiation WHERE id=?").get(offerId) as {status:string}).status, "OPEN");
+  } finally {
+    if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });
   }
 });

@@ -61,7 +61,7 @@ export function startManagerWebServer(): void {
           const fixtures = listFixtures(db);
           const stages = getSeasonStatus(db);
           const selectedStage = Number(url.searchParams.get("stageId")) || stages.find(s => s.stageStatus === "IN_PROGRESS")?.stageId || stages[0]?.stageId;
-          const standings = selectedStage ? getStandings(db, selectedStage) : [];
+          const standings = selectedStage ? getStandings(db, selectedStage, false) : [];
           const upcoming = fixtures.filter(f => f.status === "SCHEDULED").slice(0, 8);
           const recent = fixtures.filter(f => f.status === "COMPLETED").slice(-8).reverse();
           const requestedFixtureId = Number(url.searchParams.get("fixtureId")) || 0;
@@ -76,9 +76,9 @@ export function startManagerWebServer(): void {
             if (savedLineup.filter(p => p.isStarting === 1).length === 11) {
               lineup = { starters: savedLineup.filter(p => p.isStarting === 1).map(p => p.playerId), bench: savedLineup.filter(p => p.isStarting === 0).map(p => p.playerId) };
             } else {
+              // GET /api/state is read-only: previews must not persist a lineup as a side effect.
               const preview = previewLineup(db, managed.id, selectedFixture.id);
-              const defaults = saveLineup(db, selectedFixture.id, managed.id, preview.starters.map(p => p.playerId), preview.bench.map(p => p.playerId));
-              lineup = { starters: defaults.starters.map(p => p.playerId), bench: defaults.bench.map(p => p.playerId) };
+              lineup = { starters: preview.starters.map(p => p.playerId), bench: preview.bench.map(p => p.playerId) };
             }
           }
           const matchDetails = selectedFixture ? {
@@ -146,6 +146,6 @@ export function startManagerWebServer(): void {
       json(res, 400, { error: error instanceof Error ? error.message : "Erro inesperado." });
     }
   });
-  server.listen(port, "0.0.0.0", () => console.log("Manager UI disponível na porta " + port));
+  // The UI has no authentication; bind to loopback rather than exposing campaign data on the LAN.\n  server.listen(port, "127.0.0.1", () => console.log("Manager UI disponível em http://127.0.0.1:" + port));
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) startManagerWebServer();

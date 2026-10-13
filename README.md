@@ -274,6 +274,31 @@ Substituições dinâmicas durante o jogo e a influência completa de clima e vi
 
 
 
+### Confiabilidade P0 — contratos de persistência
+
+A implementação de confiabilidade está em evolução. As proteções atuais são:
+
+- **Partida:** a inicialização reivindica a fixture dentro de uma transação imediata e recusa reinicializar uma partida que já possui checkpoint. Cada minuto grava eventos, momentum, placar e checkpoint atomicamente. A seed é persistida na fixture e o checkpoint registra a versão do motor e a configuração inicial relevante; uma retomada com entradas alteradas é recusada em vez de produzir um replay misto.
+- **Retomada:** se uma gravação de minuto falhar, minutos já confirmados são mantidos e o processamento pode ser retomado do último checkpoint. A finalização da partida atualiza evento de fim, condições dos jogadores, suspensões, placar e checkpoint em uma transação.
+- **Rodada:** a progressão eliminatória, reconstrução da classificação e atualização do status da temporada são agrupadas em uma transação. Reinvocar uma rodada já concluída também revalida esse pós-processamento antes de informar que não havia partidas para simular.
+- **Finanças:** renovação de contrato, criação de proposta e resolução de negociação são executadas sob transações imediatas, para serializar validações de saldo/orçamento com as gravações. Uma falha ao vincular o jogador deve reverter as movimentações financeiras e o estado da proposta.
+- **Web:** o servidor local agora escuta somente em `127.0.0.1`. A leitura de estado não persiste escalações sugeridas e pode consultar a classificação sem reconstruir o cache durante um GET.
+
+Esses contratos não equivalem a uma auditoria formal completa. A suíte contém testes de falha induzida para retomada de partida e rollback de transferência, mas ainda é necessário executar o CI e ampliar os testes de concorrência, virada de temporada, integridade de inscrições e vínculos, migrações e análise estatística de probabilidades/xG. Não exponha a interface web à rede: ela não possui autenticação.
+
+### Auditoria de integridade do save
+
+O comando `integrity-audit` executa uma verificação **somente de leitura** em uma campanha. Ele não corrige nem apaga dados automaticamente: inconsistências precisam ser investigadas antes de qualquer reparo.
+
+```bash
+npm run dev -- integrity-audit --save-id <save-id>
+npm run dev -- integrity-audit --save <caminho-do-save.sqlite> --limit 1000
+```
+
+A auditoria compara o placar persistido com os eventos `GOAL`, exige 90 amostras de momentum e minuto final 90 para partidas concluídas, valida o checkpoint de conclusão, sinaliza seeds ausentes, confere os onze titulares e o slot de goleiro persistidos e detecta participantes sem linha de classificação. O relatório JSON inclui códigos estáveis por achado e severidade `ERROR`/`WARNING`; o comando retorna código de saída diferente de zero quando encontra erros. Checkpoints ausentes são avisos para não classificar automaticamente saves legados como corrompidos.
+
+Esta auditoria é uma camada de diagnóstico, não prova a correção de todas as regras de domínio nem substitui testes de interrupção, análise financeira ou calibração estatística. A auditoria de placar considera eventos `GOAL`; qualquer mudança de representação de gols (por exemplo, gols contra) deve atualizar explicitamente esse contrato.
+
 ### Match engine diagnostics
 
 Run a read-only diagnostic report against a save to inspect shot-level xG, conversion outcomes, side-swapped results, strength differences, and persisted-match integrity:
