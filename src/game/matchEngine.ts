@@ -151,9 +151,15 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
  let hs=0,as=0,hShots=0,aShots=0,hOn=0,aOn=0,hxg=0,axg=0;
  const events:KernelShotEvent[]=[];
  const minutes:KernelMinute[]=[];
+ const changesByMinute=new Map<number,TacticalChange[]>();
+ for(const change of changes) {
+  const list=changesByMinute.get(change.minute)??[];
+  list.push(change);changesByMinute.set(change.minute,list);
+ }
+ const substitutionsByClub=new Map<number,number>([[home.clubId,0],[away.clubId,0]]);
  for(let minute=1;minute<=90;minute++){
   const minuteEvents:KernelShotEvent[]=[];
-  for(const change of changes.filter(item=>item.minute===minute)){
+  for(const change of changesByMinute.get(minute)??[]){
    const priorEventCount=minuteEvents.length;
    const team=change.club_id===home.clubId?home:change.club_id===away.clubId?away:null;
    if(!team)throw new Error(`Tactical change ${change.id} targets a club outside the fixture.`);
@@ -166,6 +172,7 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
     if(outgoing.role==="GK"&&incoming.goalkeeper!==1)throw new Error("A goalkeeper can only be replaced by another goalkeeper.");
     incoming.role=outgoing.role;incoming.slot=outgoing.slot;incoming.isStarting=true;outgoing.isStarting=false;refreshTeamStrength(team);
     minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição: ${outgoing.name} sai, ${incoming.name} entra`});
+    substitutionsByClub.set(team.clubId,(substitutionsByClub.get(team.clubId)??0)+1);
    }else if(change.change_type==="MENTALITY"){
     const mentality=String(payload.mentality??"");
     if(!["VERY_DEFENSIVE","DEFENSIVE","BALANCED","ATTACKING","VERY_ATTACKING"].includes(mentality))throw new Error(`Tactical change ${change.id} has invalid mentality.`);
@@ -243,11 +250,12 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
       substitute.role=injured.role;substitute.slot=injured.slot;substitute.isStarting=true;
       const subEvent:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:injured.id,secondaryPlayerId:substitute.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição por lesão: ${injured.name} sai, ${substitute.name} entra`};
       minuteEvents.push(subEvent);events.push(subEvent);
+      substitutionsByClub.set(incident.team.clubId,(substitutionsByClub.get(incident.team.clubId)??0)+1);
      }
      refreshTeamStrength(incident.team);
     }
    }
-   const substitutionsUsed=events.filter(event=>event.clubId===incident.team.clubId&&event.eventType==="SUBSTITUTION").length;
+   const substitutionsUsed=substitutionsByClub.get(incident.team.clubId)??0;
    if(minute>=60&&substitutionsUsed<3&&incident.random()<MATCH_EVENT_PROBABILITIES.substitutionAttemptPerTeamMinuteAfter60) {
     const activeNow=incident.team.lineup.filter(player=>player.isStarting&&player.role!=="GK");
     const bench=incident.team.lineup.filter(player=>!player.isStarting&&player.role!=="GK");
@@ -258,6 +266,7 @@ function simulateMatchTimeline(home:Team,away:Team,seed:number,changes:TacticalC
      refreshTeamStrength(incident.team);
      const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição tática: ${outgoing.name} sai, ${incoming.name} entra`};
      minuteEvents.push(event);events.push(event);
+     substitutionsByClub.set(incident.team.clubId,(substitutionsByClub.get(incident.team.clubId)??0)+1);
     }
    }
   }
