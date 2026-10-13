@@ -171,6 +171,25 @@ test("online backup captures master WAL state and a played save does not mutate 
   }
 });
 
+test("web-safe standings query does not write the derived standings cache", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof openDatabase> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Read Only Standings", 1);
+    db = manager.open(save.filePath);
+    db.exec(`
+      CREATE TRIGGER test_block_standing_writes
+      BEFORE UPDATE ON stage_standing
+      BEGIN SELECT RAISE(ABORT, 'standing cache write blocked'); END;
+    `);
+    assert.equal(getStandings(db, 1, false).length, 4);
+    assert.throws(() => getStandings(db!, 1), /standing cache write blocked/);
+  } finally {
+    if (db?.open) db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("failed transfer acceptance rolls back money, contract links and negotiation status", async () => {
   const root = tempRoot();
   let db: ReturnType<typeof openDatabase> | undefined;
