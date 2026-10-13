@@ -924,9 +924,10 @@ export function prepareNextLeagueSeason(db: SqliteDatabase, stageId: number): {s
         fixtureCount++;
       });
     });
+    // Keep new-season creation and roster/finance lifecycle in one transaction.
+    // applyRosterSeason is idempotent, and its transaction becomes a savepoint here.
+    applyRosterSeason(db,year);
     return {seasonId,year,fixtures:fixtureCount};
   });
-  const result=create();
-  applyRosterSeason(db,result.year);
-  return result;
+  return create.immediate();
 }
