@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { openDatabase, validateDatabase } from "./db/database.js";
 import { auditGameIntegrity } from "./game/integrityAudit.js";
+import { runPerformanceBenchmark } from "./game/performance.js";
 import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis, runSeasonBalanceAnalysis, scheduleMatchTacticalChange } from "./game/matchEngine.js";
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
@@ -68,6 +69,16 @@ function withSave<T>(args: string[], callback: (db: ReturnType<typeof openDataba
   const manager = new SaveManager(masterPath, savesDir);
   const db = saveId ? manager.openById(saveId) : manager.open(savePath!);
   try { return callback(db); } finally { db.close(); }
+}
+
+async function withSaveAsync<T>(args: string[], callback: (db: ReturnType<typeof openDatabase>) => Promise<T>): Promise<T> {
+  const saveId = parseOption(args, "--save-id");
+  const savePath = parseOption(args, "--save");
+  if (saveId && savePath) throw new Error("Use either --save-id or --save, not both.");
+  if (!saveId && !savePath) throw new Error("Provide --save-id <save-id> or --save <path>.");
+  const manager = new SaveManager(masterPath, savesDir);
+  const db = saveId ? manager.openById(saveId) : manager.open(savePath!);
+  try { return await callback(db); } finally { db.close(); }
 }
 
 function parsePositiveId(raw: string | undefined, label: string): number {
@@ -319,6 +330,18 @@ async function main(): Promise<void> {
         console.log(JSON.stringify(report, null, 2));
         if (!report.ok) process.exitCode = 1;
       });
+      return;
+    }
+    case "benchmark": {
+      const seed = parsePositiveId(parseOption(args, "--seed") ?? "90210", "--seed");
+      const rawScales = parseOption(args, "--scales") ?? "16,64,256";
+      const scales = rawScales.split(",").map(value => parsePositiveId(value.trim(), "scale"));
+      const report = await withSaveAsync(args, db => runPerformanceBenchmark(db, {
+        seed, scales, includeSeason: !args.includes("--no-season"),
+      }));
+      console.log(JSON.stringify(report, null, 2));
+      const season = report.samples.find(sample => sample.name === "completeLeagueSeason");
+      if (season && season.durationMs > 7_200_000) process.exitCode = 1;
       return;
     }
     case "diagnostics": {
