@@ -538,12 +538,23 @@ function advanceRoundById(db: SqliteDatabase, roundId: number, stageId: number):
     }
     throw new Error(`Round ${round.roundNumber} (${round.name}) has no playable fixtures.`);
   }
-  // Each match owns its per-minute transactions so a process interruption does not
-  // roll back checkpoints for the entire round.
-  const results = fixtures.map(f => simulateMatch(db,f.id));
+  // Each match owns its per-minute transactions. One malformed fixture must not
+  // prevent the remaining matches in the same round from being simulated.
+  const results: MatchSummary[] = [];
+  const failures: string[] = [];
+  for (const fixture of fixtures) {
+    try {
+      results.push(simulateMatch(db,fixture.id));
+    } catch (error) {
+      failures.push(`fixture ${fixture.id}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
   progressKnockoutStage(db, stageId, roundId);
   rebuildStandings(db,stageId);
   finishSeasonIfComplete(db,stageId);
+  if (failures.length) {
+    throw new Error(`Round ${round.roundNumber} simulated ${results.length}/${fixtures.length} matches. Failures: ${failures.join(" | ")}`);
+  }
   return results;
 }
 
