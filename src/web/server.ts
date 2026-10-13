@@ -73,9 +73,13 @@ export function startManagerWebServer(): void {
               (selectedFixture.homeClub === managed.name || selectedFixture.awayClub === managed.name)) {
             const savedLineup = db.prepare("SELECT player_id AS playerId, is_starting AS isStarting FROM match_lineup WHERE fixture_id=? AND club_id=? ORDER BY slot_number")
               .all(selectedFixture.id, managed.id) as Array<{playerId:number;isStarting:number}>;
-            lineup = savedLineup.length
-              ? { starters: savedLineup.filter(p => p.isStarting === 1).map(p => p.playerId), bench: savedLineup.filter(p => p.isStarting === 0).map(p => p.playerId) }
-              : (() => { const preview = previewLineup(db, managed.id, selectedFixture.id); return { starters: preview.starters.map(p => p.playerId), bench: preview.bench.map(p => p.playerId) }; })();
+            if (savedLineup.filter(p => p.isStarting === 1).length === 11) {
+              lineup = { starters: savedLineup.filter(p => p.isStarting === 1).map(p => p.playerId), bench: savedLineup.filter(p => p.isStarting === 0).map(p => p.playerId) };
+            } else {
+              const preview = previewLineup(db, managed.id, selectedFixture.id);
+              const defaults = saveLineup(db, selectedFixture.id, managed.id, preview.starters.map(p => p.playerId), preview.bench.map(p => p.playerId));
+              lineup = { starters: defaults.starters.map(p => p.playerId), bench: defaults.bench.map(p => p.playerId) };
+            }
           }
           const matchDetails = selectedFixture ? {
             fixture: selectedFixture,
