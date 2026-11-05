@@ -4,12 +4,10 @@ import { dirname } from "node:path";
 
 import { open, validate } from "../../db/database.js";
 
-import {
-  ensureFactoryWorld16,
-  ensureFactoryLeagueCalendar,
-} from "../../game/gameService.js";
+
 
 import { masterPath, schemaPath } from "../config.js";
+import { ensureFactoryLeagueCalendar, ensureFactoryWorld16 } from "../../game/world/factoryWorldService.js";
 
 export function registerMasterCommands(program: Command): void {
   program

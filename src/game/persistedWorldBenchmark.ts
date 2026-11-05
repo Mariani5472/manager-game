@@ -3,9 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import type { SqliteDatabase } from "../db/database.js";
-import { openDatabase, validateDatabase } from "../db/database.js";
-import { advanceStageRound, ensureFactoryWorld16 } from "./gameService.js";
-import { installDataPackage, type DataPackage } from "./dataPackages.js";
+import { ensureFactoryWorld16 } from "./world/factoryWorldService.js";
+import { DataPackage } from "./dataPackages/types.js";
+import { installDataPackage } from "./dataPackages/installer.js";
+import { advanceStageRound } from "./calendar/calendarService.js";
 
 export interface PersistedWorldScaleResult {
   clubs:number; players:number; rounds:number; fixtures:number; completedFixtures:number;
