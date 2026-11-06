@@ -11,5 +11,5 @@ export const saveDir = resolve(
 );
 
 export const schemaPath = resolve(
-    process.env.GMF_SCHEMA_SQL ?? resolve(root, "src/schema/game_manager_mvp.sql"),
+    process.env.GMF_SCHEMA_SQL ?? resolve(root, "apps/api/schema/game_manager_mvp.sql"),
 );
