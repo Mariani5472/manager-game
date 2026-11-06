@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, renameSync, rmSync, statSync, readdirSync } from
 import { resolve, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { open, validate } from "../db/database.js";
+import { applyMigrations, CURRENT_SCHEMA_VERSION } from "../db/migrations.js";
 
 export interface CreateSaveOptions {
   masterPath: string;
@@ -19,7 +20,6 @@ export interface SaveInfo {
   filePath: string;
 }
 
-const CURRENT_SCHEMA_VERSION = 1;
 const SAVE_METADATA_TABLE = `
   CREATE TABLE IF NOT EXISTS game_save_metadata (
     id TEXT PRIMARY KEY,
@@ -90,7 +90,9 @@ export class SaveManager {
     let masterDb: ReturnType<typeof open> | undefined;
     let saveDb: ReturnType<typeof open> | undefined;
     try {
-      masterDb = open(master, true);
+      masterDb = open(master);
+      validate(masterDb);
+      applyMigrations(masterDb);
       validate(masterDb);
       readSchemaVersion(masterDb);
       const club = masterDb.prepare("SELECT id FROM club WHERE id = ?").get(options.clubId) as { id: number } | undefined;
@@ -150,6 +152,7 @@ export class SaveManager {
   open(filePath: string) {
     const db = open(filePath);
     try {
+      applyMigrations(db);
       validate(db);
       readSchemaVersion(db);
       if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_save_metadata'").get()) {
