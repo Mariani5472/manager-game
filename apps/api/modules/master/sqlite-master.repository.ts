@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { open, validate } from "../../db/database.js";
+import { open, validate, type SqliteDatabase } from "../../db/database.js";
 import { masterPath } from "../../client/config.js";
 import { listInstalledDataPackages } from "../../game/dataPackages/installedPackagesService.js";
 import { ApplicationError } from "../../shared/application-error.js";
@@ -12,7 +12,7 @@ import type {
 } from "../../../shared/src/index.js";
 
 export class SqliteMasterRepository implements MasterRepository {
-  private withMaster<T>(query: Parameters<MasterRepository["listCountries"]>[0] extends never ? never : (db: ReturnType<typeof open>) => T): T {
+  private withMaster<T>(query: (db: SqliteDatabase) => T): T {
     if (!existsSync(masterPath)) {
       throw ApplicationError.conflict(
         'Master database is not initialized. Run "npm run dev -- init-master" first.',
