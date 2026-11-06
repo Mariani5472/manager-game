@@ -20,6 +20,10 @@ export const errorHandler: ErrorRequestHandler = (error, _request, response, _ne
     return;
   }
 
-  const message = error instanceof Error ? error.message : "Unexpected API error.";
-  response.status(500).json({ error: message, code: "INTERNAL_SERVER_ERROR" });
+  // Keep internal paths and SQL details out of public HTTP responses.
+  console.error(error);
+  response.status(500).json({
+    error: "Unexpected API error.",
+    code: "INTERNAL_SERVER_ERROR",
+  });
 };
