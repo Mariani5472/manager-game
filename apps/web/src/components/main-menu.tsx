@@ -20,7 +20,7 @@ export function MainMenu(){
  const packsQuery=useQuery({queryKey:["data-packages","installed"],queryFn:gameApi.dataPackages,enabled:activeSection==="new-game"||activeSection==="load-game"});
  const clubsQuery=useQuery({queryKey:["master","clubs",countryId],queryFn:()=>gameApi.clubs(countryId!),enabled:activeSection==="new-game"&&countryId!==null});
  const savesQuery=useQuery({queryKey:["saves"],queryFn:gameApi.saves,enabled:activeSection==="load-game"});
- const form=useForm<NewGameInput,any,NewGameOutput>({resolver:zodResolver(newGameSchema),defaultValues:{managerName:"",saveName:"",clubId:0}});
+ const form=useForm<NewGameInput,undefined,NewGameOutput>({resolver:zodResolver(newGameSchema),defaultValues:{managerName:"",saveName:"",clubId:0}});
  const createSave=useMutation({mutationFn:gameApi.createSave,onSuccess:async({save})=>{await queryClient.invalidateQueries({queryKey:["saves"]});router.push(`/game/${save.id}`);}});
  const loadSave=useMutation({mutationFn:gameApi.openSave,onSuccess:({saveId})=>router.push(`/game/${saveId}`)});
  const goHome=()=>{setMessage(null);setCountryId(null);form.reset();setActiveSection("home");};
