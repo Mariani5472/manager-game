@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const apiOrigin = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:4000";
+const apiOrigin = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:3001";
 
 const nextConfig: NextConfig = {
   output: "standalone",

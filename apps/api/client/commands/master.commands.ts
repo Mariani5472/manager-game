@@ -6,8 +6,8 @@ import { open, validate } from "../../db/database.js";
 
 
 
-import { masterPath, schemaPath } from "../config.js";
 import { ensureFactoryLeagueCalendar, ensureFactoryWorld16 } from "../../game/world/factoryWorldService.js";
+import { masterPath, schemaPath } from "../config.js";
 
 export function registerMasterCommands(program: Command): void {
   program
