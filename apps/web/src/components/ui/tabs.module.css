@@ -1,4 +1,23 @@
-.list { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--color-border); }
-.tab { flex: 0 0 auto; padding: 11px 13px; border: 0; border-bottom: 2px solid transparent; color: var(--color-text-secondary); background: transparent; font-size: 12px; font-weight: 600; }
-.tab[aria-selected="true"] { border-bottom-color: var(--color-accent); color: var(--color-text-primary); }
-.panel { padding-top: 16px; }
+.list {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--color-border);
+}
+.tab {
+  flex: 0 0 auto;
+  padding: 11px 13px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-secondary);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+}
+.tab[aria-selected='true'] {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-text-primary);
+}
+.panel {
+  padding-top: 16px;
+}

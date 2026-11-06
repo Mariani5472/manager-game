@@ -1,1 +1,1 @@
-export {CampaignShell} from "./campaign/campaign-shell";
+export { CampaignShell } from './campaign/campaign-shell';

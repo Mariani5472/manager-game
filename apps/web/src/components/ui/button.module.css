@@ -1,19 +1,73 @@
 .button {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 40px; padding: 0 16px; border: 1px solid transparent;
-  border-radius: var(--radius-control); font-size: 13px; font-weight: 600;
-  line-height: 1; white-space: nowrap; transition: background .16s ease, border-color .16s ease, color .16s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
 }
-.button:disabled { opacity: .48; pointer-events: none; }
-.primary { color: #07140d; background: var(--color-accent); }
-.primary:hover { background: var(--color-accent-hover); }
-.secondary { color: var(--color-text-primary); background: var(--color-surface-elevated); border-color: var(--color-border); }
-.secondary:hover, .outline:hover { background: #343b46; }
-.ghost { color: var(--color-text-secondary); background: transparent; }
-.ghost:hover { color: var(--color-text-primary); background: var(--color-surface-elevated); }
-.outline { color: var(--color-text-primary); background: transparent; border-color: var(--color-border); }
-.danger { color: #fff; background: #a83e45; }
-.danger:hover { background: #bd4b52; }
-.small { min-height: 32px; padding: 0 11px; font-size: 12px; }
-.large { min-height: 48px; padding: 0 20px; font-size: 14px; }
-.icon { width: 36px; min-height: 36px; padding: 0; }
+.button:disabled {
+  opacity: 0.48;
+  pointer-events: none;
+}
+.primary {
+  color: #07140d;
+  background: var(--color-accent);
+}
+.primary:hover {
+  background: var(--color-accent-hover);
+}
+.secondary {
+  color: var(--color-text-primary);
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
+}
+.secondary:hover,
+.outline:hover {
+  background: #343b46;
+}
+.ghost {
+  color: var(--color-text-secondary);
+  background: transparent;
+}
+.ghost:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-elevated);
+}
+.outline {
+  color: var(--color-text-primary);
+  background: transparent;
+  border-color: var(--color-border);
+}
+.danger {
+  color: #fff;
+  background: #a83e45;
+}
+.danger:hover {
+  background: #bd4b52;
+}
+.small {
+  min-height: 32px;
+  padding: 0 11px;
+  font-size: 12px;
+}
+.large {
+  min-height: 48px;
+  padding: 0 20px;
+  font-size: 14px;
+}
+.icon {
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+}

@@ -1,6 +1,31 @@
-.badge { display: inline-flex; align-items: center; width: fit-content; min-height: 22px; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; line-height: 1.2; }
-.default { color: #c3cad3; background: #343943; }
-.success { color: #83d9aa; background: rgba(54,184,121,.13); }
-.warning { color: #e8c477; background: rgba(229,184,92,.13); }
-.danger { color: #ed9297; background: rgba(225,107,112,.13); }
-.info { color: #8ebde8; background: rgba(87,151,207,.13); }
+.badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.default {
+  color: #c3cad3;
+  background: #343943;
+}
+.success {
+  color: #83d9aa;
+  background: rgba(54, 184, 121, 0.13);
+}
+.warning {
+  color: #e8c477;
+  background: rgba(229, 184, 92, 0.13);
+}
+.danger {
+  color: #ed9297;
+  background: rgba(225, 107, 112, 0.13);
+}
+.info {
+  color: #8ebde8;
+  background: rgba(87, 151, 207, 0.13);
+}

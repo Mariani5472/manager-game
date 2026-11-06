@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 :root {
   color-scheme: dark;
@@ -16,11 +16,16 @@
   --radius-card: 8px;
   --content-width: 1440px;
   --space-page: 24px;
-  --font-sans: "Roboto", Arial, Helvetica, sans-serif;
+  --font-sans: 'Roboto', Arial, Helvetica, sans-serif;
 }
 
-* { box-sizing: border-box; }
-html, body { min-height: 100%; }
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  min-height: 100%;
+}
 body {
   margin: 0;
   background: var(--color-background);
@@ -29,8 +34,23 @@ body {
   font-size: 14px;
   text-rendering: optimizeLegibility;
 }
-button, input, select, textarea { font: inherit; }
-button { cursor: pointer; }
-button:disabled { cursor: not-allowed; }
-::selection { background: var(--color-accent); color: #08130d; }
-:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+::selection {
+  background: var(--color-accent);
+  color: #08130d;
+}
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
