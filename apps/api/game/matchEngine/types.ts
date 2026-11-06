@@ -15,6 +15,16 @@ export interface MatchSummary {
   awayShotsOnTarget: number;
   homeXg: number;
   awayXg: number;
+  homeFouls: number;
+  awayFouls: number;
+  homeYellowCards: number;
+  awayYellowCards: number;
+  homeRedCards: number;
+  awayRedCards: number;
+  homeSubstitutions: number;
+  awaySubstitutions: number;
+  homeInjuries: number;
+  awayInjuries: number;
 }
 
 
@@ -102,6 +112,16 @@ export interface SimulatedMatchResult {
   awayShotsOnTarget: number;
   homeXg: number;
   awayXg: number;
+  homeFouls: number;
+  awayFouls: number;
+  homeYellowCards: number;
+  awayYellowCards: number;
+  homeRedCards: number;
+  awayRedCards: number;
+  homeSubstitutions: number;
+  awaySubstitutions: number;
+  homeInjuries: number;
+  awayInjuries: number;
 }
 
 
