@@ -2,7 +2,8 @@ import { SqliteDatabase } from "../../db/database.js";
 import { progressKnockoutStage } from "../competition/knockoutService.js";
 import { finishSeasonIfComplete } from "../competition/seasonService.js";
 import { rebuildStandings } from "../competition/standingsService.js";
-import { MatchSummary, simulateMatch } from "../matchEngine.js";
+import { simulateMatch } from "../matchEngine/matchSimulationService.js";
+import { MatchSummary } from "../matchEngine/types.js";
 
 
 export function advanceRound(

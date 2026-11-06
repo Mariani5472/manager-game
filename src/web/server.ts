@@ -1,11 +1,15 @@
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { open } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
-import { advanceNextFixture, advanceRound, getManagedClub, getSeasonStatus, getStandings, listClubs, listFixtures, listSquad, getTactics } from "../game/gameService.js";
 import { previewLineup, saveLineup } from "../game/lineupService.js";
+import { getManagedClub, listClubs } from "../game/clubService.js";
+import { listFixtures } from "../game/fixtureService.js";
+import { getSeasonStatus } from "../game/competition/competitionService.js";
+import { getStandings } from "../game/competition/standingsService.js";
+import { getTactics, listSquad } from "../game/squadService.js";
+import { advanceRound } from "../game/calendar/calendarService.js";
 
 const root = process.cwd();
 const masterPath = resolve(process.env.GMF_MASTER_DB ?? "data/master.sqlite");
