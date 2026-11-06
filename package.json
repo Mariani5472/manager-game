@@ -8,15 +8,22 @@
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test dist/tests/*.test.js",
     "dev": "tsx apps/api/cli.ts",
+    "api": "tsx apps/api/http/server.ts",
     "game": "node dist/cli.js",
-    "ui": "tsx src/web/server.ts"
+    "ui": "npm run dev --prefix apps/web",
+    "ui:build": "npm run build --prefix apps/web"
   },
   "dependencies": {
     "better-sqlite3": "^11.10.0",
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
     "@types/node": "^22.15.30",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
