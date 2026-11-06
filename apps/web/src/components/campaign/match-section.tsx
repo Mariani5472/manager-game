@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, ArrowLeftRight, Pause, Play, Radio, RotateCcw, Shield, Timer, Zap } from 'lucide-react';
+import { Activity, Pause, Play, Radio, RotateCcw, Shield, Timer, Zap } from 'lucide-react';
 import type { MatchCenterResponse, MatchLineupPlayerDto, MatchPreparationResponse } from '@shared/index';
 import { gameApi } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
