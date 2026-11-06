@@ -107,19 +107,33 @@ export function simulateMatch(
         if (!alreadyFullTime) insertEvent.run(fixtureId, 90, null, null, null, "FULL_TIME", 0, "Fim de jogo");
         db.prepare("DELETE FROM match_player_state WHERE fixture_id=?").run(fixtureId);
         db.prepare("UPDATE match_tactical_change SET applied=1 WHERE fixture_id=?").run(fixtureId);
-        const state = db.prepare("INSERT INTO match_player_state(fixture_id,player_id,club_id,energy,rating,minutes_played) VALUES(?,?,?,?,?,?)");
+        const state = db.prepare("INSERT INTO match_player_state(fixture_id,player_id,club_id,energy,rating,minutes_played,goals,assists,yellow_cards,red_card,substituted_out) VALUES(?,?,?,?,?,?,?,?,?,?,?)");
         for (const team of [home, away]) for (const p of team.lineup) {
-            const substitutionOut = timeline.events.find(e => e.eventType === "SUBSTITUTION" && e.playerId === p.id);
-            const substitutionIn = timeline.events.find(e => e.eventType === "SUBSTITUTION" && e.secondaryPlayerId === p.id);
-            const injury = timeline.events.find(e => e.eventType === "INJURY" && e.playerId === p.id);
-            const redCard = timeline.events.find(e => e.eventType === "RED_CARD" && e.playerId === p.id);
+            const playerEvents = timeline.events.filter(event => event.playerId === p.id || event.secondaryPlayerId === p.id);
+            const exits = playerEvents.filter(event =>
+                (event.eventType === "SUBSTITUTION" && event.playerId === p.id) ||
+                event.eventType === "INJURY" ||
+                event.eventType === "RED_CARD"
+            ).sort((a, b) => a.minute - b.minute);
+            const substitutionIn = timeline.events.find(event => event.eventType === "SUBSTITUTION" && event.secondaryPlayerId === p.id);
+            const exitEvent = exits[0];
             const wasStarter = initiallyStartingPlayerIds.has(p.id);
-            const exitEvent = substitutionOut ?? injury ?? redCard;
-            const loss = wasStarter ? (exitEvent ? 9 : 14) : (substitutionIn ? 7 : 2);
-            const minutesPlayed = wasStarter ? (exitEvent ? exitEvent.minute : 90) : (substitutionIn ? Math.max(0, (exitEvent && exitEvent.minute > substitutionIn.minute ? exitEvent.minute : 90) - substitutionIn.minute) : 0);
-            state.run(fixtureId, p.id, team.clubId, Math.max(0, p.energy - loss), p.isStarting ? 6.3 : 6, minutesPlayed);
+            const minutesPlayed = wasStarter
+                ? Math.max(0, exitEvent?.minute ?? 90)
+                : substitutionIn
+                    ? Math.max(0, (exitEvent && exitEvent.minute > substitutionIn.minute ? exitEvent.minute : 90) - substitutionIn.minute)
+                    : 0;
+            const loss = minutesPlayed === 0 ? 2 : wasStarter ? (exitEvent ? 9 : 14) : 7;
+            const goals = timeline.events.filter(event => event.eventType === "GOAL" && event.playerId === p.id).length;
+            const assists = timeline.events.filter(event => event.eventType === "GOAL" && event.secondaryPlayerId === p.id).length;
+            const yellowCards = timeline.events.filter(event => event.eventType === "YELLOW_CARD" && event.playerId === p.id).length;
+            const redCard = timeline.events.some(event => event.eventType === "RED_CARD" && event.playerId === p.id);
+            const substitutedOut = timeline.events.some(event => event.eventType === "SUBSTITUTION" && event.playerId === p.id);
+            const rating = Math.max(4, Math.min(10, (wasStarter ? 6.3 : 6) + goals * 0.8 + assists * 0.5 - yellowCards * 0.3 - (redCard ? 1.5 : 0)));
+            state.run(fixtureId, p.id, team.clubId, Math.max(0, p.energy - loss), rating, minutesPlayed,
+                goals, assists, yellowCards, redCard ? 1 : 0, substitutedOut ? 1 : 0);
             db.prepare("UPDATE player_condition SET energy=MAX(0,energy-?) WHERE player_id=?").run(loss, p.id);
-            if (p.isStarting) {
+            if (minutesPlayed > 0) {
                 const delta = timeline.result.homeScore === timeline.result.awayScore ? 0 :
                     (team.clubId === f.home_club_id ? (timeline.result.homeScore > timeline.result.awayScore ? 2 : -2) :
                         (timeline.result.awayScore > timeline.result.homeScore ? 2 : -2));
@@ -144,7 +158,7 @@ export function simulateMatch(
         AND (f.status='COMPLETED' OR f.id=?)`).get(playerId, fixtureId, fixtureId) as { count: number }).count;
             if (count > 0 && count % 5 === 0) db.prepare("UPDATE player_condition SET suspension_matches=MAX(suspension_matches,1) WHERE player_id=?").run(playerId);
         }
-        db.prepare("UPDATE fixture SET status='COMPLETED',current_minute=90,home_score=?,away_score=? WHERE id=?")
+        db.prepare("UPDATE fixture SET status='COMPLETED',current_minute=90,home_score=?,away_score=?,completed_at=COALESCE(scheduled_at,CURRENT_TIMESTAMP) WHERE id=?")
             .run(timeline.result.homeScore, timeline.result.awayScore, fixtureId);
         checkpoint.run(90, JSON.stringify({
             engineVersion: "1.0.0", seed, config: simulationConfig, minute: 90, homeScore: timeline.result.homeScore,
