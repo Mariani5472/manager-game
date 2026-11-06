@@ -6,5 +6,9 @@ export function createCampaignRoutes(controller:CampaignController):Router {
  router.get("/:saveId/campaign/calendar",controller.calendar);
  router.get("/:saveId/campaign/squad",controller.squad);
  router.get("/:saveId/campaign/team",controller.team);
+ router.get("/:saveId/matches/:fixtureId/preparation",controller.matchPreparation);
+ router.put("/:saveId/matches/:fixtureId/lineup",controller.saveMatchLineup);
+ router.get("/:saveId/matches/:fixtureId/center",controller.matchCenter);
+ router.post("/:saveId/matches/:fixtureId/advance",controller.advanceMatch);
  return router;
 }
