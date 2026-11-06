@@ -1,6 +1,7 @@
 import type {
     SqliteDatabase,
 } from "../../db/database.js";
+import { applyMigrations } from "../../db/migrations.js";
 import {
     persistMatchEnvironment,
     recoverSquadBeforeMatch,
@@ -24,6 +25,9 @@ export function simulateMatch(
     db: SqliteDatabase,
     fixtureId: number
 ): MatchSummary {
+    // Match simulation may also run against disposable or imported databases that
+    // bypass SaveManager.open; migrate them before touching versioned match tables.
+    applyMigrations(db);
     const f = db.prepare("SELECT id,home_club_id,away_club_id,random_seed,status FROM fixture WHERE id=?").get(fixtureId) as FixtureRow | undefined;
     if (!f) throw new Error(`Fixture ${fixtureId} not found.`);
     if (f.status === "COMPLETED") throw new Error(`Fixture ${fixtureId} is already completed.`);
