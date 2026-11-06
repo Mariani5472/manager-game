@@ -38,6 +38,8 @@
 .speedControls{display:flex;gap:4px}
 .playback{display:grid;gap:13px}
 .playActions{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.playButtons{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.speedHint{margin:0;color:var(--color-text-muted);font-size:9px}
 .playActions>span{display:flex;align-items:center;gap:6px;color:var(--color-text-secondary);font-size:10px;font-variant-numeric:tabular-nums}
 .progress{height:6px;overflow:hidden;border-radius:9px;background:var(--color-surface-elevated)}
 .progress span{display:block;height:100%;border-radius:inherit;background:var(--color-accent);transition:width .2s linear}
@@ -68,4 +70,4 @@
 .eventList time{color:var(--color-accent);font-weight:800;font-variant-numeric:tabular-nums}
 .eventList span{color:var(--color-text-secondary);line-height:1.5}
 @media(max-width:900px){.prepGrid,.centerGrid{grid-template-columns:1fr}}
-@media(max-width:560px){.heading{align-items:flex-start;flex-direction:column}.fixtureBanner{align-items:flex-start;flex-direction:column}.lineupRow{grid-template-columns:34px minmax(0,1fr) auto}.lineupRow select{grid-column:2/4}.scoreboard{padding:16px 10px;gap:6px}.teamScore strong{font-size:11px}.crest{width:34px;height:34px}.scoreBlock strong{font-size:32px}.controlHeader{align-items:flex-start;flex-direction:column}.playActions{align-items:flex-start;flex-direction:column}.actionBar{justify-content:stretch}.actionBar button{flex:1}}
+@media(max-width:560px){.playButtons{width:100%}.playButtons button{flex:1}.heading{align-items:flex-start;flex-direction:column}.fixtureBanner{align-items:flex-start;flex-direction:column}.lineupRow{grid-template-columns:34px minmax(0,1fr) auto}.lineupRow select{grid-column:2/4}.scoreboard{padding:16px 10px;gap:6px}.teamScore strong{font-size:11px}.crest{width:34px;height:34px}.scoreBlock strong{font-size:32px}.controlHeader{align-items:flex-start;flex-direction:column}.playActions{align-items:flex-start;flex-direction:column}.actionBar{justify-content:stretch}.actionBar button{flex:1}}
