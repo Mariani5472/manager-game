@@ -6,12 +6,13 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test dist/tests/*.test.js",
+    "test": "npm run build && node --test dist/api/tests/*.test.js",
     "dev": "tsx apps/api/cli.ts",
     "api": "tsx apps/api/http/server.ts",
-    "game": "node dist/cli.js",
+    "game": "node dist/api/cli.js",
     "ui": "npm run dev --prefix apps/web",
-    "ui:build": "npm run build --prefix apps/web"
+    "ui:build": "npm run build --prefix apps/web",
+    "api:start": "node dist/api/http/server.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.10.0",

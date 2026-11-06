@@ -12,5 +12,8 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
-  "include": ["apps/api/**/*.ts"]
+  "include": [
+    "apps/api/**/*.ts",
+    "apps/shared/**/*.ts"
+  ]
 }
