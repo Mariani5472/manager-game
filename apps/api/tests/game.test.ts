@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 import { open, validate } from "../db/database.js";
 import { recoverSquadBeforeMatch } from "../game/matchContext.js";
 import { SaveManager } from "../save/saveManager.js";
+import { previewLineup, saveLineup } from "../game/lineupService.js";
+import { simulateMatch } from "../game/matchEngine/matchSimulationService.js";
 import { simulateMatch } from "../game/matchEngine/matchSimulationService.js";
 import { auditGameIntegrity } from "../game/integrityAudit.js";
 import { applyRosterSeason, createTransferOffer, respondToTransferOffer } from "../game/rosterLifecycle.js";
@@ -826,6 +828,41 @@ test("incremental match playback resumes deterministically and finalizes only at
   } finally {
     if (incremental?.open) incremental.close();
     if (complete?.open) complete.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
+test("match playback advances in resumable minute batches and locks the lineup after kickoff", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof open> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Match Playback", 1);
+    db = manager.open(save.filePath);
+    const preview = previewLineup(db, 1, 1);
+    saveLineup(db, 1, 1, preview.starters.map(player => player.playerId), preview.bench.map(player => player.playerId));
+
+    const firstBatch = simulateMatch(db, 1, 15);
+    assert.equal(firstBatch.minutes, 15);
+    assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "IN_PROGRESS");
+    assert.equal((db.prepare("SELECT current_minute AS minute FROM fixture WHERE id=1").get() as {minute:number}).minute, 15);
+    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 15);
+    assert.throws(
+      () => saveLineup(db!, 1, 1, preview.starters.map(player => player.playerId), preview.bench.map(player => player.playerId)),
+      /only before kickoff/,
+    );
+
+    const resumedBatch = simulateMatch(db, 1, 30);
+    assert.equal(resumedBatch.minutes, 30);
+    assert.equal((db.prepare("SELECT COUNT(DISTINCT minute) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 30);
+
+    const finished = simulateMatch(db, 1, 90);
+    assert.equal(finished.minutes, 90);
+    assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
+    assert.equal((db.prepare("SELECT COUNT(DISTINCT minute) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 90);
+    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=1 AND event_type='FULL_TIME'").get() as {count:number}).count, 1);
+  } finally {
+    if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });
   }
 });
