@@ -165,9 +165,44 @@ export function simulateMatchTimeline(
       const player=chooseActive();
       if(player) {
        const secondYellow=events.some(event=>event.clubId===incident.team.clubId&&event.playerId===player.id&&event.eventType==="YELLOW_CARD");
-       if(secondYellow) { player.isStarting=false;refreshTeamStrength(incident.team); }
-       const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:player.id,secondaryPlayerId:null,eventType:secondYellow?"RED_CARD":"YELLOW_CARD",xg:0,description:secondYellow?`Segundo amarelo e expulsão para ${player.name}`:`Cartão amarelo para ${player.name}`};
-       minuteEvents.push(event);events.push(event);
+       if (secondYellow) {
+        const secondYellowEvent: KernelShotEvent = {
+         minute,
+         clubId: incident.team.clubId,
+         playerId: player.id,
+         secondaryPlayerId: null,
+         eventType: "YELLOW_CARD",
+         xg: 0,
+         description: `Segundo cartão amarelo para ${player.name}`,
+        };
+        minuteEvents.push(secondYellowEvent);
+        events.push(secondYellowEvent);
+        player.isStarting = false;
+        refreshTeamStrength(incident.team);
+        const redCardEvent: KernelShotEvent = {
+         minute,
+         clubId: incident.team.clubId,
+         playerId: player.id,
+         secondaryPlayerId: null,
+         eventType: "RED_CARD",
+         xg: 0,
+         description: `Expulsão por segundo amarelo para ${player.name}`,
+        };
+        minuteEvents.push(redCardEvent);
+        events.push(redCardEvent);
+       } else {
+        const event: KernelShotEvent = {
+         minute,
+         clubId: incident.team.clubId,
+         playerId: player.id,
+         secondaryPlayerId: null,
+         eventType: "YELLOW_CARD",
+         xg: 0,
+         description: `Cartão amarelo para ${player.name}`,
+        };
+        minuteEvents.push(event);
+        events.push(event);
+       }
       }
      }
      if(incident.random()<MATCH_EVENT_PROBABILITIES.redCardPerTeamMinute) {
@@ -261,6 +296,16 @@ export function simulateMatchTimeline(
      awayShotsOnTarget: aOn,
      homeXg: hxg,
      awayXg: axg,
+     homeFouls: countEvents(events, home.clubId, "FOUL"),
+     awayFouls: countEvents(events, away.clubId, "FOUL"),
+     homeYellowCards: countEvents(events, home.clubId, "YELLOW_CARD"),
+     awayYellowCards: countEvents(events, away.clubId, "YELLOW_CARD"),
+     homeRedCards: countEvents(events, home.clubId, "RED_CARD"),
+     awayRedCards: countEvents(events, away.clubId, "RED_CARD"),
+     homeSubstitutions: countEvents(events, home.clubId, "SUBSTITUTION"),
+     awaySubstitutions: countEvents(events, away.clubId, "SUBSTITUTION"),
+     homeInjuries: countEvents(events, home.clubId, "INJURY"),
+     awayInjuries: countEvents(events, away.clubId, "INJURY"),
     },
    };
    validateMatchTimeline(timeline, home.clubId, away.clubId);
@@ -384,8 +429,27 @@ export function validateMatchTimeline(
     result.homeShotsOnTarget !== homeShotsOnTarget ||
     result.awayShotsOnTarget !== awayShotsOnTarget ||
     Math.abs(result.homeXg - homeXg) > 1e-9 ||
-    Math.abs(result.awayXg - awayXg) > 1e-9
+    Math.abs(result.awayXg - awayXg) > 1e-9 ||
+    result.homeFouls !== countEvents(timeline.events, homeClubId, "FOUL") ||
+    result.awayFouls !== countEvents(timeline.events, awayClubId, "FOUL") ||
+    result.homeYellowCards !== countEvents(timeline.events, homeClubId, "YELLOW_CARD") ||
+    result.awayYellowCards !== countEvents(timeline.events, awayClubId, "YELLOW_CARD") ||
+    result.homeRedCards !== countEvents(timeline.events, homeClubId, "RED_CARD") ||
+    result.awayRedCards !== countEvents(timeline.events, awayClubId, "RED_CARD") ||
+    result.homeSubstitutions !== countEvents(timeline.events, homeClubId, "SUBSTITUTION") ||
+    result.awaySubstitutions !== countEvents(timeline.events, awayClubId, "SUBSTITUTION") ||
+    result.homeInjuries !== countEvents(timeline.events, homeClubId, "INJURY") ||
+    result.awayInjuries !== countEvents(timeline.events, awayClubId, "INJURY")
   ) {
     throw new Error("Match summary does not match the generated event stream.");
   }
+}
+
+
+function countEvents(
+  events: KernelShotEvent[],
+  clubId: number,
+  eventType: KernelShotEvent["eventType"],
+): number {
+  return events.filter(event => event.clubId === clubId && event.eventType === eventType).length;
 }
