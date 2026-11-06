@@ -117,7 +117,7 @@ export function MainMenu() {
               )}
 
               {activeSection === "new-game" && (
-                <form className="mt-7 space-y-5" onSubmit={form.handleSubmit((values) => createSave.mutate(values))}>
+                <form className="mt-7 space-y-5" onSubmit={form.handleSubmit((values) => { if (countryId === null) return; createSave.mutate({ ...values, countryId }); })}>
                   <label className="block text-xs font-semibold text-zinc-300">COUNTRY
                     <select value={countryId ?? ""} onChange={(event) => onCountryChange(event.target.value)} className="mt-2 h-12 w-full rounded-lg border border-zinc-800 bg-zinc-900/80 px-4 text-sm text-white outline-none focus:border-lime-300">
                       <option value="">Select a country</option>
