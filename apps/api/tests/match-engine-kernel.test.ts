@@ -116,6 +116,14 @@ test("generated timelines keep scores, shots, xG and minute events internally co
     assert.ok(timeline.result.homeShotsOnTarget <= timeline.result.homeShots);
     assert.ok(timeline.result.awayShotsOnTarget <= timeline.result.awayShots);
     assert.ok(timeline.result.homeXg >= 0 && timeline.result.awayXg >= 0);
+    assert.equal(timeline.result.homeFouls,
+      timeline.events.filter(event => event.clubId === 1 && event.eventType === "FOUL").length);
+    assert.equal(timeline.result.awayFouls,
+      timeline.events.filter(event => event.clubId === 2 && event.eventType === "FOUL").length);
+    assert.equal(timeline.result.homeYellowCards,
+      timeline.events.filter(event => event.clubId === 1 && event.eventType === "YELLOW_CARD").length);
+    assert.equal(timeline.result.awayRedCards,
+      timeline.events.filter(event => event.clubId === 2 && event.eventType === "RED_CARD").length);
     assert.ok(timeline.minutes.every(minute =>
       minute.homePressure >= 0 && minute.homePressure <= 100 &&
       minute.awayPressure >= 0 && minute.awayPressure <= 100
