@@ -7,10 +7,13 @@ import { gameApi } from '@/lib/api';
 import { CampaignLayout } from './campaign-layout';
 import { campaignNavigation, type CampaignSectionId } from './campaign-navigation';
 import { OverviewSection, CalendarSection, SquadSection, TeamSection } from './campaign-sections';
+import { MatchSectionRouter } from './match-section';
 import styles from './campaign-shell.module.css';
 export function CampaignShell({ saveId }: { saveId: string }) {
   const router = useRouter();
   const [activeSection, setActiveSection] = useState<CampaignSectionId>('overview');
+  const [selectedFixtureId, setSelectedFixtureId] = useState<number | null>(null);
+  const [matchMode, setMatchMode] = useState<'preparation' | 'center'>('preparation');
   const overview = useQuery({
     queryKey: ['campaign', saveId, 'overview'],
     queryFn: () => gameApi.campaignOverview(saveId),
@@ -59,11 +62,18 @@ export function CampaignShell({ saveId }: { saveId: string }) {
       case 'overview':
         return overview.data ? <OverviewSection data={overview.data} /> : null;
       case 'calendar':
-        return calendar.data ? <CalendarSection data={calendar.data} /> : null;
+        return calendar.data ? <CalendarSection data={calendar.data} onPrepareMatch={(fixtureId) => {
+          const fixture = calendar.data?.fixtures.find(item => item.id === fixtureId);
+          setSelectedFixtureId(fixtureId);
+          setMatchMode(fixture?.status === 'IN_PROGRESS' ? 'center' : 'preparation');
+          setActiveSection('match');
+        }} /> : null;
       case 'squad':
         return squad.data ? <SquadSection data={squad.data} /> : null;
       case 'team':
         return team.data ? <TeamSection data={team.data} /> : null;
+      case 'match':
+        return selectedFixtureId ? <MatchSectionRouter saveId={saveId} fixtureId={selectedFixtureId} mode={matchMode} onBack={() => setActiveSection('calendar')} onKickOff={() => setMatchMode('center')} /> : <p className={styles.error}>Select a fixture from the calendar first.</p>;
     }
   };
   return (
