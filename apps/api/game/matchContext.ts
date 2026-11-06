@@ -55,14 +55,26 @@ export function persistMatchEnvironment(db: SqliteDatabase, fixtureId: number, c
 }
 
 export function recoverSquadBeforeMatch(db: SqliteDatabase, fixtureId: number, homeClubId: number, awayClubId: number): void {
-  const fixture = db.prepare("SELECT scheduled_at AS scheduledAt FROM fixture WHERE id=?").get(fixtureId) as { scheduledAt:string|null } | undefined;
-  if (!fixture?.scheduledAt) return;
-  const matchTime = new Date(fixture.scheduledAt).getTime();
-  const rows = db.prepare("SELECT sm.player_id AS playerId, COALESCE(pc.energy,100) AS energy, MAX(f.scheduled_at) AS lastMatch FROM squad_membership sm LEFT JOIN player_condition pc ON pc.player_id=sm.player_id LEFT JOIN fixture f ON f.status='COMPLETED' AND (f.home_club_id=sm.club_id OR f.away_club_id=sm.club_id) AND f.scheduled_at IS NOT NULL AND f.scheduled_at<? WHERE sm.club_id IN (?,?) GROUP BY sm.player_id").all(fixture.scheduledAt,homeClubId,awayClubId) as Array<{playerId:number;energy:number;lastMatch:string|null}>;
-  const update = db.prepare("UPDATE player_condition SET energy=MIN(100,energy+?) WHERE player_id=?");
-  for (const player of rows) {
-    const hours = player.lastMatch ? Math.max(0,(matchTime-new Date(player.lastMatch).getTime())/3600000-2) : 168;
-    const recovery = Math.min(100-player.energy,Math.floor(hours/24)*8);
-    if (recovery > 0) update.run(recovery,player.playerId);
-  }
+  const recover = db.transaction(() => {
+    const prepared = db.prepare(
+      "INSERT OR IGNORE INTO match_preparation(fixture_id) VALUES(?)",
+    ).run(fixtureId);
+
+    // Recovery is a one-time campaign mutation. The marker and energy updates
+    // commit together so a crash cannot apply the same recovery twice.
+    if (prepared.changes === 0) return;
+
+    const fixture = db.prepare("SELECT scheduled_at AS scheduledAt FROM fixture WHERE id=?").get(fixtureId) as { scheduledAt:string|null } | undefined;
+    if (!fixture?.scheduledAt) return;
+    const matchTime = new Date(fixture.scheduledAt).getTime();
+    const rows = db.prepare("SELECT sm.player_id AS playerId, COALESCE(pc.energy,100) AS energy, MAX(f.scheduled_at) AS lastMatch FROM squad_membership sm LEFT JOIN player_condition pc ON pc.player_id=sm.player_id LEFT JOIN fixture f ON f.status='COMPLETED' AND (f.home_club_id=sm.club_id OR f.away_club_id=sm.club_id) AND f.scheduled_at IS NOT NULL AND f.scheduled_at<? WHERE sm.club_id IN (?,?) GROUP BY sm.player_id").all(fixture.scheduledAt,homeClubId,awayClubId) as Array<{playerId:number;energy:number;lastMatch:string|null}>;
+    const update = db.prepare("UPDATE player_condition SET energy=MIN(100,energy+?) WHERE player_id=?");
+    for (const player of rows) {
+      const hours = player.lastMatch ? Math.max(0,(matchTime-new Date(player.lastMatch).getTime())/3600000-2) : 168;
+      const recovery = Math.min(100-player.energy,Math.floor(hours/24)*8);
+      if (recovery > 0) update.run(recovery,player.playerId);
+    }
+  });
+
+  recover.immediate();
 }
