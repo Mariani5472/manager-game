@@ -1,6 +1,7 @@
 import { ApplicationError } from "../../shared/application-error.js";
 import type { CreateCareerRequest } from "../../../shared/src/index.js";
 import type { SaveRepository } from "./save.repository.js";
+import { SaveNotFoundError } from "./save-not-found.error.js";
 
 export interface ClubCountryValidator {
   assertClubBelongsToCountry(clubId: number, countryId: number): void;
@@ -25,7 +26,7 @@ export class SaveService {
     try {
       this.saveRepository.open(saveId);
     } catch (error) {
-      if (error instanceof Error && error.message.includes("not found")) {
+      if (error instanceof SaveNotFoundError) {
         throw ApplicationError.notFound(error.message, "SAVE_NOT_FOUND");
       }
       throw error;
