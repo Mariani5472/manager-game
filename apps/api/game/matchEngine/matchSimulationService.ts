@@ -21,13 +21,20 @@ import type {
 } from "./types.js";
 
 
+function readMatchSummary(db: SqliteDatabase, fixtureId: number, minutes: number): MatchSummary {
+    const fixture = db.prepare("SELECT home_club_id AS homeClubId,away_club_id AS awayClubId,home_score AS homeScore,away_score AS awayScore FROM fixture WHERE id=?").get(fixtureId) as {homeClubId:number;awayClubId:number;homeScore:number;awayScore:number};
+    return readMatchSummary(db, fixtureId, 90);
+}
+
 export function simulateMatch(
     db: SqliteDatabase,
-    fixtureId: number
+    fixtureId: number,
+    throughMinute = 90,
 ): MatchSummary {
     // Match simulation may also run against disposable or imported databases that
     // bypass SaveManager.open; migrate them before touching versioned match tables.
     applyMigrations(db);
+    if (!Number.isSafeInteger(throughMinute) || throughMinute < 1 || throughMinute > 90) throw new Error("throughMinute must be an integer between 1 and 90.");
     const f = db.prepare("SELECT id,home_club_id,away_club_id,random_seed,status FROM fixture WHERE id=?").get(fixtureId) as FixtureRow | undefined;
     if (!f) throw new Error(`Fixture ${fixtureId} not found.`);
     if (f.status === "COMPLETED") throw new Error(`Fixture ${fixtureId} is already completed.`);
@@ -105,7 +112,9 @@ export function simulateMatch(
         db.prepare("UPDATE fixture SET status='IN_PROGRESS',current_minute=?,home_score=?,away_score=? WHERE id=?")
             .run(m.minute, m.homeScore, m.awayScore, fixtureId);
     });
-    for (const m of timeline.minutes) if (m.minute > startMinute) minuteUpdate.immediate(m);
+    for (const m of timeline.minutes) if (m.minute > startMinute && m.minute <= throughMinute) minuteUpdate.immediate(m);
+    const currentMinute = Math.max(startMinute, Math.min(throughMinute, 90));
+    if (currentMinute < 90) return readMatchSummary(db, fixtureId, currentMinute);
     const finalise = db.transaction(() => {
         const alreadyFullTime = db.prepare("SELECT 1 FROM match_event WHERE fixture_id=? AND event_type='FULL_TIME'").get(fixtureId);
         if (!alreadyFullTime) insertEvent.run(fixtureId, 90, null, null, null, "FULL_TIME", 0, "Fim de jogo");
