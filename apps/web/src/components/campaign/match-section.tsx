@@ -129,7 +129,6 @@ function PreparationView({ saveId, fixtureId, onBack, onKickOff }: {
           {saveLineup.isPending ? 'Saving…' : 'Save lineup'}
         </Button>
         <Button disabled={starterIds.length !== 11 || saveLineup.isPending} onClick={async () => {
-          if (saveLineup.isSuccess) { onKickOff(); return; }
           try { await saveLineup.mutateAsync(); onKickOff(); } catch { /* mutation error is rendered above */ }
         }}>Continue to match centre <Play size={15}/></Button>
       </div>
