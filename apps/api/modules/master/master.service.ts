@@ -5,10 +5,7 @@ export class MasterService {
   constructor(private readonly masterRepository: MasterRepository) {}
 
   getOverview() {
-    return {
-      dataPackages: this.masterRepository.getInstalledDataPackages(),
-      countries: this.masterRepository.listCountries(),
-    };
+    return { countries: this.masterRepository.listCountries() };
   }
 
   getCountryClubs(countryId: number) {
