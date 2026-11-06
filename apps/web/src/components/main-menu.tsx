@@ -27,6 +27,11 @@ export function MainMenu() {
     queryFn: gameApi.overview,
     enabled: activeSection === "new-game" || activeSection === "load-game",
   });
+  const dataPackagesQuery = useQuery({
+    queryKey: ["data-packages", "installed"],
+    queryFn: gameApi.dataPackages,
+    enabled: activeSection === "new-game" || activeSection === "load-game",
+  });
   const clubsQuery = useQuery({
     queryKey: ["master", "clubs", countryId],
     queryFn: () => gameApi.clubs(countryId!),
@@ -100,13 +105,13 @@ export function MainMenu() {
                 <section className="mt-7 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div><p className="text-[10px] font-bold tracking-[0.2em] text-lime-300">ACTIVE DATA PACKS</p><p className="mt-1 text-xs text-zinc-500">Packages installed in your master database</p></div>
-                    <span className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300">{overviewQuery.data?.dataPackages.length ?? "—"}</span>
+                    <span className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300">{dataPackagesQuery.data?.dataPackages.length ?? "—"}</span>
                   </div>
-                  {overviewQuery.isLoading && <p className="text-xs text-zinc-500">Reading master database…</p>}
-                  {overviewQuery.isError && <p className="text-xs text-red-400">{overviewQuery.error.message}</p>}
-                  {overviewQuery.data?.dataPackages.length === 0 && <p className="text-xs text-zinc-500">No external data packs installed. Factory world data is still available.</p>}
+                  {dataPackagesQuery.isLoading && <p className="text-xs text-zinc-500">Reading installed packages…</p>}
+                  {dataPackagesQuery.isError && <p className="text-xs text-red-400">{dataPackagesQuery.error.message}</p>}
+                  {dataPackagesQuery.data?.dataPackages.length === 0 && <p className="text-xs text-zinc-500">No external data packs installed. Factory world data is still available.</p>}
                   <div className="space-y-2">
-                    {overviewQuery.data?.dataPackages.map((pack) => (
+                    {dataPackagesQuery.data?.dataPackages.map((pack) => (
                       <div key={pack.id} className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2">
                         <div className="min-w-0"><p className="truncate text-sm font-medium text-zinc-200">{pack.id}</p><p className="text-[10px] text-zinc-500">Installed {new Date(pack.installedAt).toLocaleDateString()}</p></div>
                         <span className="shrink-0 font-mono text-xs text-lime-200">v{pack.version}</span>
