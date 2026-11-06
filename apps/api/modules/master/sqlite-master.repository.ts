@@ -1,14 +1,12 @@
 import { existsSync } from "node:fs";
 import { open, validate, type SqliteDatabase } from "../../db/database.js";
 import { masterPath } from "../../client/config.js";
-import { listInstalledDataPackages } from "../../game/dataPackages/installedPackagesService.js";
 import { ApplicationError } from "../../shared/application-error.js";
 import type { MasterRepository } from "./master.repository.js";
 import type {
   ClubSummaryDto,
   CountryClubsResponse,
   CountrySummaryDto,
-  DataPackageSummaryDto,
 } from "../../../shared/src/index.js";
 
 export class SqliteMasterRepository implements MasterRepository {
@@ -20,34 +18,13 @@ export class SqliteMasterRepository implements MasterRepository {
       );
     }
 
-    // listInstalledDataPackages ensures its schema, so the connection must be writable.
-    const db = open(masterPath);
+    const db = open(masterPath, true);
     try {
       validate(db);
       return query(db);
     } finally {
       db.close();
     }
-  }
-
-  getInstalledDataPackages(): DataPackageSummaryDto[] {
-    return this.withMaster((db) =>
-      listInstalledDataPackages(db).map((item) => {
-        let dependencies: DataPackageSummaryDto["dependencies"] = [];
-        try {
-          const manifest = JSON.parse(item.dependencies) as { dependencies?: DataPackageSummaryDto["dependencies"] };
-          dependencies = manifest.dependencies ?? [];
-        } catch {
-          // Keep legacy or malformed package metadata visible without breaking the overview.
-        }
-        return {
-          id: item.id,
-          version: item.version,
-          installedAt: item.installedAt,
-          dependencies,
-        };
-      }),
-    );
   }
 
   listCountries(): CountrySummaryDto[] {
@@ -72,10 +49,10 @@ export class SqliteMasterRepository implements MasterRepository {
 
       const clubs = db.prepare(`
         SELECT c.id, c.name, c.short_name AS shortName, c.reputation,
-               ci.name AS city, s.name AS stadium
+               ci.name AS city,
+               (SELECT stadium.name FROM stadium WHERE stadium.club_id = c.id ORDER BY stadium.id LIMIT 1) AS stadium
         FROM club c
         LEFT JOIN city ci ON ci.id = c.city_id
-        LEFT JOIN stadium s ON s.club_id = c.id
         WHERE c.nation_id = ?
         ORDER BY c.reputation DESC, c.name
       `).all(countryId) as ClubSummaryDto[];
