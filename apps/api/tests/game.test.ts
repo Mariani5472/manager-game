@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { open, validate } from "../db/database.js";
+import { recoverSquadBeforeMatch } from "../game/matchContext.js";
 import { SaveManager } from "../save/saveManager.js";
 import { auditGameIntegrity } from "../game/integrityAudit.js";
 import { applyRosterSeason, createTransferOffer, respondToTransferOffer } from "../game/rosterLifecycle.js";
@@ -710,6 +711,80 @@ test("CLI smoke test initializes a clean world, creates a save, lists it, and op
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /already exists and is valid/);
   } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
+test("match persistence stores player-level event stats and finalizes the calendar fixture", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof open> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Match Persistence", 1);
+    db = manager.open(save.filePath);
+    const summary = advanceNextFixture(db, 1);
+
+    const playerTotals = db.prepare(`
+      SELECT
+        COALESCE(SUM(goals),0) AS goals,
+        COALESCE(SUM(assists),0) AS assists,
+        COALESCE(SUM(yellow_cards),0) AS yellowCards,
+        COALESCE(SUM(red_card),0) AS redCards,
+        COALESCE(SUM(substituted_out),0) AS substitutions
+      FROM match_player_state
+      WHERE fixture_id=?
+    `).get(1) as {goals:number;assists:number;yellowCards:number;redCards:number;substitutions:number};
+
+    const eventTotals = db.prepare(`
+      SELECT
+        SUM(CASE WHEN event_type='GOAL' THEN 1 ELSE 0 END) AS goals,
+        SUM(CASE WHEN event_type='YELLOW_CARD' THEN 1 ELSE 0 END) AS yellowCards,
+        SUM(CASE WHEN event_type='RED_CARD' THEN 1 ELSE 0 END) AS redCards,
+        SUM(CASE WHEN event_type='SUBSTITUTION' THEN 1 ELSE 0 END) AS substitutions
+      FROM match_event
+      WHERE fixture_id=?
+    `).get(1) as {goals:number;yellowCards:number;redCards:number;substitutions:number};
+
+    assert.equal(playerTotals.goals, eventTotals.goals);
+    assert.equal(playerTotals.yellowCards, eventTotals.yellowCards);
+    assert.equal(playerTotals.redCards, eventTotals.redCards);
+    assert.equal(playerTotals.substitutions, eventTotals.substitutions);
+    assert.equal(playerTotals.goals, summary.homeScore + summary.awayScore);
+    assert.ok(playerTotals.assists >= 0);
+
+    const fixture = db.prepare("SELECT status,completed_at AS completedAt FROM fixture WHERE id=1")
+      .get() as {status:string;completedAt:string|null};
+    assert.equal(fixture.status, "COMPLETED");
+    assert.ok(fixture.completedAt);
+
+    const standings = db.prepare("SELECT SUM(played) AS played FROM stage_standing WHERE stage_id=1")
+      .get() as {played:number};
+    assert.equal(standings.played, 2);
+    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_lineup WHERE fixture_id=1").get() as {count:number}).count, 36);
+  } finally {
+    if (db?.open) db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("pre-match energy recovery is applied only once even when preparation is retried", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof open> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Recovery Idempotency", 1);
+    db = manager.open(save.filePath);
+    db.prepare("UPDATE player_condition SET energy=40 WHERE player_id=1").run();
+
+    recoverSquadBeforeMatch(db, 1, 1, 2);
+    const afterFirst = (db.prepare("SELECT energy FROM player_condition WHERE player_id=1").get() as {energy:number}).energy;
+    recoverSquadBeforeMatch(db, 1, 1, 2);
+    const afterSecond = (db.prepare("SELECT energy FROM player_condition WHERE player_id=1").get() as {energy:number}).energy;
+
+    assert.equal(afterFirst, 96);
+    assert.equal(afterSecond, afterFirst);
+    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_preparation WHERE fixture_id=1").get() as {count:number}).count, 1);
+  } finally {
+    if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });
   }
 });
