@@ -13,9 +13,6 @@ import {
   runMonteCarlo,
 } from "./monteCarloService.js";
 import {
-  calculateTeamStrength,
-} from "./strengthCalculator.js";
-import {
   loadTeam,
 } from "./teamService.js";
 import {

@@ -166,7 +166,7 @@ export function applyRosterSeason(db: SqliteDatabase, seasonYear: number): Roste
       const training = clamp(growth + (p.energy < 45 ? -.45 : 0) + (random01(p.id * 31 + seasonYear * 7919) - .5) * 1.5, -2, 2);
       const attrs = db.prepare("SELECT " + ATTRIBUTE_COLUMNS.join(",") + " FROM player_attribute WHERE player_id=?").get(p.id) as Record<string, number> | undefined;
       if (attrs) {
-        const values = ATTRIBUTE_COLUMNS.map((key, index) => {
+        const values = ATTRIBUTE_COLUMNS.map((key) => {
           const physical = ["pace", "acceleration", "agility", "stamina", "strength"].includes(key);
           const delta = physical && age >= 30 ? -Math.max(0, (age - 29) * .15) : training;
           return clamp(Number(attrs[key]) + delta, 1, 99);
@@ -273,7 +273,7 @@ export function renewPlayerContract(db: SqliteDatabase, playerId: number, clubId
   renew.immediate();
 }
 
-export function createTransferOffer(db: SqliteDatabase, playerId: number, buyingClubId: number, fee: number, weeklyWage: number, years: number, seasonYear = seasonYearForPlayer(db)): number {
+export function createTransferOffer(db: SqliteDatabase, playerId: number, buyingClubId: number, fee: number, weeklyWage: number, years: number): number {
   ensureRosterLifecycleSchema(db);
   const createOffer = db.transaction(() => {
     if (!Number.isSafeInteger(fee) || fee < 0) throw new Error("Transfer fee must be a non-negative integer.");

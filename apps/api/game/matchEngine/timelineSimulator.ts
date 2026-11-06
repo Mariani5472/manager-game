@@ -1,8 +1,5 @@
 import {
   MATCH_EVENT_PROBABILITIES,
-  TACTICAL_INSTRUCTION_RANGES,
-  VALID_MENTALITIES,
-  VALID_ROLES,
 } from "./constants.js";
 import {
   clamp,
@@ -169,7 +166,6 @@ export function simulateMatchTimeline(
       {team:away,opponent:home,isHome:false,pressure:ap,opponentPressure:hp,random:awayRandom,opponentErrorRandom:homeErrorRandom},
     ]){
      const tactic=side.team.tactic;
-     const ctx=side.team.context??{weather:"CLEAR",temperatureC:20,pitchCondition:70,restHours:168,travelKm:0,travelHours:0};
      const defensiveError=side.opponentErrorRandom()<MATCH_EVENT_PROBABILITIES.defensiveErrorPerDefendingTeamMinute;
      const chance=shotCreationProbability(side.team,side.opponent,side.isHome,side.pressure,side.opponentPressure);
      if(!defensiveError&&side.random()>=chance)continue;

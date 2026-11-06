@@ -5,9 +5,6 @@ import {
     simulateMatchKernel,
 } from "./timelineSimulator.js";
 import {
-    calculateTeamStrength,
-} from "./strengthCalculator.js";
-import {
     loadTeam,
 } from "./teamService.js";
 import type {

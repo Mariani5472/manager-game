@@ -23,14 +23,6 @@ interface PromotionRuleRow {
 }
 
 
-interface RankingRow {
-    clubId: number;
-    club: string;
-    points: number;
-    goalDifference: number;
-    goalsFor: number;
-}
-
 
 export function applyPromotionRelegation(
     db: SqliteDatabase,

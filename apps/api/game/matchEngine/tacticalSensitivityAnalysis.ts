@@ -21,34 +21,6 @@ import type {
 } from "./types.js";
 
 
-function cloneTeam(
-    team: Team
-): Team {
-    return {
-        ...team,
-
-        tactic: {
-            ...team.tactic,
-        },
-
-        lineup: team.lineup.map(
-            player => ({
-                ...player,
-            })
-        ),
-
-        ...(
-            team.context
-                ? {
-                    context: {
-                        ...team.context,
-                    },
-                }
-                : {}
-        ),
-    };
-}
-
 
 /**
  * One-variable-at-a-time sensitivity analysis using common seeds for comparison.
