@@ -9,29 +9,20 @@ apps/api/
   shared/               # API-wide errors and HTTP helpers
   modules/
     master/
-      master.routes.ts
-      master.controller.ts
-      master.service.ts
-      master.repository.ts
-      sqlite-master.repository.ts
+    data-packages/
     saves/
-      save.routes.ts
-      save.controller.ts
-      save.service.ts
-      save.repository.ts
-      save-manager.repository.ts
 apps/shared/src/         # DTOs/contracts shared by API and web
 ```
 
-## Responsibilities
+Each domain module follows the same convention where applicable:
 
 - **Routes:** map HTTP methods and paths to controller handlers.
 - **Controllers:** validate transport input, invoke application services, and write HTTP responses.
 - **Services:** enforce business rules and coordinate use cases. They do not import Express or SQLite.
 - **Repository interfaces:** define persistence operations required by a module.
 - **Repository implementations:** own SQL, filesystem and existing infrastructure adapters.
-- **Shared contracts:** define DTOs consumed by both API and web.
-- **Container:** wires implementations to services and controllers. Tests can inject dependencies into `createApp`.
+
+The `apps/shared` package contains transport DTOs used by both the API and frontend. The composition root (`container.ts`) wires repositories, services and controllers. Tests can inject dependencies into `createApp`.
 
 ## Run locally
 
