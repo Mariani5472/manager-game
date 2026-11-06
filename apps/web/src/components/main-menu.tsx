@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { NewGameOutput, newGameSchema, type NewGameInput } from '@/lib/schemas';
+import { newGameSchema, type NewGameInput, type NewGameOutput } from '@/lib/schemas';
 import { gameApi } from '@/lib/api';
 import { useMenuStore, type MenuSection } from '@/store/menu-store';
 import styles from './main-menu.module.css';
