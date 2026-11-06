@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { openDatabase, validateDatabase } from "../db/database.js";
+import { open, validate } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
 import {
   advanceFixtureRound, ensureFactoryLeagueCalendar, ensureFactorySquadProfiles,
@@ -14,19 +14,19 @@ test("play advances every pending match in the managed club's round", async () =
   const root = mkdtempSync(join(tmpdir(), "manager-game-round-"));
   const masterPath = join(root, "master.sqlite");
   const schemaPath = resolve("src/schema/game_manager_mvp.sql");
-  const master = openDatabase(masterPath);
+  const master = open(masterPath);
   try {
     master.exec(readFileSync(schemaPath, "utf8"));
     ensureFactoryWorld16(master);
     ensureFactoryLeagueCalendar(master);
     ensureFactorySquadProfiles(master);
-    validateDatabase(master);
+    validate(master);
   } finally {
     master.close();
   }
 
   const manager = new SaveManager(masterPath, join(root, "saves"));
-  const masterReadOnly = openDatabase(masterPath, true);
+  const masterReadOnly = open(masterPath, true);
   let clubId: number;
   try { clubId = listClubs(masterReadOnly)[0]!.id; } finally { masterReadOnly.close(); }
   const save = await manager.create({ name: "Round Simulation", managerName: "Test Manager", clubId });
@@ -53,7 +53,7 @@ test("play advances every pending match in the managed club's round", async () =
     assert.ok(nextResults.every(result => result.fixtureId !== ownFixture.id), "completed matches are not simulated twice");
     const after = (db.prepare("SELECT COUNT(*) AS count FROM fixture WHERE status='COMPLETED'").get() as {count:number}).count;
     assert.equal(after - before, nextResults.length, "only newly simulated matches are added to the completed count");
-    validateDatabase(db);
+    validate(db);
   } finally {
     db.close();
     rmSync(root, { recursive: true, force: true });

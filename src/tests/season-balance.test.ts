@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { openDatabase, validateDatabase } from "../db/database.js";
+import { open, validate } from "../db/database.js";
 import { ensureFactoryWorld16 } from "../game/gameService.js";
 import { runSeasonBalanceAnalysis } from "../game/matchEngine.js";
 
@@ -12,10 +12,10 @@ const schemaPath = resolve("src/schema/game_manager_mvp.sql");
 test("factory upgrade generates distinct tiered squads and multi-seed season diagnostics", () => {
   const root = mkdtempSync(join(tmpdir(), "manager-game-balance-"));
   const dbPath = join(root, "master.sqlite");
-  const db = openDatabase(dbPath);
+  const db = open(dbPath);
   try {
     db.exec(readFileSync(schemaPath, "utf8"));
-    validateDatabase(db);
+    validate(db);
     const upgrade = ensureFactoryWorld16(db);
     assert.equal(upgrade.clubs, 16);
     assert.equal(upgrade.leagueFixtures, 240);

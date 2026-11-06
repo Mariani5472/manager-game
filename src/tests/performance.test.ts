@@ -3,18 +3,18 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { openDatabase, validateDatabase } from "../db/database.js";
+import { open, validate } from "../db/database.js";
 import { ensureFactoryWorld16 } from "../game/gameService.js";
 import { runEngineDiagnostics, runMatchBalanceAnalysis, runSyntheticSeasonScaleBenchmarks, runTacticalSensitivityAnalysis } from "../game/matchEngine.js";
 import { runPerformanceBenchmark } from "../game/performance.js";
 
 const schemaPath=resolve("src/schema/game_manager_mvp.sql");
-function fixtureDb():{root:string;db:ReturnType<typeof openDatabase>} {
+function fixtureDb():{root:string;db:ReturnType<typeof open>} {
   const root=mkdtempSync(join(tmpdir(),"gm-p0-performance-"));
-  const db=openDatabase(join(root,"campaign.sqlite"));
+  const db=open(join(root,"campaign.sqlite"));
   db.exec(readFileSync(schemaPath,"utf8"));
   ensureFactoryWorld16(db);
-  validateDatabase(db);
+  validate(db);
   return {root,db};
 }
 

@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { openDatabase, validateDatabase } from "../db/database.js";
+import { open, validate } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
 import { auditGameIntegrity } from "../game/integrityAudit.js";
 import { applyRosterSeason, createTransferOffer, respondToTransferOffer } from "../game/rosterLifecycle.js";
@@ -22,10 +22,10 @@ function tempRoot(): string {
 
 function createMaster(root: string): string {
   const masterPath = join(root, "master.sqlite");
-  const db = openDatabase(masterPath);
+  const db = open(masterPath);
   try {
     db.exec(readFileSync(schemaPath, "utf8"));
-    validateDatabase(db);
+    validate(db);
   } finally {
     db.close();
   }
@@ -43,7 +43,7 @@ test("complete schema executes and passes SQLite integrity and foreign-key check
   const root = tempRoot();
   try {
     const masterPath = createMaster(root);
-    const db = openDatabase(masterPath, true);
+    const db = open(masterPath, true);
     try {
       assert.equal(db.pragma("integrity_check", { simple: true }), "ok");
       assert.deepEqual(db.pragma("foreign_key_check"), []);
@@ -58,7 +58,7 @@ test("complete schema executes and passes SQLite integrity and foreign-key check
 
 test("integrity audit is read-only and reports a clean campaign without completed fixtures", async () => {
   const root = tempRoot();
-  let db: ReturnType<typeof openDatabase> | undefined;
+  let db: ReturnType<typeof open> | undefined;
   try {
     const { manager, save } = await createSave(root, "Audit Campaign", 1);
     db = manager.open(save.filePath);
@@ -80,7 +80,7 @@ test("init-master repair restores six factory league rounds without touching the
   const root = tempRoot();
   try {
     const masterPath = createMaster(root);
-    const db = openDatabase(masterPath);
+    const db = open(masterPath);
     try {
       db.prepare("DELETE FROM competition_round WHERE stage_id=1 AND round_number>2").run();
       assert.equal((db.prepare("SELECT COUNT(*) AS count FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=1").get() as {count:number}).count,4);
@@ -103,7 +103,7 @@ test("init-master repair restores six factory league rounds without touching the
 
 test("match processing resumes after an injected minute write failure without duplicate events or momentum", async () => {
   const root = tempRoot();
-  let db: ReturnType<typeof openDatabase> | undefined;
+  let db: ReturnType<typeof open> | undefined;
   try {
     const { manager, save } = await createSave(root, "Interrupted Match", 1);
     db = manager.open(save.filePath);
@@ -143,8 +143,8 @@ test("match processing resumes after an injected minute write failure without du
 
 test("identical fixture seeds and inputs reproduce event, xG and momentum output across isolated saves", async () => {
   const root = tempRoot();
-  let first: ReturnType<typeof openDatabase> | undefined;
-  let second: ReturnType<typeof openDatabase> | undefined;
+  let first: ReturnType<typeof open> | undefined;
+  let second: ReturnType<typeof open> | undefined;
   try {
     const masterPath = createMaster(root);
     const manager = new SaveManager(masterPath, join(root, "saves"));
@@ -157,12 +157,12 @@ test("identical fixture seeds and inputs reproduce event, xG and momentum output
     assert.equal(seedA, seedB);
     advanceNextFixture(first, 1);
     advanceNextFixture(second, 1);
-    const events = (db: ReturnType<typeof openDatabase>) => db.prepare(`
+    const events = (db: ReturnType<typeof open>) => db.prepare(`
       SELECT minute,club_id AS clubId,player_id AS playerId,secondary_player_id AS secondaryPlayerId,
         event_type AS type,ROUND(COALESCE(xg,0),8) AS xg,description
       FROM match_event WHERE fixture_id=1 ORDER BY minute,id
     `).all();
-    const momentum = (db: ReturnType<typeof openDatabase>) => db.prepare(`
+    const momentum = (db: ReturnType<typeof open>) => db.prepare(`
       SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,
         home_score AS homeScore,away_score AS awayScore
       FROM match_momentum WHERE fixture_id=1 ORDER BY minute
@@ -183,12 +183,12 @@ test("identical fixture seeds and inputs reproduce event, xG and momentum output
 
 test("online backup captures master WAL state and a played save does not mutate master or another save", async () => {
   const root = tempRoot();
-  let masterDb: ReturnType<typeof openDatabase> | undefined;
-  let saveA: ReturnType<typeof openDatabase> | undefined;
-  let saveB: ReturnType<typeof openDatabase> | undefined;
+  let masterDb: ReturnType<typeof open> | undefined;
+  let saveA: ReturnType<typeof open> | undefined;
+  let saveB: ReturnType<typeof open> | undefined;
   try {
     const masterPath = createMaster(root);
-    masterDb = openDatabase(masterPath);
+    masterDb = open(masterPath);
     // Keep the master connection open in WAL mode while saves are created.
     masterDb.prepare("UPDATE player_condition SET energy=37 WHERE player_id=1").run();
     const manager = new SaveManager(masterPath, join(root, "saves"));
@@ -213,7 +213,7 @@ test("online backup captures master WAL state and a played save does not mutate 
 
 test("failed roster processing rolls back next-season creation and can be retried", async () => {
   const root = tempRoot();
-  let db: ReturnType<typeof openDatabase> | undefined;
+  let db: ReturnType<typeof open> | undefined;
   try {
     const { manager, save } = await createSave(root, "Season Rollback", 1);
     db = manager.open(save.filePath);
@@ -242,7 +242,7 @@ test("failed roster processing rolls back next-season creation and can be retrie
 
 test("web-safe standings query does not write the derived standings cache", async () => {
   const root = tempRoot();
-  let db: ReturnType<typeof openDatabase> | undefined;
+  let db: ReturnType<typeof open> | undefined;
   try {
     const { manager, save } = await createSave(root, "Read Only Standings", 1);
     db = manager.open(save.filePath);
@@ -261,7 +261,7 @@ test("web-safe standings query does not write the derived standings cache", asyn
 
 test("failed transfer acceptance rolls back money, contract links and negotiation status", async () => {
   const root = tempRoot();
-  let db: ReturnType<typeof openDatabase> | undefined;
+  let db: ReturnType<typeof open> | undefined;
   try {
     const { manager, save } = await createSave(root, "Transfer Rollback", 1);
     db = manager.open(save.filePath);

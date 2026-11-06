@@ -3,10 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import type { SqliteDatabase } from "../db/database.js";
-import { openDatabase, validateDatabase } from "../db/database.js";
-import { advanceStageRound } from "./gameService.js";
-import { runSyntheticSeasonScaleBenchmarks, simulateMatch } from "./matchEngine.js";
+
 import { applyRosterSeason, createTransferOffer } from "./rosterLifecycle.js";
+import { runSyntheticSeasonScaleBenchmarks } from "./matchEngine/syntheticBenchmark.js";
+import { advanceStageRound } from "./calendar/calendarService.js";
+import { simulateMatch } from "./matchEngine/tacticalChangeService.js";
 
 export interface BenchmarkSample {
   name: string;
@@ -59,7 +60,7 @@ async function withDisposableCopy<T>(source: SqliteDatabase, run: (db:SqliteData
   let copy:SqliteDatabase|undefined;
   try {
     await source.backup(path);
-    copy=openDatabase(path);
+    copy=open(path);
     return await run(copy,path);
   } finally {
     if(copy?.open) copy.close();
@@ -260,7 +261,7 @@ export async function runPerformanceBenchmark(
   })));
 
   samples.push(await withDisposableCopy(source,db=>measure(db,db.name,"sqliteValidationAndPersistence",()=>{
-    validateDatabase(db);
+    validate(db);
     const pages=db.pragma("page_count",{simple:true}) as number;
     const pageSize=db.pragma("page_size",{simple:true}) as number;
     return {pages,pageSize,logicalDatabaseBytes:pages*pageSize};

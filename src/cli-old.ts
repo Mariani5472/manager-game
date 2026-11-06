@@ -2,20 +2,35 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
-import { openDatabase, validateDatabase } from "./db/database.js";
 import { auditGameIntegrity } from "./game/integrityAudit.js";
 import { runPerformanceBenchmark } from "./game/performance.js";
 import { runPersistedWorldBenchmarks } from "./game/persistedWorldBenchmark.js";
 import { buildHistoricalCalibrationReport, parseHistoricalJsonl } from "./game/historicalCalibration.js";
-import { runEngineDiagnostics, runMatchBalanceAnalysis, runTacticalImpactAnalysis, runTacticalSensitivityAnalysis, runSeasonBalanceAnalysis, scheduleMatchTacticalChange } from "./game/matchEngine.js";
 import { previewLineup, saveLineup } from "./game/lineupService.js";
 import { SaveManager } from "./save/saveManager.js";
-import { applyPromotionRelegation, installDataPackage, listInstalledDataPackages, parseDataPackage, validateDataPackage } from "./game/dataPackages.js";
 import { applyRosterSeason, createTransferOffer, listClubFinances, listPlayerHistory, listRosterPlayers, listTransferHistory, renewPlayerContract, respondToTransferOffer } from "./game/rosterLifecycle.js";
-import {
-  advanceNextFixture, advanceFixtureRound, advanceStageRound, ensureFactoryLeagueCalendar, ensureFactoryWorld16, ensureFactorySquadProfiles, getManagedClub, getSeasonStatus, getStandings,
-  listClubs, listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
-} from "./game/gameService.js";
+import { ensureFactoryLeagueCalendar, ensureFactoryWorld16 } from "./game/world/factoryWorldService.js";
+import { advanceStageRound } from "./game/calendar/calendarService.js";
+import { getStandings } from "./game/competition/standingsService.js";
+import { getSeasonStatus } from "./game/competition/competitionService.js";
+import { getManagedClub, listClubs } from "./game/clubService.js";
+import { getTactics, listSquad } from "./game/squadService.js";
+import { ensureFactorySquadProfiles } from "./game/world/squadProfileService.js";
+import { advanceFixtureRound, advanceNextFixture } from "./game/matchdayService.js";
+import { listFixtures } from "./game/fixtureService.js";
+import { prepareNextLeagueSeason } from "./game/competition/seasonService.js";
+import { open, validate } from "./db/database.js";
+import { parseDataPackage } from "./game/dataPackages/parser.js";
+import { validateDataPackage } from "./game/dataPackages/validator.js";
+import { installDataPackage } from "./game/dataPackages/installer.js";
+import { listInstalledDataPackages } from "./game/dataPackages/installedPackagesService.js";
+import { applyPromotionRelegation } from "./game/dataPackages/promotionRelegationService.js";
+import { runSeasonBalanceAnalysis } from "./game/matchEngine/seasonBalanceAnalysis.js";
+import { runTacticalImpactAnalysis } from "./game/matchEngine/tacticalImpactAnalysis.js";
+import { runMatchBalanceAnalysis } from "./game/matchEngine/matchBalanceAnalysis.js";
+import { runEngineDiagnostics } from "./game/matchEngine/engineDiagnostics.js";
+import { runTacticalSensitivityAnalysis } from "./game/matchEngine/tacticalSensitivityAnalysis.js";
+
 
 const root = process.cwd();
 const masterPath = resolve(process.env.GMF_MASTER_DB ?? joinPath(root, "data/master.sqlite"));
@@ -25,12 +40,12 @@ function joinPath(a: string, b: string): string { return a.endsWith("/") ? a + b
 
 function initializeMaster(): void {
   if (existsSync(masterPath)) {
-    const existing = openDatabase(masterPath);
+    const existing = open(masterPath);
     try {
-      validateDatabase(existing);
+      validate(existing);
       const world = ensureFactoryWorld16(existing);
       const repair = ensureFactoryLeagueCalendar(existing);
-      validateDatabase(existing);
+      validate(existing);
       if (world.upgraded) console.log(`Factory world upgraded: ${world.clubs} clubs, ${world.leagueFixtures} league fixtures, ${world.cupEntrants} cup entrants.`);
       if (repair.repaired) console.log(`Factory league calendar repaired: ${repair.rounds} rounds, ${repair.fixtures} fixtures.`);
       if (!world.upgraded && !repair.repaired) console.log(`Master DB already exists and is valid: ${masterPath}`);
@@ -38,13 +53,13 @@ function initializeMaster(): void {
     return;
   }
   mkdirSync(dirname(masterPath), { recursive: true });
-  const db = openDatabase(masterPath);
+  const db = open(masterPath);
   try {
     db.exec(readFileSync(schemaPath, "utf8"));
-    validateDatabase(db);
+    validate(db);
     const world = ensureFactoryWorld16(db);
     const repair = ensureFactoryLeagueCalendar(db);
-    validateDatabase(db);
+    validate(db);
     if (world.upgraded) console.log(`Factory world upgraded: ${world.clubs} clubs, ${world.leagueFixtures} league fixtures, ${world.cupEntrants} cup entrants.`);
     if (repair.repaired) console.log(`Factory league calendar repaired: ${repair.rounds} rounds, ${repair.fixtures} fixtures.`);
     console.log(`Master DB created: ${masterPath}`);
@@ -64,7 +79,7 @@ function parseOption(args: string[], key: string): string | undefined {
   return value;
 }
 
-function withSave<T>(args: string[], callback: (db: ReturnType<typeof openDatabase>) => T): T {
+function withSave<T>(args: string[], callback: (db: ReturnType<typeof open>) => T): T {
   const saveId = parseOption(args, "--save-id");
   const savePath = parseOption(args, "--save");
   if (saveId && savePath) throw new Error("Use either --save-id or --save, not both.");
@@ -74,7 +89,7 @@ function withSave<T>(args: string[], callback: (db: ReturnType<typeof openDataba
   try { return callback(db); } finally { db.close(); }
 }
 
-async function withSaveAsync<T>(args: string[], callback: (db: ReturnType<typeof openDatabase>) => Promise<T>): Promise<T> {
+async function withSaveAsync<T>(args: string[], callback: (db: ReturnType<typeof open>) => Promise<T>): Promise<T> {
   const saveId = parseOption(args, "--save-id");
   const savePath = parseOption(args, "--save");
   if (saveId && savePath) throw new Error("Use either --save-id or --save, not both.");
@@ -90,7 +105,7 @@ function parsePositiveId(raw: string | undefined, label: string): number {
   return value;
 }
 
-function simulateSeason(db: ReturnType<typeof openDatabase>): void {
+function simulateSeason(db: ReturnType<typeof open>): void {
   const stages = db.prepare(`
     SELECT st.id AS stageId, st.name AS stage, st.stage_kind AS stageKind,
       co.name AS competition, cs.season_year AS seasonYear
@@ -179,8 +194,8 @@ async function main(): Promise<void> {
     case "init-master": initializeMaster(); return;
     case "clubs": {
       if (!existsSync(masterPath)) throw new Error('Run "npm run dev -- init-master" first.');
-      const db = openDatabase(masterPath, true);
-      try { validateDatabase(db); console.table(listClubs(db)); } finally { db.close(); }
+      const db = open(masterPath, true);
+      try { validate(db); console.table(listClubs(db)); } finally { db.close(); }
       return;
     }
     case "new-save": {

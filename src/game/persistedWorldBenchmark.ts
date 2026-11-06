@@ -91,7 +91,7 @@ async function benchmarkOne(source:SqliteDatabase,clubs:number,seed:number,packa
   const dir=mkdtempSync(join(tmpdir(),"gm-persisted-world-")),path=join(dir,"world.sqlite"),started=performance.now();
   let db:SqliteDatabase|undefined;
   try{
-    await source.backup(path);db=openDatabase(path);
+    await source.backup(path);db=open(path);
     ensureFactoryWorld16(db);
     for(const pkg of packages) installDataPackage(db,pkg);
     const world=createPersistedWorld(db,clubs,seed),setupMs=performance.now()-started,seasonStart=performance.now();
@@ -99,7 +99,7 @@ async function benchmarkOne(source:SqliteDatabase,clubs:number,seed:number,packa
     const fullSeasonMs=performance.now()-seasonStart;
     const completed=(db.prepare("SELECT COUNT(*) AS n FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=? AND f.status='COMPLETED'").get(world.stageId) as {n:number}).n;
     if(completed!==world.fixtures)throw new Error(`Persisted-world season incomplete: ${completed}/${world.fixtures} fixtures completed.`);
-    validateDatabase(db);
+    validate(db);
     return {clubs:world.clubIds.length,players:world.players,rounds:world.rounds,fixtures:world.fixtures,completedFixtures:completed,setupMs,fullSeasonMs,totalMs:performance.now()-started,databaseBytes:fileBytes(path),seed,integrity:"ok"};
   }finally{if(db?.open)db.close();rmSync(dir,{recursive:true,force:true});}
 }

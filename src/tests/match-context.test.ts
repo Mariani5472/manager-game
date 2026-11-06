@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { openDatabase, validateDatabase } from "../db/database.js";
+import { open, validate } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
 import { previewLineup, saveLineup } from "../game/lineupService.js";
 import { scheduleMatchTacticalChange, simulateMatch } from "../game/matchEngine.js";
@@ -14,10 +14,10 @@ const schemaPath = resolve("src/schema/game_manager_mvp.sql");
 test("match context persists weather and pitch, applies substitutions as events, and advances suspensions", async () => {
   const root = mkdtempSync(join(tmpdir(), "manager-game-phase6-"));
   const masterPath = join(root, "master.sqlite");
-  const master = openDatabase(masterPath);
+  const master = open(masterPath);
   try {
     master.exec(readFileSync(schemaPath, "utf8"));
-    validateDatabase(master);
+    validate(master);
   } finally { master.close(); }
 
   const manager = new SaveManager(masterPath, join(root, "saves"));
@@ -77,7 +77,7 @@ test("match context persists weather and pitch, applies substitutions as events,
     assert.equal((db.prepare("SELECT applied FROM match_tactical_change WHERE fixture_id=? AND minute=60").get(fixture.id) as {applied:number}).applied, 1);
     const subState = db.prepare("SELECT minutes_played AS minutes FROM match_player_state WHERE fixture_id=? AND player_id=?").get(fixture.id, substitute.playerId) as {minutes:number};
     assert.equal(subState.minutes, 30);
-    validateDatabase(db);
+    validate(db);
   } finally {
     db.close();
     rmSync(root, { recursive: true, force: true });

@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { openDatabase } from "../db/database.js";
+import { open } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
 import { advanceNextFixture, advanceRound, getManagedClub, getSeasonStatus, getStandings, listClubs, listFixtures, listSquad, getTactics } from "../game/gameService.js";
 import { previewLineup, saveLineup } from "../game/lineupService.js";
@@ -14,7 +14,7 @@ const htmlPath = resolve(root, "public/manager.html");
 const port = Number(process.env.PORT ?? 3000);
 const manager = new SaveManager(masterPath, savesDir);
 
-function withDb(saveId: string, fn: (db: ReturnType<typeof openDatabase>) => unknown): unknown {
+function withDb(saveId: string, fn: (db: ReturnType<typeof open>) => unknown): unknown {
   if (!saveId || !/^[a-f0-9-]{20,40}$/i.test(saveId)) throw new Error("Informe um save-id válido.");
   const db = manager.openById(saveId);
   try { return fn(db); } finally { db.close(); }
@@ -41,7 +41,7 @@ export function startManagerWebServer(): void {
         res.end(readFileSync(htmlPath)); return;
       }
       if (req.method === "GET" && url.pathname === "/api/clubs") {
-        const db = openDatabase(masterPath, true);
+        const db = open(masterPath, true);
         try { json(res, 200, listClubs(db)); } finally { db.close(); }
         return;
       }

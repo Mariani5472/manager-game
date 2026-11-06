@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { openDatabase, validateDatabase } from "../db/database.js";
+import { open, validate } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
 import {
   applyPromotionRelegation, installDataPackage, listInstalledDataPackages,
@@ -16,8 +16,8 @@ const packagePath=resolve("data/packages/example-regional-leagues.json");
 test("versioned data packages validate references, import generically and remain save-isolated",async()=>{
   const root=mkdtempSync(join(tmpdir(),"manager-game-phase8-"));
   const masterPath=join(root,"master.sqlite");
-  const master=openDatabase(masterPath);
-  try{master.exec(readFileSync(schemaPath,"utf8"));validateDatabase(master);}finally{master.close();}
+  const master=open(masterPath);
+  try{master.exec(readFileSync(schemaPath,"utf8"));validate(master);}finally{master.close();}
   const manager=new SaveManager(masterPath,join(root,"saves"));
   const save=await manager.create({name:"Phase 8 Test",managerName:"Test Manager",clubId:1});
   const pkg=parseDataPackage(readFileSync(packagePath,"utf8"));
@@ -47,9 +47,9 @@ test("versioned data packages validate references, import generically and remain
     assert.ok(db.prepare("SELECT 1 FROM stage_participant WHERE stage_id=? AND club_id=?").get(d1Next,aurora),"promoted club enters the higher division");
     assert.ok(db.prepare("SELECT 1 FROM stage_participant WHERE stage_id=? AND club_id=?").get(d2Next,porto),"relegated club enters the lower division");
     assert.equal(db.prepare("SELECT 1 FROM stage_participant WHERE stage_id=? AND club_id=?").get(d2Next,aurora),undefined,"promoted club leaves the lower division");
-    validateDatabase(db);
+    validate(db);
   }finally{db.close();}
-  const untouchedMaster=openDatabase(masterPath,true);
+  const untouchedMaster=open(masterPath,true);
   try{
     assert.equal(untouchedMaster.prepare("SELECT 1 FROM competition WHERE code='FIC-D1'").get(),undefined,"installing into a save must not mutate the master database");
   }finally{untouchedMaster.close();rmSync(root,{recursive:true,force:true});}

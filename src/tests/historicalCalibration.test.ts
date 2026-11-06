@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildHistoricalCalibrationReport, parseHistoricalJsonl } from "../game/historicalCalibration.js";
 import { runPersistedWorldBenchmarks } from "../game/persistedWorldBenchmark.js";
-import { openDatabase } from "../db/database.js";
+import { open } from "../db/database.js";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -37,7 +37,7 @@ test("historical report rejects invalid split and inconsistent shot counts",()=>
 });
 test("persisted-world benchmark validates scale before opening disposable worlds",async()=>{
   const root=mkdtempSync(join(tmpdir(),"gm-world-scale-validation-"));
-  const db=openDatabase(join(root,"campaign.sqlite"));
+  const db=open(join(root,"campaign.sqlite"));
   try {
     db.exec(readFileSync(resolve("src/schema/game_manager_mvp.sql"),"utf8"));
     ensureFactoryWorld16(db);
@@ -48,7 +48,7 @@ test("persisted-world benchmark validates scale before opening disposable worlds
 
 test("persisted-world benchmark completes a persisted 16-club league on a disposable copy",async()=>{
   const root=mkdtempSync(join(tmpdir(),"gm-world-scale-integration-"));
-  const db=openDatabase(join(root,"campaign.sqlite"));
+  const db=open(join(root,"campaign.sqlite"));
   try {
     db.exec(readFileSync(resolve("src/schema/game_manager_mvp.sql"),"utf8"));
     ensureFactoryWorld16(db);

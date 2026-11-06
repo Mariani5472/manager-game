@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, renameSync, rmSync, statSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { openDatabase, validateDatabase } from "../db/database.js";
+import { open, validate } from "../db/database.js";
 
 export interface CreateSaveOptions {
   masterPath: string;
@@ -40,7 +40,7 @@ function safeFileName(value: string): string {
   return cleaned || "campaign";
 }
 
-function readSchemaVersion(db: ReturnType<typeof openDatabase>): number {
+function readSchemaVersion(db: ReturnType<typeof open>): number {
   const row = db.prepare("SELECT MAX(version) AS version FROM schema_version").get() as { version: number | null };
   if (row.version === null) throw new Error("Database has no applied schema version.");
   if (row.version > CURRENT_SCHEMA_VERSION) {
@@ -87,11 +87,11 @@ export class SaveManager {
     const destination = join(destinationDirectory, fileName);
     const temporary = join(destinationDirectory, `.${fileName}.${randomUUID()}.tmp.sqlite`);
 
-    let masterDb: ReturnType<typeof openDatabase> | undefined;
-    let saveDb: ReturnType<typeof openDatabase> | undefined;
+    let masterDb: ReturnType<typeof open> | undefined;
+    let saveDb: ReturnType<typeof open> | undefined;
     try {
-      masterDb = openDatabase(master, true);
-      validateDatabase(masterDb);
+      masterDb = open(master, true);
+      validate(masterDb);
       readSchemaVersion(masterDb);
       const club = masterDb.prepare("SELECT id FROM club WHERE id = ?").get(options.clubId) as { id: number } | undefined;
       if (!club) throw new Error(`Club ${options.clubId} does not exist in master database.`);
@@ -102,7 +102,7 @@ export class SaveManager {
       masterDb.close();
       masterDb = undefined;
 
-      saveDb = openDatabase(temporary);
+      saveDb = open(temporary);
       saveDb.exec(SAVE_METADATA_TABLE);
       const insertMetadata = saveDb.prepare(`
         INSERT INTO game_save_metadata (id, name, manager_name, selected_club_id, schema_version)
@@ -113,7 +113,7 @@ export class SaveManager {
         saveDb!.prepare("UPDATE competition_season SET status = 'ACTIVE' WHERE status = 'PLANNED'").run();
       });
       createMetadata();
-      validateDatabase(saveDb);
+      validate(saveDb);
       readSchemaVersion(saveDb);
       const metadata = saveDb.prepare(`
         SELECT id, name, manager_name AS managerName, selected_club_id AS clubId,
@@ -148,9 +148,9 @@ export class SaveManager {
   }
 
   open(filePath: string) {
-    const db = openDatabase(filePath);
+    const db = open(filePath);
     try {
-      validateDatabase(db);
+      validate(db);
       readSchemaVersion(db);
       if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_save_metadata'").get()) {
         throw new Error("This database is not a Game Manager campaign save.");
@@ -188,7 +188,7 @@ export class SaveManager {
       .flatMap(name => {
         const filePath = join(directory, name);
         try {
-          const db = openDatabase(filePath, true);
+          const db = open(filePath, true);
           try {
             if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_save_metadata'").get()) return [];
             const row = db.prepare(`

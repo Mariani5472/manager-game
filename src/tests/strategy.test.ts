@@ -4,14 +4,14 @@ import assert from "node:assert/strict";
 import {mkdtempSync,readFileSync,rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join,resolve} from "node:path";
-import {openDatabase,validateDatabase} from "../db/database.js";
+import {open,validate} from "../db/database.js";
 import {SaveManager} from "../save/saveManager.js";
 import {previewLineup,saveLineup} from "../game/lineupService.js";
 import {advanceNextFixture,advanceStageRound,ensureFactoryWorld16,getSeasonStatus,getStandings,listFixtures} from "../game/gameService.js";
 import {summarizeSamples} from "../game/matchBalance.js";
 import {runEngineDiagnostics,runMatchBalanceAnalysis,runTacticalImpactAnalysis} from "../game/matchEngine.js";
 const schema=resolve("src/schema/game_manager_mvp.sql");
-function setup(){const root=mkdtempSync(join(tmpdir(),"gmf-p2-"));const path=join(root,"master.sqlite");const db=openDatabase(path);db.exec(readFileSync(schema,"utf8"));validateDatabase(db);db.close();return{root,masterPath:path,manager:new SaveManager(path,join(root,"saves"))};}
+function setup(){const root=mkdtempSync(join(tmpdir(),"gmf-p2-"));const path=join(root,"master.sqlite");const db=open(path);db.exec(readFileSync(schema,"utf8"));validate(db);db.close();return{root,masterPath:path,manager:new SaveManager(path,join(root,"saves"))};}
 async function campaign(){const s=setup();const save=await s.manager.create({name:"test",managerName:"test",clubId:1});return{...s,save,db:s.manager.open(save.filePath)};}
 test("lineup preview provides 11 distinct starters including a goalkeeper and at most seven substitutes",async()=>{const x=await campaign();try{const l=previewLineup(x.db,1,1);assert.equal(l.starters.length,11);assert.equal(new Set(l.starters.map(p=>p.playerId)).size,11);assert.equal(l.starters.filter(p=>p.position==="GK").length,1);assert.ok(l.bench.length<=7);}finally{x.db.close();rmSync(x.root,{recursive:true,force:true});}});
 test("custom lineup rejects wrong counts, duplicate players and missing goalkeeper, then persists valid XI",async()=>{const x=await campaign();try{const l=previewLineup(x.db,1,1);assert.throws(()=>saveLineup(x.db,1,1,l.starters.slice(1).map(p=>p.playerId)),/exactly 11/);assert.throws(()=>saveLineup(x.db,1,1,[...l.starters.slice(1).map(p=>p.playerId),l.starters[1]!.playerId]),/twice/);const withoutKeeper=l.starters.filter(p=>p.position!=="GK").map(p=>p.playerId);withoutKeeper.push(12);assert.throws(()=>saveLineup(x.db,1,1,withoutKeeper),/exactly one goalkeeper/);saveLineup(x.db,1,1,l.starters.map(p=>p.playerId),l.bench.map(p=>p.playerId));assert.equal((x.db.prepare("SELECT COUNT(*) c FROM match_lineup WHERE fixture_id=1 AND club_id=1 AND is_starting=1").get() as {c:number}).c,11);}finally{x.db.close();rmSync(x.root,{recursive:true,force:true});}});
@@ -59,11 +59,11 @@ test("exceptional goalkeeper measurably reduces opponent conversion on paired se
  assert.ok(inspired.homeShotRate>=baseline.homeShotRate-0.5,"keeper quality must affect conversion, not erase shot creation");
 }finally{x.db.close();rmSync(x.root,{recursive:true,force:true});}});
 
-test("factory world upgrade creates a playable 16-club league and knockout cup, then completes a measured season",async()=>{const s=setup();let master=openDatabase(s.masterPath);let db:ReturnType<typeof openDatabase>|undefined;try{
+test("factory world upgrade creates a playable 16-club league and knockout cup, then completes a measured season",async()=>{const s=setup();let master=open(s.masterPath);let db:ReturnType<typeof open>|undefined;try{
  const upgraded=ensureFactoryWorld16(master);
  assert.deepEqual(upgraded,{upgraded:true,clubs:16,leagueFixtures:240,cupEntrants:16});
  assert.deepEqual(ensureFactoryWorld16(master),{upgraded:false,clubs:16,leagueFixtures:240,cupEntrants:16});
- validateDatabase(master);
+ validate(master);
  master.close();
  const save=await s.manager.create({name:"16 club benchmark",managerName:"Test",clubId:1});
  db=s.manager.open(save.filePath);

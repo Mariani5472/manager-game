@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { openDatabase, validateDatabase } from "../db/database.js";
+import { open, validate } from "../db/database.js";
 import { SaveManager } from "../save/saveManager.js";
 import {
   applyRosterSeason, createTransferOffer, ensureRosterLifecycleSchema, listClubFinances,
@@ -16,8 +16,8 @@ const schemaPath=resolve("src/schema/game_manager_mvp.sql");
 test("roster lifecycle develops players, generates youth, manages contracts and records transfers",async()=>{
   const root=mkdtempSync(join(tmpdir(),"manager-game-phase7-"));
   const masterPath=join(root,"master.sqlite");
-  const master=openDatabase(masterPath);
-  try{master.exec(readFileSync(schemaPath,"utf8"));validateDatabase(master);}finally{master.close();}
+  const master=open(masterPath);
+  try{master.exec(readFileSync(schemaPath,"utf8"));validate(master);}finally{master.close();}
   const manager=new SaveManager(masterPath,join(root,"saves"));
   const save=await manager.create({name:"Phase 7 Test",managerName:"Test Manager",clubId:1});
   const db=manager.open(save.filePath);
@@ -44,6 +44,6 @@ test("roster lifecycle develops players, generates youth, manages contracts and 
     assert.equal((db.prepare("SELECT status FROM transfer_negotiation WHERE id=?").get(offerId) as {status:string}).status,"COMPLETED");
     assert.ok(listTransferHistory(db,player.playerId).some(row=>row.type==="TRANSFER"));
     assert.ok(listPlayerHistory(db,player.playerId).length>0);
-    validateDatabase(db);
+    validate(db);
   }finally{db.close();rmSync(root,{recursive:true,force:true});}
 });

@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { openDatabase } from "../db/database.js";
+import { open } from "../db/database.js";
 
 test("complete schema and seeds execute with valid SQLite integrity", () => {
   const dir = mkdtempSync(join(tmpdir(), "manager-game-schema-"));
-  const db = openDatabase(join(dir, "schema.sqlite"));
+  const db = open(join(dir, "schema.sqlite"));
   try {
     db.exec(readFileSync(resolve("src/schema/game_manager_mvp.sql"), "utf8"));
     assert.equal(db.pragma("integrity_check", { simple: true }), "ok");
