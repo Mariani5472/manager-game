@@ -33,8 +33,11 @@ export interface CountryDto {
 }
 
 export interface MasterOverviewResponse {
-  dataPackages: DataPackageSummaryDto[];
   countries: CountrySummaryDto[];
+}
+
+export interface DataPackageListResponse {
+  dataPackages: DataPackageSummaryDto[];
 }
 
 export interface CountryClubsResponse {
