@@ -46,9 +46,7 @@ export function validate(db: SqliteDatabase): void {
     throw new Error(`SQLite integrity check failed: ${integrity}`);
   }
 
-  const foreignKeyErrors = db.pragma(
-    "foreign_key_check",
-  ) as unknown[];
+  const foreignKeyErrors = db.pragma("foreign_key_check") as unknown[];
 
   if (foreignKeyErrors.length > 0) {
     throw new Error(
@@ -63,7 +61,7 @@ export function validate(db: SqliteDatabase): void {
   ];
 
   const missingTables = requiredTables.filter(
-    (table) => tableExists(db, table),
+    (table) => !tableExists(db, table),
   );
 
   if (missingTables.length > 0) {
@@ -71,4 +69,4 @@ export function validate(db: SqliteDatabase): void {
       `Database does not contain the required Game Manager schema. Missing tables: ${missingTables.join(", ")}`,
     );
   }
-};
+}
