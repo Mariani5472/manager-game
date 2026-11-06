@@ -2,6 +2,7 @@ import { masterPath, saveDir } from "../../client/config.js";
 import { SaveManager } from "../../save/saveManager.js";
 import type { CreateCareerRequest, SaveSummaryDto } from "../../../shared/src/index.js";
 import type { SaveRepository } from "./save.repository.js";
+import { SaveNotFoundError } from "./save-not-found.error.js";
 
 export class SaveManagerRepository implements SaveRepository {
   private readonly saveManager = new SaveManager(masterPath, saveDir);
@@ -19,7 +20,14 @@ export class SaveManagerRepository implements SaveRepository {
   }
 
   open(saveId: string): void {
-    const database = this.saveManager.openById(saveId);
-    database.close();
+    try {
+      const database = this.saveManager.openById(saveId);
+      database.close();
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("not found")) {
+        throw new SaveNotFoundError(saveId);
+      }
+      throw error;
+    }
   }
 }
