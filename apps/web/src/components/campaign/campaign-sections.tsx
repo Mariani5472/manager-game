@@ -324,7 +324,7 @@ function fixtureStatusVariant(
   if (status === 'CANCELLED') return 'danger';
   return 'default';
 }
-export function CalendarSection({ data }: { data: CampaignCalendarResponse }) {
+export function CalendarSection({ data, onPrepareMatch }: { data: CampaignCalendarResponse; onPrepareMatch: (fixtureId: number) => void }) {
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'results'>('all');
   const fixtures = useMemo(() => {
     const filtered = data.fixtures.filter(
@@ -401,9 +401,16 @@ export function CalendarSection({ data }: { data: CampaignCalendarResponse }) {
                   {item.competition} · {item.stage}
                 </span>
               </div>
-              <Badge variant={fixtureStatusVariant(item.status)}>
-                {item.status.replaceAll('_', ' ')}
-              </Badge>
+              <div className={styles.fixtureActions}>
+                <Badge variant={fixtureStatusVariant(item.status)}>
+                  {item.status.replaceAll('_', ' ')}
+                </Badge>
+                {['SCHEDULED', 'IN_PROGRESS'].includes(item.status) && (
+                  <Button size="sm" variant="secondary" onClick={() => onPrepareMatch(item.id)}>
+                    {item.status === 'IN_PROGRESS' ? 'Resume' : 'Prepare'}
+                  </Button>
+                )}
+              </div>
             </article>
           ))}
           {!fixtures.length && (
