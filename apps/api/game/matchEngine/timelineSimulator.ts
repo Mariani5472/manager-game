@@ -114,7 +114,7 @@ export function simulateMatchTimeline(
         slot > 11 ||
         assignedSlots.has(slot) ||
         !["GK","CB","LB","RB","LWB","RWB","DM","CM","AM","LW","RW","LM","RM","ST"].includes(role) ||
-        (role === "GK") !== (player.goalkeeper === 1)
+        (role === "GK" && player.goalkeeper !== 1)
        ) {
         throw new Error(`Formation change ${change.id} has invalid slot assignments.`);
        }
@@ -329,15 +329,13 @@ function validateTeamForSimulation(team: Team): void {
   const starters = team.lineup.filter(player => player.isStarting);
   const playerIds = team.lineup.map(player => player.id);
   const goalkeeperSlots = starters.filter(player => player.role === "GK");
-  const goalkeeperPlayers = starters.filter(player => player.goalkeeper === 1);
-
   if (starters.length !== 11) {
     throw new Error(`Club ${team.clubId} must have exactly eleven starting players.`);
   }
   if (new Set(playerIds).size !== playerIds.length) {
     throw new Error(`Club ${team.clubId} has duplicate players in its match lineup.`);
   }
-  if (goalkeeperSlots.length !== 1 || goalkeeperPlayers.length !== 1 || goalkeeperSlots[0]?.id !== goalkeeperPlayers[0]?.id) {
+  if (goalkeeperSlots.length !== 1 || goalkeeperSlots[0]?.goalkeeper !== 1) {
     throw new Error(`Club ${team.clubId} must field exactly one goalkeeper in the goalkeeper role.`);
   }
 }
