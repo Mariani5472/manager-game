@@ -1,8 +1,8 @@
 import type {
-  ClubSummaryDto,
   CountryClubsResponse,
   CreateCareerRequest,
   CreateCareerResponse,
+  DataPackageListResponse,
   ListSavesResponse,
   MasterOverviewResponse,
   OpenSaveResponse,
@@ -25,6 +25,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const gameApi = {
   overview: () => request<MasterOverviewResponse>("/api/master/overview"),
+  dataPackages: () => request<DataPackageListResponse>("/api/data-packages/installed"),
   clubs: (countryId: number) =>
     request<CountryClubsResponse>(`/api/master/countries/${countryId}/clubs`),
   saves: () => request<ListSavesResponse>("/api/saves"),
@@ -36,5 +37,3 @@ export const gameApi = {
   openSave: (saveId: string) =>
     request<OpenSaveResponse>(`/api/saves/${saveId}/open`, { method: "POST" }),
 };
-
-export type { ClubSummaryDto };
