@@ -6,4 +6,5 @@ export const newGameSchema = z.object({
   clubId: z.coerce.number().int().positive("Choose a club."),
 });
 
-export type NewGameInput = z.infer<typeof newGameSchema>;
+export type NewGameInput = z.input<typeof newGameSchema>;
+export type NewGameOutput = z.output<typeof newGameSchema>;

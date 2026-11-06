@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, ChevronRight, CircleHelp, Cog, FolderOpen, Gamepad2, HardDrive, LoaderCircle, Plus, ShieldCheck, SlidersHorizontal, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { newGameSchema, type NewGameInput } from "@/lib/schemas";
+import { NewGameOutput, newGameSchema, type NewGameInput } from "@/lib/schemas";
 import { gameApi } from "@/lib/api";
 import { useMenuStore, type MenuSection } from "@/store/menu-store";
 
@@ -44,9 +44,13 @@ export function MainMenu() {
     queryFn: gameApi.saves,
     enabled: activeSection === "load-game",
   });
-  const form = useForm<NewGameInput>({
+  const form = useForm<NewGameInput, any, NewGameOutput>({
     resolver: zodResolver(newGameSchema),
-    defaultValues: { managerName: "", saveName: "", clubId: 0 },
+    defaultValues: {
+      managerName: "",
+      saveName: "",
+      clubId: 0,
+    },
   });
   const createSave = useMutation({
     mutationFn: gameApi.createSave,
