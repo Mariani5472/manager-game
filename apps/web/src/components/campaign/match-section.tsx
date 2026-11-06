@@ -222,7 +222,7 @@ export function MatchSection({ saveId, fixtureId, onBack }: { saveId: string; fi
             </div>
             <span><Timer size={14}/> {currentMinute} / 90 min</span>
           </div>
-          <p className={styles.speedHint}>Playback speed: {speed} simulated {speed === 1 ? 'minute' : 'minutes'} per second. Playback pauses when this tab is hidden.</p>
+          <p className={styles.speedHint}>Playback speed: {speed} match {speed === 1 ? 'minute' : 'minutes'} per update (about one second plus processing time). Playback pauses when this tab is hidden.</p>
           <div className={styles.progress}><span style={{width:`${currentMinute/90*100}%`}}/></div>
           {advance.isError && <p className={styles.error}>{advance.error.message}</p>}
         </CardContent>
@@ -239,8 +239,8 @@ export function MatchSection({ saveId, fixtureId, onBack }: { saveId: string; fi
         <LineupList title={`Away XI · ${away.name}`} players={away.lineup} managed={false} selectedIds={[]}/>
       </div>
       <Card><CardHeader><CardTitle><Zap size={16}/> Live commentary</CardTitle></CardHeader><CardContent className={styles.commentary}>
-        {latestEvent ? <div className={styles.latestCommentary}><Badge variant="info">{latestEvent.minute}'</Badge><p>{latestEvent.description ?? latestEvent.type.replaceAll('_',' ')}</p></div> : <p className={styles.chartEmpty}>The referee is ready. Start the match to receive live commentary.</p>}
-        <div className={styles.eventList}>{[...data.events].reverse().filter(event=>event.minute>0).slice(0,16).map(event=><div key={event.id}><time>{event.minute}&apos;</time><span><b>{event.type.replaceAll('_',' ')}</b>{event.description ? ` · ${event.description}` : ''}</span></div>)}</div>
+        {latestEvent ? <div className={styles.latestCommentary} aria-live="polite" aria-atomic="true"><Badge variant="info">{latestEvent.minute}'</Badge><p>{latestEvent.description ?? latestEvent.type.replaceAll('_',' ')}</p></div> : <p className={styles.chartEmpty}>The referee is ready. Start the match to receive live commentary.</p>}
+        <div className={styles.eventList} role="log" aria-label="Match event commentary" aria-live="polite">{[...data.events].reverse().filter(event=>event.minute>0).slice(0,16).map(event=><div key={event.id}><time>{event.minute}&apos;</time><span><b>{event.type.replaceAll('_',' ')}</b>{event.description ? ` · ${event.description}` : ''}</span></div>)}</div>
       </CardContent></Card>
     </div>
   );
