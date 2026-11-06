@@ -193,3 +193,17 @@ export interface MatchSimulationCheckpointDto {
   completed: boolean;
   updatedAt: string;
 }
+
+
+export interface MatchPreparationResponse {
+  fixture: MatchFixtureDto;
+  managedClubId: number;
+  homeLineup: MatchLineupPlayerDto[];
+  awayLineup: MatchLineupPlayerDto[];
+  managedClubIsHome: boolean;
+}
+
+export interface SaveMatchLineupRequest {
+  starterIds: number[];
+  benchIds: number[];
+}
