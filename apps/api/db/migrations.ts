@@ -50,39 +50,41 @@ export function applyMigrations(db: SqliteDatabase): number {
     throw new Error("Cannot migrate a database without schema_version.");
   }
 
-  let currentVersion = (db.prepare(
-    "SELECT MAX(version) AS version FROM schema_version",
-  ).get() as { version: number | null }).version;
+  // Read the version after acquiring SQLite's write lock. This prevents two
+  // processes opening the same legacy save from attempting the same ALTER TABLE.
+  const migrate = db.transaction(() => {
+    let currentVersion = (db.prepare(
+      "SELECT MAX(version) AS version FROM schema_version",
+    ).get() as { version: number | null }).version;
 
-  if (currentVersion === null) {
-    throw new Error("Database has no applied schema version.");
-  }
+    if (currentVersion === null) {
+      throw new Error("Database has no applied schema version.");
+    }
 
-  if (currentVersion > CURRENT_SCHEMA_VERSION) {
-    throw new Error(
-      `Database schema version ${currentVersion} is newer than this game supports (${CURRENT_SCHEMA_VERSION}).`,
-    );
-  }
+    if (currentVersion > CURRENT_SCHEMA_VERSION) {
+      throw new Error(
+        `Database schema version ${currentVersion} is newer than this game supports (${CURRENT_SCHEMA_VERSION}).`,
+      );
+    }
 
-  for (const migration of migrations) {
-    if (migration.version <= currentVersion) continue;
+    for (const migration of migrations) {
+      if (migration.version <= currentVersion) continue;
 
-    const apply = db.transaction(() => {
       migration.up(db);
       db.prepare(
         "INSERT INTO schema_version(version, description) VALUES(?, ?)",
       ).run(migration.version, migration.description);
-    });
+      currentVersion = migration.version;
+    }
 
-    apply.immediate();
-    currentVersion = migration.version;
-  }
+    if (currentVersion !== CURRENT_SCHEMA_VERSION) {
+      throw new Error(
+        `Database schema version ${currentVersion} is not supported; expected ${CURRENT_SCHEMA_VERSION}.`,
+      );
+    }
 
-  if (currentVersion !== CURRENT_SCHEMA_VERSION) {
-    throw new Error(
-      `Database schema version ${currentVersion} is not supported; expected ${CURRENT_SCHEMA_VERSION}.`,
-    );
-  }
+    return currentVersion;
+  });
 
-  return currentVersion;
+  return migrate.immediate();
 }
