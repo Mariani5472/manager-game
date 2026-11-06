@@ -257,7 +257,7 @@ export async function runPerformanceBenchmark(
     if(!player) throw new Error("Market benchmark requires at least one rostered player.");
     const buyer=db.prepare("SELECT id FROM club WHERE id<>? ORDER BY id LIMIT 1").get(player.clubId) as {id:number}|undefined;
     if(!buyer) throw new Error("Market benchmark requires at least two clubs.");
-    return createTransferOffer(db,player.id,buyer.id,0,0,1,nextSeasonYear(db));
+    return createTransferOffer(db,player.id,buyer.id,0,0,1);
   })));
 
   samples.push(await withDisposableCopy(source,db=>measure(db,db.name,"sqliteValidationAndPersistence",()=>{

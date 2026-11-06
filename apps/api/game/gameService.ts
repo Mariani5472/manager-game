@@ -1,4 +1,4 @@
-export { advanceRound, advanceStageRound, ensureFactoryLeagueCalendar } from "./calendar/calendarService.js";
+export { advanceRound, advanceStageRound } from "./calendar/calendarService.js";
 export { getSeasonStatus } from "./competition/competitionService.js";
 export { resolveKnockoutFixtureWinner } from "./competition/knockoutService.js";
 export { getStandings } from "./competition/standingsService.js";
@@ -7,5 +7,5 @@ export { listClubs, getManagedClub } from "./clubService.js";
 export { listFixtures } from "./fixtureService.js";
 export { advanceNextFixture, advanceFixtureRound } from "./matchdayService.js";
 export { listSquad, getTactics } from "./squadService.js";
-export { ensureFactoryWorld16 } from "./world/factoryWorldService.js";
+export { ensureFactoryWorld16, ensureFactoryLeagueCalendar } from "./world/factoryWorldService.js";
 export { ensureFactorySquadProfiles } from "./world/squadProfileService.js";

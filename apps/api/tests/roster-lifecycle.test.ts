@@ -36,7 +36,7 @@ test("roster lifecycle develops players, generates youth, manages contracts and 
     const player=roster.find(p=>p.clubId===1&&p.age<30&&p.careerStatus==="ACTIVE");
     assert.ok(player,"factory squad should have a young active player");
     renewPlayerContract(db,player.playerId,1,0,3,2027);
-    const offerId=createTransferOffer(db,player.playerId,2,1000,0,3,2027);
+    const offerId=createTransferOffer(db,player.playerId,2,1000,0,3);
     respondToTransferOffer(db,offerId,"COUNTER",{fee:2000,weeklyWage:0,years:3},2027);
     respondToTransferOffer(db,offerId,"ACCEPT",undefined,2027);
     const moved=db.prepare("SELECT club_id AS clubId FROM squad_membership WHERE player_id=?").get(player.playerId) as {clubId:number};
