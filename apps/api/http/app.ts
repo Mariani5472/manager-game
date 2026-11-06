@@ -3,6 +3,7 @@ import cors from "cors";
 import type { ApiContainer } from "../container.js";
 import { createContainer } from "../container.js";
 import { errorHandler } from "../shared/http/error-handler.js";
+import { createDataPackageRoutes } from "../modules/data-packages/data-package.routes.js";
 import { createMasterRoutes } from "../modules/master/master.routes.js";
 import { createSaveRoutes } from "../modules/saves/save.routes.js";
 
@@ -22,13 +23,11 @@ export function createApp(container: ApiContainer = createContainer()) {
   });
 
   app.use("/api/master", createMasterRoutes(container.masterController));
+  app.use("/api/data-packages", createDataPackageRoutes(container.dataPackageController));
   app.use("/api/saves", createSaveRoutes(container.saveController));
 
   app.use((_request, response) => {
-    response.status(404).json({
-      error: "Route not found.",
-      code: "ROUTE_NOT_FOUND",
-    });
+    response.status(404).json({ error: "Route not found.", code: "ROUTE_NOT_FOUND" });
   });
 
   app.use(errorHandler);
