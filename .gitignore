@@ -1,5 +1,5 @@
 node_modules/
-apps/web/.next/cache/
+.next/
 package-lock.json
 dist/
 data/
