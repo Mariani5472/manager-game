@@ -9,7 +9,6 @@ import { recoverSquadBeforeMatch } from "../game/matchContext.js";
 import { SaveManager } from "../save/saveManager.js";
 import { previewLineup, saveLineup } from "../game/lineupService.js";
 import { simulateMatch } from "../game/matchEngine/matchSimulationService.js";
-import { simulateMatch } from "../game/matchEngine/matchSimulationService.js";
 import { auditGameIntegrity } from "../game/integrityAudit.js";
 import { applyRosterSeason, createTransferOffer, respondToTransferOffer } from "../game/rosterLifecycle.js";
 import {
