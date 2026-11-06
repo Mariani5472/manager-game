@@ -10,6 +10,9 @@ import type {
   CampaignCalendarResponse,
   CampaignSquadResponse,
   CampaignTeamResponse,
+  MatchCenterResponse,
+  MatchPreparationResponse,
+  SaveMatchLineupRequest,
 } from '@shared/index';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -46,4 +49,8 @@ export const gameApi = {
     request<CampaignCalendarResponse>(`/api/saves/${id}/campaign/calendar`),
   campaignSquad: (id: string) => request<CampaignSquadResponse>(`/api/saves/${id}/campaign/squad`),
   campaignTeam: (id: string) => request<CampaignTeamResponse>(`/api/saves/${id}/campaign/team`),
+  matchPreparation: (id: string, fixtureId: number) => request<MatchPreparationResponse>(`/api/saves/${id}/matches/${fixtureId}/preparation`),
+  saveMatchLineup: (id: string, fixtureId: number, input: SaveMatchLineupRequest) => request<MatchPreparationResponse>(`/api/saves/${id}/matches/${fixtureId}/lineup`, { method: 'PUT', body: JSON.stringify(input) }),
+  matchCenter: (id: string, fixtureId: number) => request<MatchCenterResponse>(`/api/saves/${id}/matches/${fixtureId}/center`),
+  advanceMatch: (id: string, fixtureId: number, throughMinute: number) => request<MatchCenterResponse>(`/api/saves/${id}/matches/${fixtureId}/advance`, { method: 'POST', body: JSON.stringify({ throughMinute }) }),
 };
