@@ -187,6 +187,9 @@ export function MatchSection({ saveId, fixtureId, onBack }: { saveId: string; fi
     ['Expected goals', data.statistics.home.expectedGoals.toFixed(2), data.statistics.away.expectedGoals.toFixed(2)],
     ['Fouls', data.statistics.home.fouls, data.statistics.away.fouls],
     ['Yellow cards', data.statistics.home.yellowCards, data.statistics.away.yellowCards],
+    ['Red cards', data.statistics.home.redCards, data.statistics.away.redCards],
+    ['Substitutions', data.statistics.home.substitutions, data.statistics.away.substitutions],
+    ['Injuries', data.statistics.home.injuries, data.statistics.away.injuries],
   ];
   return (
     <div className={styles.stack}>
