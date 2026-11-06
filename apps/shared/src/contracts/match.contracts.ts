@@ -88,6 +88,11 @@ export interface MatchTeamStatisticsDto {
   shotsOnTarget: number;
   goals: number;
   expectedGoals: number;
+  fouls: number;
+  yellowCards: number;
+  redCards: number;
+  substitutions: number;
+  injuries: number;
 }
 
 export interface MatchStatisticsDto {
