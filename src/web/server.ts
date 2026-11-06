@@ -11,7 +11,7 @@ const root = process.cwd();
 const masterPath = resolve(process.env.GMF_MASTER_DB ?? "data/master.sqlite");
 const savesDir = resolve(process.env.GMF_SAVES_DIR ?? "data/saves");
 const htmlPath = resolve(root, "public/manager.html");
-const port = Number(process.env.PORT ?? 4173);
+const port = Number(process.env.PORT ?? 3000);
 const manager = new SaveManager(masterPath, savesDir);
 
 function withDb(saveId: string, fn: (db: ReturnType<typeof openDatabase>) => unknown): unknown {
@@ -146,6 +146,14 @@ export function startManagerWebServer(): void {
       json(res, 400, { error: error instanceof Error ? error.message : "Erro inesperado." });
     }
   });
+
+  server.on("error", (error) => {
+    console.error("[UI] Erro:", error);
+  });
+
+  server.listen(3000, "0.0.0.0", () => {
+    console.log(`Manager UI disponível em http://localhost:${port}`);
+  });
   // The UI has no authentication; bind to loopback rather than exposing campaign data on the LAN.\n  server.listen(port, "127.0.0.1", () => console.log("Manager UI disponível em http://127.0.0.1:" + port));
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) startManagerWebServer();
+startManagerWebServer();
