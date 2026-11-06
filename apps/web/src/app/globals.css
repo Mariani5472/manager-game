@@ -1,8 +1,36 @@
 @import "tailwindcss";
 
-:root { color-scheme: dark; --background: #090b0a; --foreground: #f4f5f4; }
+:root {
+  color-scheme: dark;
+  --color-background: #111318;
+  --color-surface: #20242b;
+  --color-surface-elevated: #292f38;
+  --color-border: #343943;
+  --color-text-primary: #f1f3f5;
+  --color-text-secondary: #9aa3af;
+  --color-accent: #36b879;
+  --color-accent-hover: #49c98b;
+  --color-danger: #e16b70;
+  --color-warning: #e5b85c;
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --content-width: 1440px;
+  --space-page: 24px;
+  --font-sans: "Roboto", Arial, Helvetica, sans-serif;
+}
+
 * { box-sizing: border-box; }
 html, body { min-height: 100%; }
-body { margin: 0; background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; }
-button, input { font: inherit; }
-::selection { background: #a3e635; color: #111827; }
+body {
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  text-rendering: optimizeLegibility;
+}
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+::selection { background: var(--color-accent); color: #08130d; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }

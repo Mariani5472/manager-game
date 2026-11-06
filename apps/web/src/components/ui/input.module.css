@@ -1,0 +1,4 @@
+.input { display: block; width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: var(--radius-control); color: var(--color-text-primary); background: #181c22; font-size: 13px; }
+.input::placeholder { color: #707986; }
+.input:focus { border-color: var(--color-accent); outline: 2px solid rgba(54,184,121,.16); outline-offset: 0; }
+.input:disabled { opacity: .5; cursor: not-allowed; }
