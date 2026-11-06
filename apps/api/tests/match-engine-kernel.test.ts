@@ -105,6 +105,7 @@ test("generated timelines keep scores, shots, xG and minute events internally co
     yellowCards: 0,
     redCards: 0,
     substitutions: 0,
+    secondYellowDismissals: 0,
   };
 
   for (let seed = 1; seed <= 300; seed += 1) {
@@ -130,13 +131,25 @@ test("generated timelines keep scores, shots, xG and minute events internally co
       minute.awayPressure >= 0 && minute.awayPressure <= 100
     ));
 
+    const bookings = new Map<string, number>();
     for (const event of timeline.events) {
+      if (event.eventType === "YELLOW_CARD") {
+        const key = `${event.clubId}:${event.playerId}`;
+        bookings.set(key, (bookings.get(key) ?? 0) + 1);
+      }
       if (event.eventType === "GOAL") aggregate.goals += 1;
       if (event.eventType === "SAVE") aggregate.saves += 1;
       if (event.eventType === "MISS") aggregate.misses += 1;
       if (event.eventType === "YELLOW_CARD") aggregate.yellowCards += 1;
       if (event.eventType === "RED_CARD") aggregate.redCards += 1;
       if (event.eventType === "SUBSTITUTION") aggregate.substitutions += 1;
+    }
+    for (const [key, yellowCount] of bookings) {
+      if (yellowCount >= 2 && timeline.events.some(event =>
+        event.eventType === "RED_CARD" && `${event.clubId}:${event.playerId}` === key
+      )) {
+        aggregate.secondYellowDismissals += 1;
+      }
     }
   }
 
@@ -145,6 +158,7 @@ test("generated timelines keep scores, shots, xG and minute events internally co
   assert.ok(aggregate.misses > 0);
   assert.ok(aggregate.yellowCards > 0);
   assert.ok(aggregate.redCards > 0, "seeded extreme sample should include a direct or second-yellow red card");
+  assert.ok(aggregate.secondYellowDismissals > 0, "a second booking must be represented as both a second yellow and a red card");
 });
 
 test("scheduled substitutions emit events and preserve eleven active players", () => {
