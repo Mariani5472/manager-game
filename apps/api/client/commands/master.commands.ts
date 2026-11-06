@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { open, validate } from "../../db/database.js";
+import { applyMigrations } from "../../db/migrations.js";
 import { listClubs } from "../../game/clubService.js";
 import {
   ensureFactoryLeagueCalendar,
@@ -28,6 +29,7 @@ function initializeMaster(): void {
 
     try {
       validate(db);
+      applyMigrations(db);
 
       const world = ensureFactoryWorld16(db);
       const repair = ensureFactoryLeagueCalendar(db);
@@ -62,6 +64,7 @@ function initializeMaster(): void {
 
   try {
     db.exec(readFileSync(schemaPath, "utf8"));
+    applyMigrations(db);
     validate(db);
 
     const world = ensureFactoryWorld16(db);
