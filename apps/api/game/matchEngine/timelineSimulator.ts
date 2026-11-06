@@ -32,8 +32,17 @@ export function simulateMatchTimeline(
   seed: number,
   changes: TacticalChange[] = []
 ): KernelTimeline {
-  home={...home,tactic:{...home.tactic},lineup:home.lineup.map(p=>({...p}))};
-   away={...away,tactic:{...away.tactic},lineup:away.lineup.map(p=>({...p}))};
+  validateTeamForSimulation(home);
+  validateTeamForSimulation(away);
+  if (home.clubId === away.clubId) {
+    throw new Error("A match requires two different clubs.");
+  }
+  if (!Number.isSafeInteger(seed)) {
+    throw new Error("Match seed must be a safe integer.");
+  }
+
+  home = { ...home, tactic: { ...home.tactic }, lineup: home.lineup.map(player => ({ ...player })) };
+  away = { ...away, tactic: { ...away.tactic }, lineup: away.lineup.map(player => ({ ...player })) };
    const homeRandom=rng(seed ^ Math.imul(home.clubId,0x9e3779b1));
    const awayRandom=rng(seed ^ Math.imul(away.clubId,0x9e3779b1));
    const homeEventRandom=rng((seed ^ Math.imul(home.clubId,0x85ebca6b) ^ 0x51ed270b)>>>0);
@@ -44,9 +53,19 @@ export function simulateMatchTimeline(
    const events:KernelShotEvent[]=[];
    const minutes:KernelMinute[]=[];
    const changesByMinute=new Map<number,TacticalChange[]>();
-   for(const change of changes) {
-    const list=changesByMinute.get(change.minute)??[];
-    list.push(change);changesByMinute.set(change.minute,list);
+   const orderedChanges = [...changes].sort(
+    (left, right) => left.minute - right.minute || left.id - right.id
+   );
+   for (const change of orderedChanges) {
+    if (!Number.isSafeInteger(change.minute) || change.minute < 1 || change.minute > 90) {
+      throw new Error(`Tactical change ${change.id} has an invalid minute.`);
+    }
+    if (change.club_id !== home.clubId && change.club_id !== away.clubId) {
+      throw new Error(`Tactical change ${change.id} targets a club outside the fixture.`);
+    }
+    const list = changesByMinute.get(change.minute) ?? [];
+    list.push(change);
+    changesByMinute.set(change.minute, list);
    }
    const substitutionsByClub=new Map<number,number>([[home.clubId,0],[away.clubId,0]]);
    for(let minute=1;minute<=90;minute++){
@@ -79,16 +98,49 @@ export function simulateMatchTimeline(
      }else if(change.change_type==="FORMATION"){
       const slots=payload.slots;
       if(!Array.isArray(slots)||slots.length!==11)throw new Error(`Formation change ${change.id} requires eleven assignments.`);
-      const assigned=new Set<number>();
-      for(const player of team.lineup.filter(p=>p.isStarting))player.isStarting=false;
-      for(const raw of slots as Array<Record<string,unknown>>){
-       const playerId=Number(raw.playerId),slot=Number(raw.slotNumber),role=String(raw.positionCode??"");
-       const player=team.lineup.find(p=>p.id===playerId);
-       if(!player||assigned.has(playerId)||!Number.isInteger(slot)||!["GK","CB","LB","RB","LWB","RWB","DM","CM","AM","LW","RW","LM","RM","ST"].includes(role))throw new Error(`Formation change ${change.id} has invalid slot assignments.`);
-       player.isStarting=true;player.slot=slot;player.role=role;assigned.add(playerId);
+      const assignments = slots as Array<Record<string, unknown>>;
+      const assignedPlayers = new Set<number>();
+      const assignedSlots = new Set<number>();
+      const parsedAssignments = assignments.map(raw => {
+       const playerId = Number(raw.playerId);
+       const slot = Number(raw.slotNumber);
+       const role = String(raw.positionCode ?? "");
+       const player = team.lineup.find(candidate => candidate.id === playerId);
+       if (
+        !player ||
+        assignedPlayers.has(playerId) ||
+        !Number.isSafeInteger(slot) ||
+        slot < 1 ||
+        slot > 11 ||
+        assignedSlots.has(slot) ||
+        !["GK","CB","LB","RB","LWB","RWB","DM","CM","AM","LW","RW","LM","RM","ST"].includes(role) ||
+        (role === "GK") !== (player.goalkeeper === 1)
+       ) {
+        throw new Error(`Formation change ${change.id} has invalid slot assignments.`);
+       }
+       assignedPlayers.add(playerId);
+       assignedSlots.add(slot);
+       return { player, slot, role };
+      });
+      if (
+       assignedPlayers.size !== 11 ||
+       assignedSlots.size !== 11 ||
+       parsedAssignments.filter(assignment => assignment.role === "GK").length !== 1
+      ) {
+       throw new Error("Formation change must assign eleven distinct players, eleven distinct slots and exactly one goalkeeper.");
       }
-      if(team.lineup.filter(p=>p.isStarting).length!==11||team.lineup.filter(p=>p.isStarting&&p.role==="GK"&&p.goalkeeper===1).length!==1)throw new Error("Formation change must retain eleven players and one goalkeeper.");
-      team.tactic={...team.tactic,formation_id:Number(payload.formationId)};refreshTeamStrength(team);
+      for (const player of team.lineup) player.isStarting = false;
+      for (const assignment of parsedAssignments) {
+       assignment.player.isStarting = true;
+       assignment.player.slot = assignment.slot;
+       assignment.player.role = assignment.role;
+      }
+      const formationId = Number(payload.formationId);
+      if (!Number.isSafeInteger(formationId) || formationId <= 0) {
+       throw new Error(`Formation change ${change.id} has an invalid formation id.`);
+      }
+      team.tactic = { ...team.tactic, formation_id: formationId };
+      refreshTeamStrength(team);
       minuteEvents.push({minute,clubId:team.clubId,playerId:0,secondaryPlayerId:null,eventType:"TACTIC_CHANGE",xg:0,description:"Formação alterada durante a partida"});
      }
      if(minuteEvents.length>priorEventCount)events.push(minuteEvents[minuteEvents.length-1]!);
@@ -197,8 +249,22 @@ export function simulateMatchTimeline(
     }
     minutes.push({minute,homePressure:hp,awayPressure:ap,homeScore:hs,awayScore:as,events:minuteEvents});
    }
-   return {events,minutes,result:{homeScore:hs,awayScore:as,homeShots:hShots,awayShots:aShots,
-    homeShotsOnTarget:hOn,awayShotsOnTarget:aOn,homeXg:hxg,awayXg:axg}};
+   const timeline: KernelTimeline = {
+    events,
+    minutes,
+    result: {
+     homeScore: hs,
+     awayScore: as,
+     homeShots: hShots,
+     awayShots: aShots,
+     homeShotsOnTarget: hOn,
+     awayShotsOnTarget: aOn,
+     homeXg: hxg,
+     awayXg: axg,
+    },
+   };
+   validateMatchTimeline(timeline, home.clubId, away.clubId);
+   return timeline;
 }
 
 
@@ -212,4 +278,114 @@ export function simulateMatchKernel(
     away,
     seed
   ).result;
+}
+
+function validateTeamForSimulation(team: Team): void {
+  const starters = team.lineup.filter(player => player.isStarting);
+  const playerIds = team.lineup.map(player => player.id);
+  const goalkeeperSlots = starters.filter(player => player.role === "GK");
+  const goalkeeperPlayers = starters.filter(player => player.goalkeeper === 1);
+
+  if (starters.length !== 11) {
+    throw new Error(`Club ${team.clubId} must have exactly eleven starting players.`);
+  }
+  if (new Set(playerIds).size !== playerIds.length) {
+    throw new Error(`Club ${team.clubId} has duplicate players in its match lineup.`);
+  }
+  if (goalkeeperSlots.length !== 1 || goalkeeperPlayers.length !== 1 || goalkeeperSlots[0]?.id !== goalkeeperPlayers[0]?.id) {
+    throw new Error(`Club ${team.clubId} must field exactly one goalkeeper in the goalkeeper role.`);
+  }
+}
+
+export function validateMatchTimeline(
+  timeline: KernelTimeline,
+  homeClubId: number,
+  awayClubId: number,
+): void {
+  if (timeline.minutes.length !== 90) {
+    throw new Error("A regulation-time timeline must contain exactly 90 minutes.");
+  }
+
+  const flattenedEvents: KernelShotEvent[] = [];
+  let homeScore = 0;
+  let awayScore = 0;
+  let homeShots = 0;
+  let awayShots = 0;
+  let homeShotsOnTarget = 0;
+  let awayShotsOnTarget = 0;
+  let homeXg = 0;
+  let awayXg = 0;
+
+  for (let index = 0; index < timeline.minutes.length; index += 1) {
+    const minute = timeline.minutes[index]!;
+    if (minute.minute !== index + 1) {
+      throw new Error("Match timeline minutes must be contiguous from 1 to 90.");
+    }
+    if (
+      !Number.isFinite(minute.homePressure) ||
+      !Number.isFinite(minute.awayPressure) ||
+      minute.homePressure < 0 ||
+      minute.homePressure > 100 ||
+      minute.awayPressure < 0 ||
+      minute.awayPressure > 100
+    ) {
+      throw new Error(`Minute ${minute.minute} contains invalid pressure values.`);
+    }
+
+    for (const event of minute.events) {
+      if (event.minute !== minute.minute) {
+        throw new Error("Match event minute does not match its containing timeline minute.");
+      }
+      if (event.clubId !== homeClubId && event.clubId !== awayClubId) {
+        throw new Error("Match event references a club outside the fixture.");
+      }
+      if (!Number.isFinite(event.xg) || event.xg < 0 || event.xg > 1) {
+        throw new Error("Match event xG must be a finite value between zero and one.");
+      }
+      flattenedEvents.push(event);
+
+      const isHome = event.clubId === homeClubId;
+      const isShot = event.eventType === "GOAL" || event.eventType === "SAVE" || event.eventType === "MISS";
+      const isOnTarget = event.eventType === "GOAL" || event.eventType === "SAVE";
+
+      if (event.eventType === "GOAL") {
+        if (isHome) homeScore += 1;
+        else awayScore += 1;
+      }
+      if (isShot) {
+        if (isHome) {
+          homeShots += 1;
+          homeXg += event.xg;
+          if (isOnTarget) homeShotsOnTarget += 1;
+        } else {
+          awayShots += 1;
+          awayXg += event.xg;
+          if (isOnTarget) awayShotsOnTarget += 1;
+        }
+      }
+    }
+
+    if (minute.homeScore !== homeScore || minute.awayScore !== awayScore) {
+      throw new Error(`Minute ${minute.minute} score does not match its goal events.`);
+    }
+  }
+
+  if (flattenedEvents.length !== timeline.events.length ||
+      flattenedEvents.some((event, index) => event !== timeline.events[index])) {
+    throw new Error("Timeline event stream does not match the minute event collections.");
+  }
+
+  const result = timeline.result;
+  if (
+    result.homeScore !== homeScore ||
+    result.awayScore !== awayScore ||
+    result.homeShots !== homeShots ||
+    result.awayShots !== awayShots ||
+    result.homeShotsOnTarget !== homeShotsOnTarget ||
+    result.awayShotsOnTarget !== awayShotsOnTarget ||
+    Math.abs(result.homeXg - homeXg) > 1e-9 ||
+    Math.abs(result.awayXg - awayXg) > 1e-9
+  ) {
+    throw new Error("Match summary does not match the generated event stream.");
+  }
 }
