@@ -96,21 +96,27 @@ export function advanceNextFixture(
   );
 
 
-  progressKnockoutStage(
-    db,
-    stage.id,
-    stage.roundId
-  );
+  const finalizeMatchday = db.transaction(() => {
+    progressKnockoutStage(
+      db,
+      stage.id,
+      stage.roundId
+    );
 
-  rebuildStandings(
-    db,
-    stage.id
-  );
+    rebuildStandings(
+      db,
+      stage.id
+    );
 
-  finishSeasonIfComplete(
-    db,
-    stage.id
-  );
+    finishSeasonIfComplete(
+      db,
+      stage.id
+    );
+  });
+
+  // Match checkpoints are committed independently; post-match competition
+  // bookkeeping is atomic and can be safely retried after a process restart.
+  finalizeMatchday.immediate();
 
 
   return summary;
