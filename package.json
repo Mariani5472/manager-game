@@ -7,7 +7,12 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test dist/api/tests/*.test.js",
+    "lint": "eslint apps/api apps/shared && npm run lint --prefix apps/web",
+    "test:ui": "npm test --prefix apps/web",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,js,mjs,json,md,css}\" README*.md",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,js,mjs,json,md,css}\" README*.md",
     "dev": "tsx apps/api/cli.ts",
+    "legacy:game": "tsx apps/api/legacy-cli.ts",
     "api": "tsx apps/api/http/server.ts",
     "game": "node dist/api/cli.js",
     "ui": "npm run dev --prefix apps/web",
@@ -26,6 +31,9 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/node": "^22.15.30",
+    "eslint": "^9.38.0",
+    "prettier": "^3.6.2",
+    "typescript-eslint": "^8.46.2",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }

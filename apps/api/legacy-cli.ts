@@ -30,12 +30,13 @@ import { runTacticalImpactAnalysis } from "./game/matchEngine/tacticalImpactAnal
 import { runMatchBalanceAnalysis } from "./game/matchEngine/matchBalanceAnalysis.js";
 import { runEngineDiagnostics } from "./game/matchEngine/engineDiagnostics.js";
 import { runTacticalSensitivityAnalysis } from "./game/matchEngine/tacticalSensitivityAnalysis.js";
+import { scheduleMatchTacticalChange } from "./game/matchEngine/tacticalChangeService.js";
 
 
 const root = process.cwd();
-const masterPath = resolve(process.env.GMF_MASTER_DB ?? joinPath(root, "data/master.sqlite"));
-const savesDir = resolve(process.env.GMF_SAVES_DIR ?? joinPath(root, "data/saves"));
-const schemaPath = resolve(process.env.GMF_SCHEMA_SQL ?? joinPath(root, "src/schema/game_manager_mvp.sql"));
+const masterPath = resolve(process.env.GM_MASTER_DB ?? joinPath(root, "data/master.sqlite"));
+const savesDir = resolve(process.env.GM_SAVE_DIR ?? joinPath(root, "data/saves"));
+const schemaPath = resolve(process.env.GMF_SCHEMA_SQL ?? joinPath(root, "apps/api/schema/game_manager_mvp.sql"));
 function joinPath(a: string, b: string): string { return a.endsWith("/") ? a + b : a + "/" + b; }
 
 function initializeMaster(): void {

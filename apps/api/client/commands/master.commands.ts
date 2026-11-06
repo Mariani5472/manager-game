@@ -3,10 +3,11 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { open, validate } from "../../db/database.js";
-
-
-
-import { ensureFactoryLeagueCalendar, ensureFactoryWorld16 } from "../../game/world/factoryWorldService.js";
+import { listClubs } from "../../game/clubService.js";
+import {
+  ensureFactoryLeagueCalendar,
+  ensureFactoryWorld16,
+} from "../../game/world/factoryWorldService.js";
 import { masterPath, schemaPath } from "../config.js";
 
 export function registerMasterCommands(program: Command): void {
@@ -61,7 +62,6 @@ function initializeMaster(): void {
 
   try {
     db.exec(readFileSync(schemaPath, "utf8"));
-
     validate(db);
 
     const world = ensureFactoryWorld16(db);
@@ -96,7 +96,7 @@ function listMasterClubs(): void {
 
   try {
     validate(db);
-
+    console.table(listClubs(db));
   } finally {
     db.close();
   }
