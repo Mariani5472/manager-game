@@ -107,7 +107,6 @@ export class SqliteCampaignRepository implements CampaignRepository {
     const count=(types:string[])=>rows.filter(e=>e.clubId===clubId&&types.includes(e.type)).length;
     return {shots:count(["GOAL","SAVE","MISS"]),shotsOnTarget:count(["GOAL","SAVE"]),goals:count(["GOAL"]),expectedGoals:rows.filter(e=>e.clubId===clubId&&["GOAL","SAVE","MISS"].includes(e.type)).reduce((sum,e)=>sum+(e.xg??0),0),fouls:count(["FOUL"]),yellowCards:count(["YELLOW_CARD"]),redCards:count(["RED_CARD"]),substitutions:count(["SUBSTITUTION"]),injuries:count(["INJURY"])};
    };
-   const checkpoint=db.prepare("SELECT simulation_minute AS minute FROM match_simulation_state WHERE fixture_id=?").get(fixtureId) as {minute:number}|undefined;
    const home=this.lineup(db,fixtureId,fixture.home.clubId),away=this.lineup(db,fixtureId,fixture.away.clubId);
    return {fixture,playbackStatus:fixture.status==="COMPLETED"?"FINISHED":fixture.status==="IN_PROGRESS"?"PAUSED":"IDLE",teams:[{clubId:fixture.home.clubId,name:fixture.home.name,isHome:true,lineup:home},{clubId:fixture.away.clubId,name:fixture.away.name,isHome:false,lineup:away}],statistics:{home:aggregate(fixture.home.clubId),away:aggregate(fixture.away.clubId)},events:rows.map(e=>({id:e.id,fixtureId,minute:e.minute,addedTime:0,type:e.type,clubId:e.clubId,playerId:e.playerId,secondaryPlayerId:e.secondaryPlayerId,xg:e.xg,description:e.description})),momentum};
   });
