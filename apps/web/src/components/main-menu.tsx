@@ -7,35 +7,34 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, ChevronRight, CircleHelp, Cog, FolderOpen, Gamepad2, HardDrive, LoaderCircle, Plus, ShieldCheck, SlidersHorizontal, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { newGameSchema, type NewGameInput } from "@/lib/schemas";
+import { gameApi } from "@/lib/api";
 import { useMenuStore, type MenuSection } from "@/store/menu-store";
 
-type Club = { id: number; name: string; reputation: number; city: string };
-type Save = { id: string; name: string; managerName: string; clubId: number; createdAt: string };
 const navigation: { id: MenuSection; label: string; icon: typeof Plus; hint: string }[] = [
   { id: "new-game", label: "New Game", icon: Plus, hint: "Start a new career" },
   { id: "load-game", label: "Load Game", icon: FolderOpen, hint: "Continue your journey" },
   { id: "config", label: "Config", icon: Cog, hint: "Set up your experience" },
 ];
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error ?? "Something went wrong.");
-  return payload as T;
-}
-
 export function MainMenu() {
   const { activeSection, setActiveSection } = useMenuStore();
   const [message, setMessage] = useState<string | null>(null);
+  const [countryId, setCountryId] = useState<number | null>(null);
   const queryClient = useQueryClient();
+
+  const overviewQuery = useQuery({
+    queryKey: ["master", "overview"],
+    queryFn: gameApi.overview,
+    enabled: activeSection === "new-game" || activeSection === "load-game",
+  });
   const clubsQuery = useQuery({
-    queryKey: ["master", "clubs"],
-    queryFn: () => fetchJson<{ ready: boolean; clubs: Club[] }>("/api/master/clubs"),
-    enabled: activeSection === "new-game",
+    queryKey: ["master", "clubs", countryId],
+    queryFn: () => gameApi.clubs(countryId!),
+    enabled: activeSection === "new-game" && countryId !== null,
   });
   const savesQuery = useQuery({
     queryKey: ["saves"],
-    queryFn: () => fetchJson<{ saves: Save[] }>("/api/saves"),
+    queryFn: gameApi.saves,
     enabled: activeSection === "load-game",
   });
   const form = useForm<NewGameInput>({
@@ -43,27 +42,30 @@ export function MainMenu() {
     defaultValues: { managerName: "", saveName: "", clubId: 0 },
   });
   const createSave = useMutation({
-    mutationFn: async (input: NewGameInput) => {
-      const response = await fetch("/api/saves", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? "Could not create campaign.");
-      return payload as { save: Save };
-    },
+    mutationFn: gameApi.createSave,
     onSuccess: async ({ save }) => {
       await queryClient.invalidateQueries({ queryKey: ["saves"] });
-      setMessage(`Campaign "${save.name}" created successfully.`);
+      setMessage(`Career "${save.name}" created successfully.`);
       setActiveSection("load-game");
     },
   });
   const loadSave = useMutation({
-    mutationFn: (saveId: string) => fetchJson<{ opened: boolean; saveId: string }>(`/api/saves/${saveId}`),
-    onSuccess: () => setMessage("Save validated. The in-game dashboard is the next implementation step."),
+    mutationFn: gameApi.openSave,
+    onSuccess: () => setMessage("Save validated and opened. The in-game dashboard is the next implementation step."),
   });
-  const goHome = () => { setMessage(null); setActiveSection("home"); };
+
+  const goHome = () => {
+    setMessage(null);
+    setCountryId(null);
+    form.reset();
+    setActiveSection("home");
+  };
+
+  const onCountryChange = (value: string) => {
+    const nextCountryId = value ? Number(value) : null;
+    setCountryId(nextCountryId);
+    form.setValue("clubId", 0, { shouldValidate: true });
+  };
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#090b0a]">
@@ -92,23 +94,56 @@ export function MainMenu() {
             <div className="max-w-2xl">
               <button onClick={goHome} className="mb-8 flex items-center gap-2 text-xs font-semibold text-zinc-500 hover:text-lime-300"><ArrowLeft size={14} />BACK TO MAIN MENU</button>
               <h1 className="text-4xl font-black tracking-[-0.04em] text-white sm:text-5xl">{activeSection === "new-game" ? "Start a new career." : activeSection === "load-game" ? "Back in the game." : "Make it yours."}</h1>
-              <p className="mt-4 text-sm leading-6 text-zinc-400">{activeSection === "new-game" ? "Choose your identity and the club where your story begins." : activeSection === "load-game" ? "Your saved careers are listed below." : "The essentials for your management experience."}</p>
+              <p className="mt-4 text-sm leading-6 text-zinc-400">{activeSection === "new-game" ? "Review installed data packs, choose a country and select your club." : activeSection === "load-game" ? "Your saved careers and loaded world packages are listed below." : "The essentials for your management experience."}</p>
+
+              {(activeSection === "new-game" || activeSection === "load-game") && (
+                <section className="mt-7 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div><p className="text-[10px] font-bold tracking-[0.2em] text-lime-300">ACTIVE DATA PACKS</p><p className="mt-1 text-xs text-zinc-500">Packages installed in your master database</p></div>
+                    <span className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300">{overviewQuery.data?.dataPackages.length ?? "—"}</span>
+                  </div>
+                  {overviewQuery.isLoading && <p className="text-xs text-zinc-500">Reading master database…</p>}
+                  {overviewQuery.isError && <p className="text-xs text-red-400">{overviewQuery.error.message}</p>}
+                  {overviewQuery.data?.dataPackages.length === 0 && <p className="text-xs text-zinc-500">No external data packs installed. Factory world data is still available.</p>}
+                  <div className="space-y-2">
+                    {overviewQuery.data?.dataPackages.map((pack) => (
+                      <div key={pack.id} className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2">
+                        <div className="min-w-0"><p className="truncate text-sm font-medium text-zinc-200">{pack.id}</p><p className="text-[10px] text-zinc-500">Installed {new Date(pack.installedAt).toLocaleDateString()}</p></div>
+                        <span className="shrink-0 font-mono text-xs text-lime-200">v{pack.version}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               {activeSection === "new-game" && (
-                <form className="mt-9 space-y-5" onSubmit={form.handleSubmit((values) => createSave.mutate(values))}>
+                <form className="mt-7 space-y-5" onSubmit={form.handleSubmit((values) => createSave.mutate(values))}>
+                  <label className="block text-xs font-semibold text-zinc-300">COUNTRY
+                    <select value={countryId ?? ""} onChange={(event) => onCountryChange(event.target.value)} className="mt-2 h-12 w-full rounded-lg border border-zinc-800 bg-zinc-900/80 px-4 text-sm text-white outline-none focus:border-lime-300">
+                      <option value="">Select a country</option>
+                      {(overviewQuery.data?.countries ?? []).map((country) => <option key={country.id} value={country.id}>{country.name} ({country.clubCount} clubs)</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-xs font-semibold text-zinc-300">CHOOSE YOUR CLUB
+                    <select {...form.register("clubId")} disabled={!countryId || clubsQuery.isLoading} className="mt-2 h-12 w-full rounded-lg border border-zinc-800 bg-zinc-900/80 px-4 text-sm text-white outline-none focus:border-lime-300 disabled:opacity-50">
+                      <option value={0}>{countryId ? "Select a club" : "Select a country first"}</option>
+                      {(clubsQuery.data?.clubs ?? []).map((club) => <option key={club.id} value={club.id}>{club.name} · {club.city ?? "No city"} · REP {club.reputation}</option>)}
+                    </select>
+                  </label>
+                  {clubsQuery.isLoading && <p className="text-xs text-zinc-500">Loading clubs for selected country…</p>}
+                  {clubsQuery.isError && <p className="text-xs text-red-400">{clubsQuery.error.message}</p>}
+                  {clubsQuery.data && <p className="text-xs text-zinc-500">{clubsQuery.data.country.name}: {clubsQuery.data.clubs.length} playable clubs</p>}
                   <div className="grid gap-5 sm:grid-cols-2">
                     <label className="block text-xs font-semibold text-zinc-300">MANAGER NAME<input {...form.register("managerName")} placeholder="e.g. Alex Ferguson" className="mt-2 h-12 w-full rounded-lg border border-zinc-800 bg-zinc-900/80 px-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-lime-300" />{form.formState.errors.managerName && <span className="mt-1 block text-xs text-red-400">{form.formState.errors.managerName.message}</span>}</label>
                     <label className="block text-xs font-semibold text-zinc-300">CAREER NAME<input {...form.register("saveName")} placeholder="e.g. The Road to Glory" className="mt-2 h-12 w-full rounded-lg border border-zinc-800 bg-zinc-900/80 px-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-lime-300" />{form.formState.errors.saveName && <span className="mt-1 block text-xs text-red-400">{form.formState.errors.saveName.message}</span>}</label>
                   </div>
-                  <label className="block text-xs font-semibold text-zinc-300">CHOOSE YOUR CLUB<select {...form.register("clubId")} className="mt-2 h-12 w-full rounded-lg border border-zinc-800 bg-zinc-900/80 px-4 text-sm text-white outline-none focus:border-lime-300"><option value={0}>Select a club</option>{(clubsQuery.data?.clubs ?? []).map((club) => <option key={club.id} value={club.id}>{club.name} · {club.city} · REP {club.reputation}</option>)}</select>{form.formState.errors.clubId && <span className="mt-1 block text-xs text-red-400">{form.formState.errors.clubId.message}</span>}</label>
-                  {clubsQuery.isLoading && <p className="text-xs text-zinc-500">Loading clubs from master database…</p>}
-                  {clubsQuery.data && !clubsQuery.data.ready && <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200">Master database not initialized. Run <code>npm run dev -- init-master</code> in the project root.</p>}
-                  {clubsQuery.isError && <p className="text-xs text-red-400">{clubsQuery.error.message}</p>}
                   {createSave.isError && <p className="text-xs text-red-400">{createSave.error.message}</p>}
-                  <div className="flex flex-wrap gap-3 pt-2"><Button type="submit" size="lg" disabled={createSave.isPending || !clubsQuery.data?.ready}>{createSave.isPending ? <LoaderCircle className="animate-spin" size={17} /> : <Plus size={17} />}Create Career</Button><Button type="button" variant="outline" size="lg" onClick={goHome}>Cancel</Button></div>
+                  <div className="flex flex-wrap gap-3 pt-2"><Button type="submit" size="lg" disabled={createSave.isPending || !countryId || !clubsQuery.data}>{createSave.isPending ? <LoaderCircle className="animate-spin" size={17} /> : <Plus size={17} />}Create Career</Button><Button type="button" variant="outline" size="lg" onClick={goHome}>Cancel</Button></div>
                 </form>
               )}
+
               {activeSection === "load-game" && (
-                <div className="mt-9 space-y-3">
+                <div className="mt-7 space-y-3">
                   {savesQuery.isLoading && <p className="text-sm text-zinc-500">Looking for saved careers…</p>}
                   {savesQuery.isError && <p className="text-sm text-red-400">{savesQuery.error.message}</p>}
                   {savesQuery.data?.saves.length === 0 && <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-900/40 p-8 text-center"><HardDrive className="mx-auto mb-3 text-zinc-600" size={26} /><p className="font-semibold text-zinc-300">No saved careers yet</p><p className="mt-1 text-xs text-zinc-500">Start a New Game to create your first save.</p><Button className="mt-5" onClick={() => setActiveSection("new-game")}><Plus size={16} />New Game</Button></div>}
@@ -118,7 +153,7 @@ export function MainMenu() {
               )}
               {activeSection === "config" && <div className="mt-9 space-y-3">
                 <div className="flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"><SlidersHorizontal className="text-lime-300" size={20} /><div><p className="text-sm font-semibold text-white">Game settings</p><p className="mt-1 text-xs text-zinc-500">Settings screen scaffold — preferences will be added here.</p></div></div>
-                <div className="flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"><ShieldCheck className="text-lime-300" size={20} /><div><p className="text-sm font-semibold text-white">Local data</p><p className="mt-1 text-xs text-zinc-500">SQLite databases remain on this machine.</p></div></div>
+                <div className="flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"><ShieldCheck className="text-lime-300" size={20} /><div><p className="text-sm font-semibold text-white">Local data</p><p className="mt-1 text-xs text-zinc-500">SQLite databases remain on this machine. Express API owns database access.</p></div></div>
               </div>}
               {message && <p className="mt-6 rounded-lg border border-lime-300/20 bg-lime-300/10 p-3 text-xs text-lime-200">{message}</p>}
             </div>
