@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { existsSync } from "node:fs";
-import { masterPath, saveDir } from "../../../../src/client/config.js";
-import { SaveManager } from "../../../../src/save/saveManager.js";
-import { open, validate } from "../../../../src/db/database.js";
+import { masterPath, saveDir } from "../../../../../src/client/config.js";
+import { SaveManager } from "../../../../../src/save/saveManager.js";
 import { newGameSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
@@ -26,7 +25,6 @@ export async function POST(request: Request) {
     const { filePath: _filePath, ...publicSave } = save;
     return NextResponse.json({ save: publicSave }, { status: 201 });
   } catch (error) {
-    const validationMessage = error instanceof Error ? error.message : "Could not create campaign.";
-    return NextResponse.json({ error: validationMessage }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not create campaign." }, { status: 400 });
   }
 }
