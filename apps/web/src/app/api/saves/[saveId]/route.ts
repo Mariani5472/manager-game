@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { masterPath, saveDir } from "../../../../../src/client/config.js";
-import { SaveManager } from "../../../../../src/save/saveManager.js";
+import { masterPath, saveDir } from "../../../../../../src/client/config.js";
+import { SaveManager } from "../../../../../../src/save/saveManager.js";
 
 export const runtime = "nodejs";
 
