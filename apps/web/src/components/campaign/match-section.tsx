@@ -31,21 +31,25 @@ function LineupList({
     <Card>
       <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
       <CardContent className={styles.lineupList}>
-        {players.filter(player => player.isStarting).map((player, index) => (
-          <div className={styles.lineupRow} key={player.playerId}>
-            <span className={styles.slot}>{player.position}</span>
-            <span className={styles.playerName}>{player.name}</span>
-            <span className={styles.playerCondition}>{Math.round(player.energy)}% energy</span>
-            {managed && onReplace ? (
-              <select aria-label={`Replace ${player.name}`} value={selectedIds[index] ?? player.playerId}
-                onChange={event => onReplace(index, Number(event.target.value))}>
-                {players.map(option => <option key={option.playerId} value={option.playerId}>{option.name}</option>)}
-              </select>
-            ) : <Badge variant="default">{player.position}</Badge>}
-          </div>
-        ))}
+        {players.filter(player => player.isStarting).map((player, index) => {
+          const selectedId = selectedIds[index] ?? player.playerId;
+          const selectedPlayer = players.find(option => option.playerId === selectedId) ?? player;
+          return (
+            <div className={styles.lineupRow} key={player.slot}>
+              <span className={styles.slot}>{player.position}</span>
+              <span className={styles.playerName}>{selectedPlayer.name}</span>
+              <span className={styles.playerCondition}>{Math.round(selectedPlayer.energy)}% energy</span>
+              {managed && onReplace ? (
+                <select aria-label={`Replace ${player.name}`} value={selectedId}
+                  onChange={event => onReplace(index, Number(event.target.value))}>
+                  {players.map(option => <option key={option.playerId} value={option.playerId}>{option.name}</option>)}
+                </select>
+              ) : <Badge variant="default">{player.position}</Badge>}
+            </div>
+          );
+        })}
         <div className={styles.benchLabel}>SUBSTITUTES</div>
-        {players.filter(player => !player.isStarting).map(player => (
+        {players.filter(player => managed ? !selectedIds.includes(player.playerId) : !player.isStarting).map(player => (
           <div className={styles.benchRow} key={player.playerId}>
             <span>{player.name}</span><span>{player.position} · {Math.round(player.energy)}%</span>
           </div>
