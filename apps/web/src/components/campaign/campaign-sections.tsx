@@ -16,7 +16,7 @@ function PageHeading({ eyebrow, title, description }: { eyebrow: string; title: 
 function formatDate(value: string | null, options: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" }) {
   if (!value) return "Date to be confirmed";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-GB", options).format(date);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-GB", { ...options, timeZone: "UTC" }).format(date);
 }
 function StatCard({ label, value, detail, icon: Icon }: { label: string; value: string | number; detail: string; icon: typeof Shield }) {
   return <Card className={styles.statCard}><CardContent><div className={styles.statTop}><span>{label}</span><Icon size={16} aria-hidden="true" /></div><strong className={styles.statValue}>{value}</strong><span className={styles.statDetail}>{detail}</span></CardContent></Card>;
@@ -87,14 +87,14 @@ function fixtureStatusVariant(status: string): "default" | "success" | "warning"
 export function CalendarSection({ data }: { data: CampaignCalendarResponse }) {
   const [filter, setFilter] = useState<"all" | "upcoming" | "results">("all");
   const fixtures = useMemo(() => {
-    const filtered = data.fixtures.filter(item => filter === "all" || (filter === "results" ? item.status === "COMPLETED" : item.status !== "COMPLETED"));
+    const filtered = data.fixtures.filter(item => filter === "all" || (filter === "results" ? item.status === "COMPLETED" : ["SCHEDULED", "IN_PROGRESS", "POSTPONED"].includes(item.status)));
     return [...filtered].sort((a, b) => {
       const aTime = a.scheduledAt ? new Date(a.scheduledAt).getTime() : Number.MAX_SAFE_INTEGER;
       const bTime = b.scheduledAt ? new Date(b.scheduledAt).getTime() : Number.MAX_SAFE_INTEGER;
       return filter === "results" ? bTime - aTime : aTime - bTime;
     });
   }, [data.fixtures, filter]);
-  const upcomingCount = data.fixtures.filter(item => item.status !== "COMPLETED").length;
+  const upcomingCount = data.fixtures.filter(item => ["SCHEDULED", "IN_PROGRESS", "POSTPONED"].includes(item.status)).length;
   const resultCount = data.fixtures.length - upcomingCount;
   return <div className={styles.sectionStack}>
     <PageHeading eyebrow="FIXTURES & RESULTS" title="Calendar" description="A clear view of your club's matches, past and upcoming." />
@@ -125,7 +125,7 @@ function PlayerDetails({ player }: { player: CampaignPlayerDto }) {
     <div className={styles.playerIdentity}><span className={styles.playerNumber}>{player.shirtNumber ?? "—"}</span><div><strong>{player.name}</strong><span>{player.positions.join(" · ") || "Position not registered"}</span></div></div>
     <div className={styles.playerStatusLine}><span>Squad status</span><Badge variant={playerStatus(player.squadStatus)}>{player.squadStatus.replaceAll("_", " ")}</Badge></div>
     <div className={styles.playerMetrics}><MetricBar label="Energy" value={player.energy} /><MetricBar label="Morale" value={player.morale} /><MetricBar label="Sharpness" value={player.sharpness} /></div>
-    <p className={styles.detailDisclaimer}>These are the condition values currently available in this save. Technical attributes and contract details are not part of this screen's data yet.</p>
+    <p className={styles.detailDisclaimer}>These are the condition values currently available in this save. Technical attributes and contract details are not part of this screen&apos;s data yet.</p>
   </div>;
 }
 export function SquadSection({ data }: { data: CampaignSquadResponse }) {
