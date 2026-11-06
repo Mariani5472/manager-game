@@ -22,8 +22,24 @@ import type {
 
 
 function readMatchSummary(db: SqliteDatabase, fixtureId: number, minutes: number): MatchSummary {
-    const fixture = db.prepare("SELECT home_club_id AS homeClubId,away_club_id AS awayClubId,home_score AS homeScore,away_score AS awayScore FROM fixture WHERE id=?").get(fixtureId) as {homeClubId:number;awayClubId:number;homeScore:number;awayScore:number};
-    return readMatchSummary(db, fixtureId, 90);
+    const fixture = db.prepare("SELECT home_club_id AS homeClubId,away_club_id AS awayClubId FROM fixture WHERE id=?").get(fixtureId) as {homeClubId:number;awayClubId:number};
+    const actual = db.prepare("SELECT club_id AS club,event_type AS type,COALESCE(SUM(xg),0) AS xg,COUNT(*) AS count FROM match_event WHERE fixture_id=? AND club_id IS NOT NULL GROUP BY club_id,event_type").all(fixtureId) as Array<{club:number;type:string;xg:number;count:number}>;
+    const metric = (club:number, types:string[]) => actual.filter(event=>event.club===club&&types.includes(event.type)).reduce((total,event)=>total+event.count,0);
+    const xg = (club:number) => actual.filter(event=>event.club===club&&["GOAL","SAVE","MISS"].includes(event.type)).reduce((total,event)=>total+event.xg,0);
+    const events = (db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=?").get(fixtureId) as {count:number}).count;
+    return {
+      fixtureId,homeClubId:fixture.homeClubId,awayClubId:fixture.awayClubId,
+      homeScore:metric(fixture.homeClubId,["GOAL"]),awayScore:metric(fixture.awayClubId,["GOAL"]),
+      homeShots:metric(fixture.homeClubId,["GOAL","SAVE","MISS"]),awayShots:metric(fixture.awayClubId,["GOAL","SAVE","MISS"]),
+      homeShotsOnTarget:metric(fixture.homeClubId,["GOAL","SAVE"]),awayShotsOnTarget:metric(fixture.awayClubId,["GOAL","SAVE"]),
+      homeXg:xg(fixture.homeClubId),awayXg:xg(fixture.awayClubId),
+      homeFouls:metric(fixture.homeClubId,["FOUL"]),awayFouls:metric(fixture.awayClubId,["FOUL"]),
+      homeYellowCards:metric(fixture.homeClubId,["YELLOW_CARD"]),awayYellowCards:metric(fixture.awayClubId,["YELLOW_CARD"]),
+      homeRedCards:metric(fixture.homeClubId,["RED_CARD"]),awayRedCards:metric(fixture.awayClubId,["RED_CARD"]),
+      homeSubstitutions:metric(fixture.homeClubId,["SUBSTITUTION"]),awaySubstitutions:metric(fixture.awayClubId,["SUBSTITUTION"]),
+      homeInjuries:metric(fixture.homeClubId,["INJURY"]),awayInjuries:metric(fixture.awayClubId,["INJURY"]),
+      events,minutes,
+    };
 }
 
 export function simulateMatch(
