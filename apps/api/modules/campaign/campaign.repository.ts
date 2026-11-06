@@ -1,0 +1,2 @@
+import type {CampaignOverviewResponse,CampaignCalendarResponse,CampaignSquadResponse,CampaignTeamResponse} from "../../../shared/src/index.js";
+export interface CampaignRepository { overview(id:string):CampaignOverviewResponse; calendar(id:string):CampaignCalendarResponse; squad(id:string):CampaignSquadResponse; team(id:string):CampaignTeamResponse; }
