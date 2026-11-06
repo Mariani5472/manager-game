@@ -13,7 +13,7 @@ import {
 test("play advances every pending match in the managed club's round", async () => {
   const root = mkdtempSync(join(tmpdir(), "manager-game-round-"));
   const masterPath = join(root, "master.sqlite");
-  const schemaPath = resolve("src/schema/game_manager_mvp.sql");
+  const schemaPath = resolve("apps/api/schema/game_manager_mvp.sql");
   const master = open(masterPath);
   try {
     master.exec(readFileSync(schemaPath, "utf8"));

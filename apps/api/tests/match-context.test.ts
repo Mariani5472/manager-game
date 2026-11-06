@@ -9,7 +9,7 @@ import { previewLineup, saveLineup } from "../game/lineupService.js";
 import { scheduleMatchTacticalChange, simulateMatch } from "../game/matchEngine.js";
 import { resolveMatchContext } from "../game/matchContext.js";
 
-const schemaPath = resolve("src/schema/game_manager_mvp.sql");
+const schemaPath = resolve("apps/api/schema/game_manager_mvp.sql");
 
 test("match context persists weather and pitch, applies substitutions as events, and advances suspensions", async () => {
   const root = mkdtempSync(join(tmpdir(), "manager-game-phase6-"));

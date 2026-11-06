@@ -8,7 +8,7 @@ import { ensureFactoryWorld16 } from "../game/gameService.js";
 import { runEngineDiagnostics, runMatchBalanceAnalysis, runSyntheticSeasonScaleBenchmarks, runTacticalSensitivityAnalysis } from "../game/matchEngine.js";
 import { runPerformanceBenchmark } from "../game/performance.js";
 
-const schemaPath=resolve("src/schema/game_manager_mvp.sql");
+const schemaPath=resolve("apps/api/schema/game_manager_mvp.sql");
 function fixtureDb():{root:string;db:ReturnType<typeof open>} {
   const root=mkdtempSync(join(tmpdir(),"gm-p0-performance-"));
   const db=open(join(root,"campaign.sqlite"));

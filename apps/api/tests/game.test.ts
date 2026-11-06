@@ -14,7 +14,7 @@ import {
   listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
 } from "../game/gameService.js";
 
-const schemaPath = resolve("src/schema/game_manager_mvp.sql");
+const schemaPath = resolve("apps/api/schema/game_manager_mvp.sql");
 
 function tempRoot(): string {
   return mkdtempSync(join(tmpdir(), "manager-game-issues-"));
@@ -682,8 +682,8 @@ test("CLI smoke test initializes a clean world, creates a save, lists it, and op
   const root = tempRoot();
   const master = join(root, "world", "master.sqlite");
   const saves = join(root, "world", "saves");
-  const env = { ...process.env, GMF_MASTER_DB: master, GMF_SAVES_DIR: saves, GMF_SCHEMA_SQL: schemaPath };
-  const cliPath = resolve("dist/cli.js");
+  const env = { ...process.env, GM_MASTER_DB: master, GM_SAVE_DIR: saves, GMF_SCHEMA_SQL: schemaPath };
+  const cliPath = resolve("dist/api/legacy-cli.js");
   const run = (...args: string[]) => spawnSync(process.execPath, [cliPath, ...args], {
     encoding: "utf8", env, cwd: process.cwd(),
   });

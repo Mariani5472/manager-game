@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
-import type { SqliteDatabase } from "../db/database.js";
+import { open, validate, type SqliteDatabase } from "../db/database.js";
 import { ensureFactoryWorld16 } from "./world/factoryWorldService.js";
 import { DataPackage } from "./dataPackages/types.js";
 import { installDataPackage } from "./dataPackages/installer.js";

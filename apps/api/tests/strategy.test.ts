@@ -10,7 +10,7 @@ import {previewLineup,saveLineup} from "../game/lineupService.js";
 import {advanceNextFixture,advanceStageRound,ensureFactoryWorld16,getSeasonStatus,getStandings,listFixtures} from "../game/gameService.js";
 import {summarizeSamples} from "../game/matchBalance.js";
 import {runEngineDiagnostics,runMatchBalanceAnalysis,runTacticalImpactAnalysis} from "../game/matchEngine.js";
-const schema=resolve("src/schema/game_manager_mvp.sql");
+const schema=resolve("apps/api/schema/game_manager_mvp.sql");
 function setup(){const root=mkdtempSync(join(tmpdir(),"gmf-p2-"));const path=join(root,"master.sqlite");const db=open(path);db.exec(readFileSync(schema,"utf8"));validate(db);db.close();return{root,masterPath:path,manager:new SaveManager(path,join(root,"saves"))};}
 async function campaign(){const s=setup();const save=await s.manager.create({name:"test",managerName:"test",clubId:1});return{...s,save,db:s.manager.open(save.filePath)};}
 test("lineup preview provides 11 distinct starters including a goalkeeper and at most seven substitutes",async()=>{const x=await campaign();try{const l=previewLineup(x.db,1,1);assert.equal(l.starters.length,11);assert.equal(new Set(l.starters.map(p=>p.playerId)).size,11);assert.equal(l.starters.filter(p=>p.position==="GK").length,1);assert.ok(l.bench.length<=7);}finally{x.db.close();rmSync(x.root,{recursive:true,force:true});}});

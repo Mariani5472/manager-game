@@ -2,12 +2,12 @@ import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
-import type { SqliteDatabase } from "../db/database.js";
+import { open, validate, type SqliteDatabase } from "../db/database.js";
 
 import { applyRosterSeason, createTransferOffer } from "./rosterLifecycle.js";
 import { runSyntheticSeasonScaleBenchmarks } from "./matchEngine/syntheticBenchmark.js";
 import { advanceStageRound } from "./calendar/calendarService.js";
-import { simulateMatch } from "./matchEngine/tacticalChangeService.js";
+import { simulateMatch } from "./matchEngine/matchSimulationService.js";
 
 export interface BenchmarkSample {
   name: string;

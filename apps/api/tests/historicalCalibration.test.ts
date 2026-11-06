@@ -39,7 +39,7 @@ test("persisted-world benchmark validates scale before opening disposable worlds
   const root=mkdtempSync(join(tmpdir(),"gm-world-scale-validation-"));
   const db=open(join(root,"campaign.sqlite"));
   try {
-    db.exec(readFileSync(resolve("src/schema/game_manager_mvp.sql"),"utf8"));
+    db.exec(readFileSync(resolve("apps/api/schema/game_manager_mvp.sql"),"utf8"));
     ensureFactoryWorld16(db);
     await assert.rejects(()=>runPersistedWorldBenchmarks(db,[17],1),/even integers/);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM club").get() as {n:number}).n,16);
@@ -50,7 +50,7 @@ test("persisted-world benchmark completes a persisted 16-club league on a dispos
   const root=mkdtempSync(join(tmpdir(),"gm-world-scale-integration-"));
   const db=open(join(root,"campaign.sqlite"));
   try {
-    db.exec(readFileSync(resolve("src/schema/game_manager_mvp.sql"),"utf8"));
+    db.exec(readFileSync(resolve("apps/api/schema/game_manager_mvp.sql"),"utf8"));
     ensureFactoryWorld16(db);
     const before=(db.prepare("SELECT COUNT(*) AS n FROM fixture").get() as {n:number}).n;
     const results=await runPersistedWorldBenchmarks(db,[16],42);

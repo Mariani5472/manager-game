@@ -10,7 +10,7 @@ import {
   parseDataPackage, validateDataPackage,
 } from "../game/dataPackages.js";
 
-const schemaPath=resolve("src/schema/game_manager_mvp.sql");
+const schemaPath=resolve("apps/api/schema/game_manager_mvp.sql");
 const packagePath=resolve("data/packages/example-regional-leagues.json");
 
 test("versioned data packages validate references, import generically and remain save-isolated",async()=>{

@@ -7,7 +7,7 @@ import { open, validate } from "../db/database.js";
 import { ensureFactoryWorld16 } from "../game/gameService.js";
 import { runSeasonBalanceAnalysis } from "../game/matchEngine.js";
 
-const schemaPath = resolve("src/schema/game_manager_mvp.sql");
+const schemaPath = resolve("apps/api/schema/game_manager_mvp.sql");
 
 test("factory upgrade generates distinct tiered squads and multi-seed season diagnostics", () => {
   const root = mkdtempSync(join(tmpdir(), "manager-game-balance-"));
