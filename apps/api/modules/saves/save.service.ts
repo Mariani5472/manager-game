@@ -1,12 +1,15 @@
 import { ApplicationError } from "../../shared/application-error.js";
 import type { CreateCareerRequest } from "../../../shared/src/index.js";
-import type { MasterService } from "../master/master.service.js";
 import type { SaveRepository } from "./save.repository.js";
+
+export interface ClubCountryValidator {
+  assertClubBelongsToCountry(clubId: number, countryId: number): void;
+}
 
 export class SaveService {
   constructor(
     private readonly saveRepository: SaveRepository,
-    private readonly masterService: MasterService,
+    private readonly clubCountryValidator: ClubCountryValidator,
   ) {}
 
   list() {
@@ -14,7 +17,7 @@ export class SaveService {
   }
 
   async createCareer(input: CreateCareerRequest) {
-    this.masterService.assertClubBelongsToCountry(input.clubId, input.countryId);
+    this.clubCountryValidator.assertClubBelongsToCountry(input.clubId, input.countryId);
     return this.saveRepository.create(input);
   }
 
