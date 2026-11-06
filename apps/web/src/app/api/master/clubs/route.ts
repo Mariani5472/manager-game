@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { existsSync } from "node:fs";
-import { masterPath } from "../../../../../src/client/config.js";
-import { open, validate } from "../../../../../src/db/database.js";
+import { masterPath } from "../../../../../../src/client/config.js";
+import { open, validate } from "../../../../../../src/db/database.js";
 
 export const runtime = "nodejs";
 
@@ -15,16 +15,16 @@ export async function GET() {
       const tableNames = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
       const tables = new Set(tableNames.map((table) => table.name));
       const hasCity = columns.some((column) => column.name === "city_id") && tables.has("city");
-      const hasNation = tables.has("nation");
-      const query = db.prepare(`
-        SELECT c.id, c.name, COALESCE(c.reputation, 0) AS reputation,
+      const hasReputation = columns.some((column) => column.name === "reputation");
+      const hasExtinct = columns.some((column) => column.name === "extinct");
+      const clubs = db.prepare(`
+        SELECT c.id, c.name, ${hasReputation ? "COALESCE(c.reputation, 0)" : "0"} AS reputation,
                ${hasCity ? "COALESCE(ci.name, 'Unknown')" : "'Unknown'"} AS city
         FROM club c
         ${hasCity ? "LEFT JOIN city ci ON ci.id = c.city_id" : ""}
-        WHERE COALESCE(c.extinct, 0) = 0
-        ORDER BY c.reputation DESC, c.name
-      `);
-      const clubs = query.all();
+        ${hasExtinct ? "WHERE COALESCE(c.extinct, 0) = 0" : ""}
+        ORDER BY reputation DESC, c.name
+      `).all();
       return NextResponse.json({ ready: true, clubs });
     } finally {
       db.close();
