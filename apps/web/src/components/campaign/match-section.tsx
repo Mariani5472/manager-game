@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, Pause, Play, Radio, RotateCcw, Shield, Timer, Zap } from 'lucide-react';
-import type { MatchCenterResponse, MatchLineupPlayerDto, MatchPreparationResponse } from '@shared/index';
+import type { MatchCenterResponse, MatchLineupPlayerDto } from '@shared/index';
 import { gameApi } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -115,7 +115,7 @@ function PreparationView({ saveId, fixtureId, onBack, onKickOff }: {
         <div className={styles.stack}>
           <div className={styles.sectionTitle}><Shield size={16}/> YOUR SQUAD · {managedTeam.name}</div>
           <LineupList title={`Starting XI · ${starterIds.length}/11`} players={managedPlayers} managed selectedIds={starterIds} onReplace={swapStarter}/>
-          <Card><CardHeader><CardTitle>Selection notes</CardTitle></CardHeader><CardContent className={styles.notes}>Use the selectors to exchange starters with substitutes. Position order follows the club's saved formation. Injured and suspended players are excluded by the backend.</CardContent></Card>
+          <Card><CardHeader><CardTitle>Selection notes</CardTitle></CardHeader><CardContent className={styles.notes}>Use the selectors to exchange starters with substitutes. Position order follows the club&apos;s saved formation. Injured and suspended players are excluded by the backend.</CardContent></Card>
         </div>
         <div className={styles.stack}>
           <div className={styles.sectionTitle}><Shield size={16}/> OPPONENT · {opponentTeam.name}</div>
@@ -144,7 +144,7 @@ function MomentumChart({ data }: { data: MatchCenterResponse['momentum'] }) {
       <div className={styles.momentumLegend}><span><i className={styles.homeDot}/> Home pressure</span><span><i className={styles.awayDot}/> Away pressure</span></div>
       <svg viewBox="0 0 900 224" role="img" aria-label="Match momentum chart showing home and away attacking pressure">
         <line x1="0" y1="112" x2="900" y2="112" className={styles.axis}/>
-        {[0,30,60,90].map(minute => <g key={minute}><line x1={minute/90*900} y1="0" x2={minute/90*900} y2="224" className={styles.gridLine}/><text x={minute/90*900+4} y="218" className={styles.axisLabel}>{minute}'</text></g>)}
+        {[0,30,60,90].map(minute => <g key={minute}><line x1={minute/90*900} y1="0" x2={minute/90*900} y2="224" className={styles.gridLine}/><text x={minute/90*900+4} y="218" className={styles.axisLabel}>{minute}&apos;</text></g>)}
         {data.length > 0 && <><polyline points={home} className={styles.homeLine}/><polyline points={away} className={styles.awayLine}/></>}
       </svg>
       {!data.length && <p className={styles.chartEmpty}>Momentum will build as the match progresses.</p>}
@@ -167,14 +167,15 @@ export function MatchSection({ saveId, fixtureId, onBack }: { saveId: string; fi
     onError: () => setPlaying(false),
   });
   const currentMinute = center.data?.fixture.currentMinute ?? 0;
+  const advanceMatch = advance.mutate;
   useEffect(() => {
     if (!playing || !center.data || center.data.fixture.status === 'COMPLETED' || advance.isPending) return;
     const interval = window.setInterval(() => {
       const nextMinute = Math.min(90, currentMinute + 1);
-      advance.mutate(nextMinute);
+      advanceMatch(nextMinute);
     }, Math.max(150, 1000 / speed));
     return () => window.clearInterval(interval);
-  }, [playing, center.data, currentMinute, speed, advance.isPending]);
+  }, [playing, center.data, currentMinute, speed, advance.isPending, advanceMatch]);
   const latestEvent = useMemo(() => center.data?.events.filter(event => event.minute > 0).at(-1), [center.data?.events]);
   if (center.isLoading) return <p className={styles.loading}>Opening match centre…</p>;
   if (center.isError || !center.data) return <p className={styles.error}>{center.error?.message ?? 'Unable to load match centre.'}</p>;
@@ -224,7 +225,7 @@ export function MatchSection({ saveId, fixtureId, onBack }: { saveId: string; fi
       </div>
       <Card><CardHeader><CardTitle><Zap size={16}/> Commentary</CardTitle></CardHeader><CardContent className={styles.commentary}>
         {latestEvent ? <div className={styles.latestCommentary}><Badge variant="info">{latestEvent.minute}'</Badge><p>{latestEvent.description ?? latestEvent.type.replaceAll('_',' ')}</p></div> : <p className={styles.chartEmpty}>The referee is ready. Start the match to receive live commentary.</p>}
-        <div className={styles.eventList}>{[...data.events].reverse().filter(event=>event.minute>0).slice(0,12).map(event=><div key={event.id}><time>{event.minute}'</time><span>{event.description ?? event.type.replaceAll('_',' ')}</span></div>)}</div>
+        <div className={styles.eventList}>{[...data.events].reverse().filter(event=>event.minute>0).slice(0,12).map(event=><div key={event.id}><time>{event.minute}&apos;</time><span>{event.description ?? event.type.replaceAll('_',' ')}</span></div>)}</div>
       </CardContent></Card>
     </div>
   );
