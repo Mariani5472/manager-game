@@ -11,7 +11,7 @@ import {
   renewPlayerContract,
 } from "../game/rosterLifecycle.js";
 
-const schemaPath=resolve("src/schema/game_manager_mvp.sql");
+const schemaPath=resolve("apps/api/schema/game_manager_mvp.sql");
 
 test("roster lifecycle develops players, generates youth, manages contracts and records transfers",async()=>{
   const root=mkdtempSync(join(tmpdir(),"manager-game-phase7-"));

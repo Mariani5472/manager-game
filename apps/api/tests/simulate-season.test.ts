@@ -11,7 +11,7 @@ test("simulate-season CLI completes all league and cup rounds and prints standin
     ...process.env,
     GMF_MASTER_DB: join(root, "world", "master.sqlite"),
     GMF_SAVES_DIR: join(root, "world", "saves"),
-    GMF_SCHEMA_SQL: resolve("src/schema/game_manager_mvp.sql"),
+    GMF_SCHEMA_SQL: resolve("apps/api/schema/game_manager_mvp.sql"),
   };
   const cliPath = resolve("dist/cli.js");
   const run = (...args: string[]) => spawnSync(process.execPath, [cliPath, ...args], {
