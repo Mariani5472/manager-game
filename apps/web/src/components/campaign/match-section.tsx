@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, Pause, Play, Radio, RotateCcw, Shield, Timer, Zap } from 'lucide-react';
+import { Activity, Pause, Play, Radio, RotateCcw, Shield, SkipForward, Timer, Zap } from 'lucide-react';
 import type { MatchCenterResponse, MatchLineupPlayerDto } from '@shared/index';
 import { gameApi } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
@@ -137,8 +137,8 @@ function PreparationView({ saveId, fixtureId, onBack, onKickOff }: {
 }
 
 function MomentumChart({ data }: { data: MatchCenterResponse['momentum'] }) {
-  const home = data.map((point, index) => `${data.length < 2 ? 450 : (index / (data.length - 1)) * 900},${112 - point.homePressure * 0.92}`).join(' ');
-  const away = data.map((point, index) => `${data.length < 2 ? 450 : (index / (data.length - 1)) * 900},${112 + point.awayPressure * 0.92}`).join(' ');
+  const home = data.map(point => `${(point.minute / 90) * 900},${112 - point.homePressure * 0.92}`).join(' ');
+  const away = data.map(point => `${(point.minute / 90) * 900},${112 + point.awayPressure * 0.92}`).join(' ');
   return (
     <div className={styles.momentum}>
       <div className={styles.momentumLegend}><span><i className={styles.homeDot}/> Home pressure</span><span><i className={styles.awayDot}/> Away pressure</span></div>
@@ -171,12 +171,19 @@ export function MatchSection({ saveId, fixtureId, onBack }: { saveId: string; fi
   useEffect(() => {
     if (!playing || !center.data || center.data.fixture.status === 'COMPLETED' || advance.isPending) return;
     const interval = window.setInterval(() => {
-      const nextMinute = Math.min(90, currentMinute + 1);
+      // Advance a small batch per second. This keeps the playback rate intuitive
+      // while avoiding four HTTP round-trips per second at 4x speed.
+      const nextMinute = Math.min(90, currentMinute + speed);
       advanceMatch(nextMinute);
-    }, Math.max(150, 1000 / speed));
+    }, 1000);
     return () => window.clearInterval(interval);
   }, [playing, center.data, currentMinute, speed, advance.isPending, advanceMatch]);
   const latestEvent = useMemo(() => center.data?.events.filter(event => event.minute > 0).at(-1), [center.data?.events]);
+  useEffect(() => {
+    const pauseWhenHidden = () => { if (document.hidden) setPlaying(false); };
+    document.addEventListener('visibilitychange', pauseWhenHidden);
+    return () => document.removeEventListener('visibilitychange', pauseWhenHidden);
+  }, []);
   if (center.isLoading) return <p className={styles.loading}>Opening match centre…</p>;
   if (center.isError || !center.data) return <p className={styles.error}>{center.error?.message ?? 'Unable to load match centre.'}</p>;
   const data = center.data;
@@ -209,9 +216,13 @@ export function MatchSection({ saveId, fixtureId, onBack }: { saveId: string; fi
         </div></CardHeader>
         <CardContent className={styles.playback}>
           <div className={styles.playActions}>
-            <Button disabled={isFinished || advance.isPending} onClick={()=>setPlaying(value=>!value)}>{playing ? <><Pause size={15}/> Pause</> : <><Play size={15}/> {currentMinute ? 'Resume' : 'Start match'}</>}</Button>
+            <div className={styles.playButtons}>
+              <Button disabled={isFinished || advance.isPending} onClick={()=>setPlaying(value=>!value)}>{playing ? <><Pause size={15}/> Pause</> : <><Play size={15}/> {currentMinute ? 'Resume' : 'Start match'}</>}</Button>
+              <Button variant="secondary" disabled={isFinished || playing || advance.isPending} onClick={()=>advance.mutate(Math.min(90,currentMinute+1))}><SkipForward size={15}/> Next minute</Button>
+            </div>
             <span><Timer size={14}/> {currentMinute} / 90 min</span>
           </div>
+          <p className={styles.speedHint}>Playback speed: {speed} simulated {speed === 1 ? 'minute' : 'minutes'} per second. Playback pauses when this tab is hidden.</p>
           <div className={styles.progress}><span style={{width:`${currentMinute/90*100}%`}}/></div>
           {advance.isError && <p className={styles.error}>{advance.error.message}</p>}
         </CardContent>
@@ -223,9 +234,13 @@ export function MatchSection({ saveId, fixtureId, onBack }: { saveId: string; fi
           {stats.map(([label,h,a])=><div className={styles.statRow} key={label}><strong>{h}</strong><span>{label}</span><strong>{a}</strong></div>)}
         </CardContent></Card>
       </div>
-      <Card><CardHeader><CardTitle><Zap size={16}/> Commentary</CardTitle></CardHeader><CardContent className={styles.commentary}>
+      <div className={styles.centerGrid}>
+        <LineupList title={`Home XI · ${home.name}`} players={home.lineup} managed={false} selectedIds={[]}/>
+        <LineupList title={`Away XI · ${away.name}`} players={away.lineup} managed={false} selectedIds={[]}/>
+      </div>
+      <Card><CardHeader><CardTitle><Zap size={16}/> Live commentary</CardTitle></CardHeader><CardContent className={styles.commentary}>
         {latestEvent ? <div className={styles.latestCommentary}><Badge variant="info">{latestEvent.minute}'</Badge><p>{latestEvent.description ?? latestEvent.type.replaceAll('_',' ')}</p></div> : <p className={styles.chartEmpty}>The referee is ready. Start the match to receive live commentary.</p>}
-        <div className={styles.eventList}>{[...data.events].reverse().filter(event=>event.minute>0).slice(0,12).map(event=><div key={event.id}><time>{event.minute}&apos;</time><span>{event.description ?? event.type.replaceAll('_',' ')}</span></div>)}</div>
+        <div className={styles.eventList}>{[...data.events].reverse().filter(event=>event.minute>0).slice(0,16).map(event=><div key={event.id}><time>{event.minute}&apos;</time><span><b>{event.type.replaceAll('_',' ')}</b>{event.description ? ` · ${event.description}` : ''}</span></div>)}</div>
       </CardContent></Card>
     </div>
   );
