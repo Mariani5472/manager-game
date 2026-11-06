@@ -91,6 +91,7 @@ test("same teams, seed and tactical commands produce an identical timeline witho
 
   assert.deepEqual(first, repeated);
   assert.deepEqual(first, reversedCommands);
+  assert.notDeepEqual(first, simulateMatchTimeline(home, away, 81274, changes));
   assert.equal(JSON.stringify({ home, away }), before);
 });
 
