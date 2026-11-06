@@ -190,9 +190,9 @@ test("formation changes reject duplicate slots and goalkeeper-role mismatches", 
       positionCode: player.role,
     }));
   invalidAssignments[0] = {
-    playerId: home.lineup[0]!.id,
+    playerId: home.lineup[1]!.id,
     slotNumber: 1,
-    positionCode: "CB",
+    positionCode: "GK",
   };
 
   const change: TacticalChange = {
