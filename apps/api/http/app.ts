@@ -6,6 +6,7 @@ import { errorHandler } from "../shared/http/error-handler.js";
 import { createDataPackageRoutes } from "../modules/data-packages/data-package.routes.js";
 import { createMasterRoutes } from "../modules/master/master.routes.js";
 import { createSaveRoutes } from "../modules/saves/save.routes.js";
+import { createCampaignRoutes } from "../modules/campaign/campaign.routes.js";
 
 export function createApp(container: ApiContainer = createContainer()) {
   const app = express();
@@ -25,6 +26,7 @@ export function createApp(container: ApiContainer = createContainer()) {
   app.use("/api/master", createMasterRoutes(container.masterController));
   app.use("/api/data-packages", createDataPackageRoutes(container.dataPackageController));
   app.use("/api/saves", createSaveRoutes(container.saveController));
+  app.use("/api/saves", createCampaignRoutes(container.campaignController));
 
   app.use((_request, response) => {
     response.status(404).json({ error: "Route not found.", code: "ROUTE_NOT_FOUND" });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,6 +18,7 @@ const navigation: { id: MenuSection; label: string; icon: typeof Plus; hint: str
 ];
 
 export function MainMenu() {
+  const router = useRouter();
   const { activeSection, setActiveSection } = useMenuStore();
   const [message, setMessage] = useState<string | null>(null);
   const [countryId, setCountryId] = useState<number | null>(null);
@@ -50,13 +52,12 @@ export function MainMenu() {
     mutationFn: gameApi.createSave,
     onSuccess: async ({ save }) => {
       await queryClient.invalidateQueries({ queryKey: ["saves"] });
-      setMessage(`Career "${save.name}" created successfully.`);
-      setActiveSection("load-game");
+      router.push(`/game/${save.id}`);
     },
   });
   const loadSave = useMutation({
     mutationFn: gameApi.openSave,
-    onSuccess: () => setMessage("Save validated and opened. The in-game dashboard is the next implementation step."),
+    onSuccess: ({ saveId }) => router.push(`/game/${saveId}`),
   });
 
   const goHome = () => {

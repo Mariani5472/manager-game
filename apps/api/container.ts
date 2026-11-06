@@ -7,6 +7,9 @@ import { SqliteMasterRepository } from "./modules/master/sqlite-master.repositor
 import { SaveController } from "./modules/saves/save.controller.js";
 import { SaveManagerRepository } from "./modules/saves/save-manager.repository.js";
 import { SaveService } from "./modules/saves/save.service.js";
+import { CampaignController } from "./modules/campaign/campaign.controller.js";
+import { CampaignService } from "./modules/campaign/campaign.service.js";
+import { SqliteCampaignRepository } from "./modules/campaign/sqlite-campaign.repository.js";
 
 export function createContainer() {
   const masterRepository = new SqliteMasterRepository();
@@ -15,11 +18,13 @@ export function createContainer() {
   const saveService = new SaveService(saveRepository, masterService);
   const dataPackageRepository = new SqliteDataPackageRepository();
   const dataPackageService = new DataPackageService(dataPackageRepository);
+  const campaignService = new CampaignService(new SqliteCampaignRepository());
 
   return {
     masterController: new MasterController(masterService),
     saveController: new SaveController(saveService),
     dataPackageController: new DataPackageController(dataPackageService),
+    campaignController: new CampaignController(campaignService),
   };
 }
 

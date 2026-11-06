@@ -6,6 +6,10 @@ import type {
   ListSavesResponse,
   MasterOverviewResponse,
   OpenSaveResponse,
+  CampaignOverviewResponse,
+  CampaignCalendarResponse,
+  CampaignSquadResponse,
+  CampaignTeamResponse,
 } from "@shared/index";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -36,4 +40,8 @@ export const gameApi = {
     }),
   openSave: (saveId: string) =>
     request<OpenSaveResponse>(`/api/saves/${saveId}/open`, { method: "POST" }),
+  campaignOverview: (id: string) => request<CampaignOverviewResponse>(`/api/saves/${id}/campaign/overview`),
+  campaignCalendar: (id: string) => request<CampaignCalendarResponse>(`/api/saves/${id}/campaign/calendar`),
+  campaignSquad: (id: string) => request<CampaignSquadResponse>(`/api/saves/${id}/campaign/squad`),
+  campaignTeam: (id: string) => request<CampaignTeamResponse>(`/api/saves/${id}/campaign/team`),
 };
