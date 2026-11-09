@@ -79,6 +79,20 @@ test("match context persists weather and pitch, applies substitutions as events,
     const formation = db.prepare("SELECT formation_id AS id FROM team_tactic WHERE club_id=?").get(fixture.home) as {id:number};
     scheduleMatchTacticalChange(db, fixture.id, fixture.home, 80, "FORMATION", { formationId: formation.id });
 
+
+    // Decisions may be appended during playback, but only for future minutes.
+    simulateMatch(db, fixture.id, 20);
+    const lateSubstitutionStarter = db.prepare("SELECT player_id AS id FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=1 AND position_code<>'GK' ORDER BY slot_number LIMIT 1").get(fixture.id, fixture.home) as { id:number };
+    const lateSubstitutionBench = db.prepare("SELECT player_id AS id FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=0 AND position_code='BENCH' ORDER BY slot_number LIMIT 1").get(fixture.id, fixture.home) as { id:number };
+    const lateDecisionId = scheduleMatchTacticalChange(db, fixture.id, fixture.home, 40, "SUBSTITUTION", {
+      playerOutId: lateSubstitutionStarter.id, playerInId: lateSubstitutionBench.id
+    });
+    assert.ok(lateDecisionId > 0);
+    assert.throws(
+      () => scheduleMatchTacticalChange(db, fixture.id, fixture.home, 20, "MENTALITY", { mentality: "ATTACKING" }),
+      /current minute/,
+    );
+
     const result = simulateMatch(db, fixture.id);
     assert.equal(result.minutes, 90);
     assert.equal((db.prepare("SELECT weather FROM match_environment WHERE fixture_id=?").get(fixture.id) as {weather:string}).weather, "HEAVY_RAIN");
