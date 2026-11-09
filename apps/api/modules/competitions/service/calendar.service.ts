@@ -158,7 +158,8 @@ export function advanceRoundById(
   const fixtures = db
     .prepare(`
       SELECT
-        id
+        id,
+        status
 
       FROM fixture
 
@@ -236,12 +237,21 @@ export function advanceRoundById(
 
   for (const fixture of fixtures) {
     try {
-      results.push(
-        simulateMatch(
-          db,
-          fixture.id
-        )
-      );
+      // IN_PROGRESS without a checkpoint cannot be resumed deterministically.
+      // The batch runner repairs this narrow legacy/inconsistent case only if
+      // no persisted minute/events exist; otherwise it fails without resetting data.
+      if (fixture.status === "IN_PROGRESS") {
+        const state = db.prepare(
+          "SELECT simulation_minute AS minute FROM match_simulation_state WHERE fixture_id=?",
+        ).get(fixture.id) as { minute:number } | undefined;
+        const eventCount = (db.prepare(
+          "SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=?",
+        ).get(fixture.id) as { count:number }).count;
+        if (!state && eventCount === 0) {
+          db.prepare("UPDATE fixture SET status='SCHEDULED',current_minute=0 WHERE id=? AND status='IN_PROGRESS'").run(fixture.id);
+        }
+      }
+      results.push(simulateMatch(db, fixture.id));
     } catch (error) {
       failures.push(
         `fixture ${fixture.id}: ${
