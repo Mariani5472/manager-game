@@ -848,7 +848,7 @@ test("match playback advances in resumable minute batches and locks the lineup a
     assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 15);
     assert.throws(
       () => saveLineup(db!, 1, 1, preview.starters.map(player => player.playerId), preview.bench.map(player => player.playerId)),
-      /only before kickoff/,
+      /only be changed before kickoff/,
     );
 
     const resumedBatch = simulateMatch(db, 1, 30);
