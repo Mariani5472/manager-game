@@ -725,6 +725,10 @@ test("match persistence stores player-level event stats and finalizes the calend
     const { manager, save } = await createSave(root, "Match Persistence", 1);
     db = manager.open(save.filePath);
     const summary = advanceNextFixture(db, 1);
+    const remainingInRound = (db.prepare(
+      "SELECT COUNT(*) AS count FROM fixture WHERE round_id=(SELECT round_id FROM fixture WHERE id=1) AND status<>'COMPLETED'",
+    ).get() as {count:number}).count;
+    assert.equal(remainingInRound, 1, "single-fixture playback must leave the other match pending");
 
     const playerTotals = db.prepare(`
       SELECT
@@ -848,7 +852,7 @@ test("match playback advances in resumable minute batches and locks the lineup a
     assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 15);
     assert.throws(
       () => saveLineup(db!, 1, 1, preview.starters.map(player => player.playerId), preview.bench.map(player => player.playerId)),
-      /only before kickoff/,
+      /only be changed before kickoff/,
     );
 
     const resumedBatch = simulateMatch(db, 1, 30);

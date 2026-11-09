@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react';
 import type { CampaignCalendarResponse } from '@shared/index';
 import { CalendarDays } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDate } from '@/lib/formatters/date';
 import {
@@ -16,10 +15,8 @@ import { PageHeading } from './section-ui';
 import styles from './campaign-sections.module.css';
 export function CalendarSection({
   data,
-  onPrepareMatch,
 }: {
   data: CampaignCalendarResponse;
-  onPrepareMatch: (fixtureId: number) => void;
 }) {
   const [filter, setFilter] = useState<FixtureFilter>('all');
   const fixtures = useMemo(
@@ -32,7 +29,7 @@ export function CalendarSection({
       <PageHeading
         eyebrow="FIXTURES & RESULTS"
         title="Calendar"
-        description="Track upcoming matches, review completed results and prepare the next match day."
+        description="Track upcoming matches and review completed results. Start your next match from the campaign header."
       />
       <div className={styles.fixtureSummary}>
         <Card>
@@ -79,13 +76,6 @@ export function CalendarSection({
                   <Badge variant={getFixtureStatusVariant(item.status)}>
                     {item.status.replaceAll('_', ' ')}
                   </Badge>
-                  <Button size="sm" variant="outline" onClick={() => onPrepareMatch(item.id)}>
-                    {item.status === 'IN_PROGRESS'
-                      ? 'Continue match'
-                      : item.status === 'COMPLETED'
-                        ? 'View match'
-                        : 'Prepare match'}
-                  </Button>
                 </div>
               ))}
             </div>

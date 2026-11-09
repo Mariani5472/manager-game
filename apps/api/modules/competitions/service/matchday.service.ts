@@ -105,24 +105,28 @@ export function advanceNextFixture(
     const pending = db.prepare(
       "SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status<>'COMPLETED'",
     ).get(stage.roundId) as { count:number };
-    if (pending.count > 0) {
-      throw new Error(`Round ${stage.roundId} still has ${pending.count} unfinished fixture(s); standings and knockout progression were not finalized.`);
-    }
-    progressKnockoutStage(
-      db,
-      stage.id,
-      stage.roundId
-    );
 
+    // Standings are a live view of completed fixtures, not a round-level
+    // snapshot. Refresh them after every match, even when its round is partial.
     rebuildStandings(
       db,
       stage.id
     );
 
-    finishSeasonIfComplete(
-      db,
-      stage.id
-    );
+    // Knockout progression and season completion are round-level operations:
+    // never create the next bracket round until every fixture is completed.
+    if (pending.count === 0) {
+      progressKnockoutStage(
+        db,
+        stage.id,
+        stage.roundId
+      );
+
+      finishSeasonIfComplete(
+        db,
+        stage.id
+      );
+    }
   });
 
   // Match checkpoints are committed independently; post-match competition

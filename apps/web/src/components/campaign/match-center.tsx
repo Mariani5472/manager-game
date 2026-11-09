@@ -78,16 +78,16 @@ export function MatchCenter({
   });
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
-  const [decisionMinute, setDecisionMinute] = useState(1);
   const [mentality, setMentality] = useState<Extract<MatchTacticalChangeRequest, { type: 'MENTALITY' }>['mentality']>('BALANCED');
   const [instructionKey, setInstructionKey] = useState<Extract<MatchTacticalChangeRequest, { type: 'INSTRUCTION' }>['key']>('pressing');
   const [instructionValue, setInstructionValue] = useState(65);
   const [playerOutId, setPlayerOutId] = useState<number | null>(null);
   const [playerInId, setPlayerInId] = useState<number | null>(null);
-  const [formationId, setFormationId] = useState('');
+  const [formationId, setFormationId] = useState<number | null>(null);
   // A ref closes the interval race: state updates from React are asynchronous,
   // while a timer callback can otherwise enqueue another advance immediately.
   const advanceInFlight = useRef(false);
+  const decisionInFlight = useRef(false);
   const advance = useMutation({
     mutationFn: (minute: number) => gameApi.advanceMatch(saveId, fixtureId, minute),
     onSuccess: (data) => {
@@ -107,7 +107,7 @@ export function MatchCenter({
     const interval = window.setInterval(() => {
       // Advance a small batch per second. This keeps the playback rate intuitive
       // while avoiding four HTTP round-trips per second at 4x speed.
-      if (advanceInFlight.current) return;
+      if (advanceInFlight.current || decisionInFlight.current) return;
       const nextMinute = Math.min(90, currentMinute + speed);
       if (nextMinute <= currentMinute) {
         setPlaying(false);
@@ -135,9 +135,7 @@ export function MatchCenter({
     document.addEventListener('visibilitychange', pauseWhenHidden);
     return () => document.removeEventListener('visibilitychange', pauseWhenHidden);
   }, []);
-  useEffect(() => {
-    setDecisionMinute((minute) => Math.max(currentMinute + 1, minute));
-  }, [currentMinute]);
+
   if (center.isLoading) return <p className={styles.loading}>Opening match centre…</p>;
   if (center.isError || !center.data)
     return (
@@ -147,23 +145,28 @@ export function MatchCenter({
   const home = data.teams[0],
     away = data.teams[1];
   const isFinished = data.fixture.status === 'COMPLETED';
-  const managedClubId = data.fixture.home.clubId === data.teams[0].clubId ? data.teams[0].clubId : data.teams[1].clubId;
+  const managedClubId = data.managedClubId;
   const userCanDecide = data.fixture.status !== 'COMPLETED';
   const managedLineup = data.teams.find((team) => team.clubId === managedClubId)?.lineup ?? [];
   const activePlayers = managedLineup.filter((player) => player.isStarting);
   const benchPlayers = managedLineup.filter((player) => !player.isStarting);
-  const nextDecisionMinute = Math.max(currentMinute + 1, decisionMinute);
-  
+  const nextDecisionMinute = currentMinute + 1;
+  const decisionBusy = advance.isPending || scheduleDecision.isPending || advanceInFlight.current || decisionInFlight.current;
 
   const submitDecision = async (input: MatchTacticalChangeRequest) => {
+    if (!userCanDecide || decisionBusy || nextDecisionMinute > 90) return;
+    // Lock synchronously before React can tear down the playback interval.
+    // This prevents a minute advance and a tactical decision racing each other.
+    decisionInFlight.current = true;
     setPlaying(false);
     try {
       await scheduleDecision.mutateAsync({ ...input, minute: nextDecisionMinute } as MatchTacticalChangeRequest);
-      setDecisionMinute(nextDecisionMinute + 1);
       setPlayerOutId(null);
       setPlayerInId(null);
     } catch {
       // The mutation error is displayed next to the decision controls.
+    } finally {
+      decisionInFlight.current = false;
     }
   };
 
@@ -289,43 +292,136 @@ export function MatchCenter({
           <CardTitle>Manager decisions</CardTitle>
         </CardHeader>
         <CardContent className={styles.playback}>
-          <p className={styles.speedHint}>Decisions are applied at the selected future minute and affect the simulation from that point onward.</p>
-          <label className={styles.decisionField}>
-            Apply at minute
-            <input aria-label="Decision minute" type="number" min={currentMinute + 1} max="90" value={nextDecisionMinute} onChange={(event) => setDecisionMinute(Math.max(currentMinute + 1, Number(event.target.value) || currentMinute + 1))} />
-          </label>
+          <p className={styles.speedHint}>
+            Changes take effect from minute {nextDecisionMinute}. Pause the playback to make a decision;
+            the current match minute is never modified retroactively.
+          </p>
           <div className={styles.decisionGrid}>
             <section className={styles.decisionPanel}>
               <strong>Substitution</strong>
-              <select aria-label="Player to substitute" value={playerOutId ?? ''} onChange={(event) => setPlayerOutId(event.target.value ? Number(event.target.value) : null)}>
-                <option value="">Outgoing starter</option>
-                {activePlayers.map((player) => <option key={player.playerId} value={player.playerId}>{player.name} · {player.position}</option>)}
-              </select>
-              <select aria-label="Substitute player" value={playerInId ?? ''} onChange={(event) => setPlayerInId(event.target.value ? Number(event.target.value) : null)}>
-                <option value="">Incoming substitute</option>
-                {benchPlayers.map((player) => <option key={player.playerId} value={player.playerId}>{player.name} · {player.position}</option>)}
-              </select>
-              <Button size="sm" disabled={!userCanDecide || !playerOutId || !playerInId || scheduleDecision.isPending || nextDecisionMinute > 90} onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'SUBSTITUTION', playerOutId: playerOutId!, playerInId: playerInId! })}>Schedule substitution</Button>
+              <span className={styles.speedHint}>1. Choose the player leaving the pitch.</span>
+              <div className={styles.choiceList}>
+                {activePlayers.map((player) => (
+                  <button
+                    type="button"
+                    key={player.playerId}
+                    className={playerOutId === player.playerId ? styles.choiceSelected : styles.choiceButton}
+                    aria-pressed={playerOutId === player.playerId}
+                    disabled={!userCanDecide || decisionBusy}
+                    onClick={() => { setPlayerOutId(player.playerId); setPlayerInId(null); }}
+                  >
+                    <span>{player.name}</span><small>{player.position} · {Math.round(player.energy)}% energy</small>
+                  </button>
+                ))}
+              </div>
+              <span className={styles.speedHint}>2. Choose the substitute entering.</span>
+              <div className={styles.choiceList}>
+                {benchPlayers.map((player) => (
+                  <button
+                    type="button"
+                    key={player.playerId}
+                    className={playerInId === player.playerId ? styles.choiceSelected : styles.choiceButton}
+                    aria-pressed={playerInId === player.playerId}
+                    disabled={!userCanDecide || decisionBusy || playerOutId === null}
+                    onClick={() => setPlayerInId(player.playerId)}
+                  >
+                    <span>{player.name}</span><small>{player.position} · {Math.round(player.energy)}% energy</small>
+                  </button>
+                ))}
+              </div>
+              <Button size="sm" disabled={!userCanDecide || decisionBusy || !playerOutId || !playerInId || nextDecisionMinute > 90}
+                onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'SUBSTITUTION', playerOutId: playerOutId!, playerInId: playerInId! })}>
+                Confirm substitution
+              </Button>
             </section>
             <section className={styles.decisionPanel}>
-              <strong>Mentality</strong>
-              <select aria-label="Team mentality" value={mentality} onChange={(event) => setMentality(event.target.value as typeof mentality)}>
-                <option value="VERY_DEFENSIVE">Very defensive</option><option value="DEFENSIVE">Defensive</option><option value="BALANCED">Balanced</option><option value="ATTACKING">Attacking</option><option value="VERY_ATTACKING">Very attacking</option>
-              </select>
-              <Button size="sm" disabled={!userCanDecide || scheduleDecision.isPending || nextDecisionMinute > 90} onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'MENTALITY', mentality })}>Change mentality</Button>
+              <strong>Team mentality</strong>
+              <div className={styles.optionGrid}>
+                {([
+                  ['VERY_DEFENSIVE', 'Very defensive'],
+                  ['DEFENSIVE', 'Defensive'],
+                  ['BALANCED', 'Balanced'],
+                  ['ATTACKING', 'Attacking'],
+                  ['VERY_ATTACKING', 'Very attacking'],
+                ] as const).map(([value, label]) => (
+                  <button type="button" key={value}
+                    className={mentality === value ? styles.choiceSelected : styles.choiceButton}
+                    aria-pressed={mentality === value}
+                    disabled={!userCanDecide || decisionBusy}
+                    onClick={() => setMentality(value)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <Button size="sm" disabled={!userCanDecide || decisionBusy || nextDecisionMinute > 90}
+                onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'MENTALITY', mentality })}>
+                Apply mentality
+              </Button>
             </section>
             <section className={styles.decisionPanel}>
               <strong>Tactical instruction</strong>
-              <select aria-label="Instruction" value={instructionKey} onChange={(event) => setInstructionKey(event.target.value as typeof instructionKey)}>
-                <option value="pressing">Pressing</option><option value="tempo">Tempo</option><option value="defensive_line">Defensive line</option><option value="width">Width</option><option value="passing_directness">Passing directness</option><option value="counter_attack">Counter attack</option>
-              </select>
-              <input aria-label="Instruction value" type="number" min="0" max={instructionKey === 'counter_attack' ? 1 : 100} value={instructionValue} onChange={(event) => setInstructionValue(Number(event.target.value))} />
-              <Button size="sm" disabled={!userCanDecide || scheduleDecision.isPending || nextDecisionMinute > 90 || instructionValue < 0 || instructionValue > (instructionKey === 'counter_attack' ? 1 : 100)} onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'INSTRUCTION', key: instructionKey, value: instructionValue })}>Apply instruction</Button>
+              <span className={styles.speedHint}>Choose an instruction to tune.</span>
+              <div className={styles.optionGrid}>
+                {([
+                  ['pressing', 'Pressing'],
+                  ['tempo', 'Tempo'],
+                  ['defensive_line', 'Defensive line'],
+                  ['width', 'Width'],
+                  ['passing_directness', 'Passing'],
+                  ['counter_attack', 'Counter attack'],
+                ] as const).map(([value, label]) => (
+                  <button type="button" key={value}
+                    className={instructionKey === value ? styles.choiceSelected : styles.choiceButton}
+                    aria-pressed={instructionKey === value}
+                    disabled={!userCanDecide || decisionBusy}
+                    onClick={() => { setInstructionKey(value); if (value === 'counter_attack') setInstructionValue(1); }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {instructionKey === 'counter_attack' ? (
+                <div className={styles.optionGrid}>
+                  {([['0', 'Off'], ['1', 'On']] as const).map(([value, label]) => (
+                    <button type="button" key={value}
+                      className={instructionValue === Number(value) ? styles.choiceSelected : styles.choiceButton}
+                      aria-pressed={instructionValue === Number(value)}
+                      disabled={!userCanDecide || decisionBusy}
+                      onClick={() => setInstructionValue(Number(value))}>{label}</button>
+                  ))}
+                </div>
+              ) : (
+                <label className={styles.sliderField}>
+                  <span>{instructionKey.replaceAll('_', ' ')}: <b>{instructionValue}</b></span>
+                  <input aria-label="Instruction intensity" type="range" min="0" max="100" step="5"
+                    value={instructionValue}
+                    disabled={!userCanDecide || decisionBusy}
+                    onChange={(event) => setInstructionValue(Number(event.target.value))} />
+                  <span className={styles.sliderScale}><small>Lower</small><small>Higher</small></span>
+                </label>
+              )}
+              <Button size="sm" disabled={!userCanDecide || decisionBusy || nextDecisionMinute > 90}
+                onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'INSTRUCTION', key: instructionKey, value: instructionValue })}>
+                Apply instruction
+              </Button>
             </section>
             <section className={styles.decisionPanel}>
               <strong>Formation</strong>
-              <input aria-label="Formation id" inputMode="numeric" placeholder="Formation id" value={formationId} onChange={(event) => setFormationId(event.target.value.replace(/[^0-9]/g, ''))} />
-              <Button size="sm" disabled={!userCanDecide || !formationId || scheduleDecision.isPending || nextDecisionMinute > 90} onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'FORMATION', formationId: Number(formationId) })}>Change formation</Button>
+              <span className={styles.speedHint}>Choose one of the formations supported by your data package.</span>
+              <div className={styles.optionGrid}>
+                {data.formations.map((formation) => (
+                  <button type="button" key={formation.id}
+                    className={formationId === formation.id ? styles.choiceSelected : styles.choiceButton}
+                    aria-pressed={formationId === formation.id}
+                    disabled={!userCanDecide || decisionBusy}
+                    onClick={() => setFormationId(formation.id)}>
+                    {formation.name}
+                  </button>
+                ))}
+              </div>
+              <Button size="sm" disabled={!userCanDecide || decisionBusy || formationId === null || nextDecisionMinute > 90}
+                onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'FORMATION', formationId: formationId! })}>
+                Change formation
+              </Button>
             </section>
           </div>
           {scheduleDecision.isError && <p className={styles.error}>{scheduleDecision.error.message}</p>}

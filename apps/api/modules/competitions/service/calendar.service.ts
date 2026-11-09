@@ -236,12 +236,21 @@ export function advanceRoundById(
 
   for (const fixture of fixtures) {
     try {
-      results.push(
-        simulateMatch(
-          db,
-          fixture.id
-        )
-      );
+      const fixtureState = db.prepare("SELECT status FROM fixture WHERE id=?").get(fixture.id) as { status:string } | undefined;
+      if (fixtureState?.status === "IN_PROGRESS") {
+        const checkpoint = db.prepare(
+          "SELECT simulation_minute AS minute FROM match_simulation_state WHERE fixture_id=?",
+        ).get(fixture.id) as { minute:number } | undefined;
+        const eventCount = (db.prepare(
+          "SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=?",
+        ).get(fixture.id) as { count:number }).count;
+        if (!checkpoint && eventCount === 0) {
+          db.prepare("UPDATE fixture SET status='SCHEDULED',current_minute=0 WHERE id=? AND status='IN_PROGRESS'").run(fixture.id);
+        } else if (!checkpoint || checkpoint.minute < 0 || checkpoint.minute > 90) {
+          throw new Error("Fixture is IN_PROGRESS with an invalid or missing checkpoint; refusing destructive recovery.");
+        }
+      }
+      results.push(simulateMatch(db, fixture.id));
     } catch (error) {
       failures.push(
         `fixture ${fixture.id}: ${

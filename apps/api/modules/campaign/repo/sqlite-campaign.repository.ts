@@ -11,6 +11,7 @@ import {simulateMatch} from "../../matches/service/match-simulation.service.js";
 import {scheduleMatchTacticalChange} from "../../matches/engine/tacticalChangeService.js";
 import {progressKnockoutStage} from "../../competitions/service/knockout.service.js";
 import {finishSeasonIfComplete} from "../../competitions/service/season.service.js";
+import {advanceRoundById} from "../../competitions/service/calendar.service.js";
 import type {CampaignClubDto,CampaignOverviewResponse,CampaignCalendarResponse,CampaignSquadResponse,CampaignTeamResponse,MatchCenterResponse,MatchPreparationResponse,MatchFixtureDto,MatchLineupPlayerDto,SaveMatchLineupRequest,MatchTacticalChangeRequest} from "../../../../shared/src/index.js";
 import type {CampaignRepository} from "./campaign.repository.js";
 import {SaveNotFoundError} from "../../saves/save-not-found.error.js";
@@ -134,8 +135,18 @@ export class SqliteCampaignRepository implements CampaignRepository {
     });
     lineupUpdate.immediate();
     const stage=db.prepare("SELECT r.stage_id AS stageId,r.id AS roundId FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE f.id=?").get(fixtureId) as {stageId:number;roundId:number};
-    const finalize=db.transaction(()=>{progressKnockoutStage(db,stage.stageId,stage.roundId);rebuildStandings(db,stage.stageId);finishSeasonIfComplete(db,stage.stageId);});
-    finalize.immediate();
+    const pendingFixtures=db.prepare("SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status IN ('SCHEDULED','IN_PROGRESS')").get(stage.roundId) as {count:number};
+    if(pendingFixtures.count>0) {
+     // The managed match stays interactive; only after its full-time do we
+     // resolve the rest of the same round in batch and finalize standings once.
+     advanceRoundById(db,stage.roundId,stage.stageId);
+    } else {
+     const unfinished=db.prepare("SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status<>'COMPLETED'").get(stage.roundId) as {count:number};
+     if(unfinished.count===0) {
+      const finalize=db.transaction(()=>{progressKnockoutStage(db,stage.stageId,stage.roundId);rebuildStandings(db,stage.stageId);finishSeasonIfComplete(db,stage.stageId);});
+      finalize.immediate();
+     }
+    }
    }
    return this.matchCenterFromDb(db,fixtureId);
   });
@@ -156,7 +167,7 @@ export class SqliteCampaignRepository implements CampaignRepository {
   const events=[...rows.map(e=>({id:e.id,fixtureId,minute:e.minute,addedTime:0,type:e.type,clubId:e.clubId,playerId:e.playerId,secondaryPlayerId:e.secondaryPlayerId,xg:e.xg,description:e.description})),...decisionEvents].sort((a,b)=>a.minute-b.minute||a.id-b.id);
   const momentum=db.prepare("SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,home_score AS homeScore,away_score AS awayScore FROM match_momentum WHERE fixture_id=? ORDER BY minute").all(fixtureId) as MatchCenterResponse["momentum"];
   const aggregate=(clubId:number)=>{const count=(types:string[])=>rows.filter(e=>e.clubId===clubId&&types.includes(e.type)).length;return {shots:count(["GOAL","SAVE","MISS"]),shotsOnTarget:count(["GOAL","SAVE"]),goals:count(["GOAL"]),expectedGoals:rows.filter(e=>e.clubId===clubId&&["GOAL","SAVE","MISS"].includes(e.type)).reduce((sum,e)=>sum+(e.xg??0),0),fouls:count(["FOUL"]),yellowCards:count(["YELLOW_CARD"]),redCards:count(["RED_CARD"]),substitutions:count(["SUBSTITUTION"]),injuries:count(["INJURY"])};};
-  return {fixture,playbackStatus:fixture.status==="COMPLETED"?"FINISHED":fixture.status==="IN_PROGRESS"?"PAUSED":"IDLE",teams:[{clubId:fixture.home.clubId,name:fixture.home.name,isHome:true,lineup:this.lineup(db,fixtureId,fixture.home.clubId)},{clubId:fixture.away.clubId,name:fixture.away.name,isHome:false,lineup:this.lineup(db,fixtureId,fixture.away.clubId)}],statistics:{home:aggregate(fixture.home.clubId),away:aggregate(fixture.away.clubId)},events,momentum};
+  const formations=db.prepare("SELECT id,name FROM formation ORDER BY name").all() as Array<{id:number;name:string}>;\n  return {fixture,managedClubId:getManagedClub(db).id,formations,playbackStatus:fixture.status==="COMPLETED"?"FINISHED":fixture.status==="IN_PROGRESS"?"PAUSED":"IDLE",teams:[{clubId:fixture.home.clubId,name:fixture.home.name,isHome:true,lineup:this.lineup(db,fixtureId,fixture.home.clubId)},{clubId:fixture.away.clubId,name:fixture.away.name,isHome:false,lineup:this.lineup(db,fixtureId,fixture.away.clubId)}],statistics:{home:aggregate(fixture.home.clubId),away:aggregate(fixture.away.clubId)},events,momentum};
  }
 
 }
