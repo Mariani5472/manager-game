@@ -100,40 +100,7 @@ export class SqliteCampaignRepository implements CampaignRepository {
   });
  }
  matchCenter(id:string,fixtureId:number):MatchCenterResponse {
-  return this.withSave(id,db=>{
-   const fixture=this.fixture(db,fixtureId);
-   const rows=db.prepare("SELECT id,minute,club_id AS clubId,player_id AS playerId,secondary_player_id AS secondaryPlayerId,event_type AS type,xg,description FROM match_event WHERE fixture_id=? ORDER BY minute,id").all(fixtureId) as Array<{id:number;minute:number;clubId:number|null;playerId:number|null;secondaryPlayerId:number|null;type:MatchCenterResponse["events"][number]["type"];xg:number|null;description:string|null}>;
-  const pendingDecisions=db.prepare("SELECT id,minute,change_type AS type,payload FROM match_tactical_change WHERE fixture_id=? AND applied=0 ORDER BY minute,id").all(fixtureId) as Array<{id:number;minute:number;type:string;payload:string}>;
-  const decisionEvents=pendingDecisions.map(decision=>{
-   const payload=JSON.parse(decision.payload) as Record<string,unknown>;
-   let description="Decisão tática agendada";
-   if(decision.type==="MENTALITY") description=`Mentalidade definida para ${String(payload.mentality)}`;
-   if(decision.type==="INSTRUCTION") description=`Instrução ${String(payload.key)} definida para ${String(payload.value)}`;
-   if(decision.type==="SUBSTITUTION") description=`Substituição agendada: jogador ${String(payload.playerOutId)} sai, jogador ${String(payload.playerInId)} entra`;
-   if(decision.type==="FORMATION") description=`Alteração de formação agendada (ID ${String(payload.formationId)})`;
-   return {id:-decision.id,fixtureId,minute:decision.minute,addedTime:0,type:"TACTIC_CHANGE" as const,clubId:getManagedClub(db).id,playerId:null,secondaryPlayerId:null,xg:0,description};
-  });
-  const allEvents=[...rows.map(e=>({id:e.id,fixtureId,minute:e.minute,addedTime:0,type:e.type,clubId:e.clubId,playerId:e.playerId,secondaryPlayerId:e.secondaryPlayerId,xg:e.xg,description:e.description})),...decisionEvents].sort((left,right)=>left.minute-right.minute||left.id-right.id);
-   const momentum=db.prepare("SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,home_score AS homeScore,away_score AS awayScore FROM match_momentum WHERE fixture_id=? ORDER BY minute").all(fixtureId) as MatchCenterResponse["momentum"];
-   const aggregate=(clubId:number)=>{
-    const count=(types:string[])=>rows.filter(e=>e.clubId===clubId&&types.includes(e.type)).length;
-    return {shots:count(["GOAL","SAVE","MISS"]),shotsOnTarget:count(["GOAL","SAVE"]),goals:count(["GOAL"]),expectedGoals:rows.filter(e=>e.clubId===clubId&&["GOAL","SAVE","MISS"].includes(e.type)).reduce((sum,e)=>sum+(e.xg??0),0),fouls:count(["FOUL"]),yellowCards:count(["YELLOW_CARD"]),redCards:count(["RED_CARD"]),substitutions:count(["SUBSTITUTION"]),injuries:count(["INJURY"])};
-   };
-   const home=this.lineup(db,fixtureId,fixture.home.clubId),away=this.lineup(db,fixtureId,fixture.away.clubId);
-   return {fixture,playbackStatus:fixture.status==="COMPLETED"?"FINISHED":fixture.status==="IN_PROGRESS"?"PAUSED":"IDLE",teams:[{clubId:fixture.home.clubId,name:fixture.home.name,isHome:true,lineup:home},{clubId:fixture.away.clubId,name:fixture.away.name,isHome:false,lineup:away}],statistics:{home:aggregate(fixture.home.clubId),away:aggregate(fixture.away.clubId)},events:allEvents,momentum};
-  });
- }
- scheduleTacticalChange(id:string,fixtureId:number,input:MatchTacticalChangeRequest):{changeId:number} {
-  return this.withSave(id,db=>{
-   const managedClubId=getManagedClub(db).id;
-   const fixture=this.fixture(db,fixtureId);
-   if(fixture.home.clubId!==managedClubId&&fixture.away.clubId!==managedClubId) throw new Error("Managed club is not part of this fixture.");
-   if(fixture.status==="COMPLETED") throw new Error("Cannot change tactics after full time.");
-   if(input.minute<=fixture.currentMinute) throw new Error("Decision must be scheduled after the current minute.");
-   const {minute,type,...payload}=input;
-   const changeId=scheduleMatchTacticalChange(db,fixtureId,managedClubId,minute,type,payload);
-   return {changeId};
-  });
+  return this.withSave(id,db=>this.matchCenterFromDb(db,fixtureId));
  }
  advanceMatch(id:string,fixtureId:number,throughMinute:number):MatchCenterResponse {
   return this.withSave(id,db=>{
