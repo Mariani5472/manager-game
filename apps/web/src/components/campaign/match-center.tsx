@@ -353,19 +353,25 @@ export function MatchCenter({
             </section>
             <section className={styles.decisionPanel}>
               <strong>Tactical instruction</strong>
-              <label className={styles.instructionLabel}>
-                Instruction
-                <select aria-label="Instruction" value={instructionKey}
-                  disabled={!userCanDecide || decisionBusy}
-                  onChange={(event) => setInstructionKey(event.target.value as typeof instructionKey)}>
-                  <option value="pressing">Pressing</option>
-                  <option value="tempo">Tempo</option>
-                  <option value="defensive_line">Defensive line</option>
-                  <option value="width">Width</option>
-                  <option value="passing_directness">Passing directness</option>
-                  <option value="counter_attack">Counter attack</option>
-                </select>
-              </label>
+              <span className={styles.speedHint}>Choose an instruction to tune.</span>
+              <div className={styles.optionGrid}>
+                {([
+                  ['pressing', 'Pressing'],
+                  ['tempo', 'Tempo'],
+                  ['defensive_line', 'Defensive line'],
+                  ['width', 'Width'],
+                  ['passing_directness', 'Passing'],
+                  ['counter_attack', 'Counter attack'],
+                ] as const).map(([value, label]) => (
+                  <button type="button" key={value}
+                    className={instructionKey === value ? styles.choiceSelected : styles.choiceButton}
+                    aria-pressed={instructionKey === value}
+                    disabled={!userCanDecide || decisionBusy}
+                    onClick={() => { setInstructionKey(value); if (value === 'counter_attack') setInstructionValue(1); }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
               {instructionKey === 'counter_attack' ? (
                 <div className={styles.optionGrid}>
                   {([['0', 'Off'], ['1', 'On']] as const).map(([value, label]) => (
