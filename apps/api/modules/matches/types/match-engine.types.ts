@@ -1,3 +1,4 @@
+import type { TeamGameState } from "../engine/game-state/gameState.types.js";
 import type { MatchContext } from "../service/match-context.service.js";
 
 
@@ -180,6 +181,8 @@ export interface KernelMinute {
   awayPressure: number;
   homeBasePressure: number;
   awayBasePressure: number;
+  homeState: TeamGameState;
+  awayState: TeamGameState;
   homeScore: number;
   awayScore: number;
   events: KernelShotEvent[];
