@@ -21,11 +21,13 @@ test("match context persists weather and pitch, applies substitutions as events,
   } finally { master.close(); }
 
   const manager = new SaveManager(masterPath, join(root, "saves"));
-  const save = await manager.create({ name: "Phase 6 Test", managerName: "Test Manager", clubId: 1 });
+  const save = await manager.create({ name: "Phase 6 Test", managerName: "Test Manager", clubId: 2 });
   const db = manager.open(save.filePath);
   try {
     const fixture = db.prepare("SELECT id,home_club_id AS home,away_club_id AS away FROM fixture WHERE status='SCHEDULED' ORDER BY id LIMIT 1")
       .get() as { id:number; home:number; away:number };
+    const selectedClub = db.prepare("SELECT selected_club_id AS clubId FROM game_save_metadata LIMIT 1").get() as {clubId:number};
+    assert.equal(selectedClub.clubId, fixture.away, "the managed club is the away side in this fixture");
     const preview = previewLineup(db, fixture.home, fixture.id);
     assert.equal(preview.starters.length, 11);
     assert.ok(preview.bench.length > 0);
