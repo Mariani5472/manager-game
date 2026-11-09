@@ -127,14 +127,15 @@ export function simulateMatchTimeline(
        const role = String(raw.positionCode ?? "");
        const player = team.lineup.find(candidate => candidate.id === playerId);
        if (
-        !player ||
+        !Number.isSafeInteger(playerId) ||
+        playerId <= 0 ||
         assignedPlayers.has(playerId) ||
         !Number.isSafeInteger(slot) ||
         slot < 1 ||
         slot > 11 ||
         assignedSlots.has(slot) ||
         !["GK","CB","LB","RB","LWB","RWB","DM","CM","AM","LW","RW","LM","RM","ST"].includes(role) ||
-        (role === "GK" && player.goalkeeper !== 1)
+        (role === "GK" && player && player.goalkeeper !== 1)
        ) {
         throw new Error(`Formation change ${change.id} has invalid slot assignments.`);
        }
