@@ -2,6 +2,7 @@ import {
   MATCH_EVENT_PROBABILITIES,
 } from "./constants.js";
 import { advanceMatchGameState, createMatchGameState } from "./game-state/gameState.calculator.js";
+import { resolveTeamGameActions } from "./game-state/gameActionResolver.js";
 import {
   clamp,
   mean,
@@ -50,6 +51,8 @@ export function simulateMatchTimeline(
    const awayEventRandom=rng((seed ^ Math.imul(away.clubId,0x85ebca6b) ^ 0x51ed270b)>>>0);
    const homeErrorRandom=rng((seed ^ Math.imul(home.clubId,0xc2b2ae35) ^ 0x27d4eb2f)>>>0);
    const awayErrorRandom=rng((seed ^ Math.imul(away.clubId,0xc2b2ae35) ^ 0x27d4eb2f)>>>0);
+   const homeGameRandom=rng((seed ^ Math.imul(home.clubId,0x27d4eb2f) ^ 0x165667b1)>>>0);
+   const awayGameRandom=rng((seed ^ Math.imul(away.clubId,0x27d4eb2f) ^ 0x165667b1)>>>0);
    let hs=0,as=0,hShots=0,aShots=0,hOn=0,aOn=0,hxg=0,axg=0;
    let gameState = createMatchGameState(home, away);
    const events:KernelShotEvent[]=[];
@@ -288,6 +291,10 @@ export function simulateMatchTimeline(
       }
      }
     }
+    const gameActions = [
+     ...resolveTeamGameActions(home, away, gameState.home, gameState.away, minute, homeGameRandom),
+     ...resolveTeamGameActions(away, home, gameState.away, gameState.home, minute, awayGameRandom),
+    ];
     const homeBasePressure=teamPressure(home,homeRandom);
     const awayBasePressure=teamPressure(away,awayRandom);
     for(const side of [
@@ -331,6 +338,7 @@ export function simulateMatchTimeline(
      homeBasePressure,
      awayBasePressure,
      minuteEvents,
+     gameActions,
      minute,
     );
     minutes.push({
