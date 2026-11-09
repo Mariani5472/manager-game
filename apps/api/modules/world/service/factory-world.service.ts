@@ -6,7 +6,7 @@ import {
 import {
   ensureFactorySquadProfiles,
   FactoryCalendarRepair,
-} from "./squadProfileService.js";
+} from "./squad-profile.service.js";
 
 
 /**
