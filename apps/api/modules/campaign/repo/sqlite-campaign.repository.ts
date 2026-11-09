@@ -11,11 +11,19 @@ import {simulateMatch} from "../../matches/service/match-simulation.service.js";
 import {scheduleMatchTacticalChange} from "../../matches/engine/tacticalChangeService.js";
 import {progressKnockoutStage} from "../../competitions/service/knockout.service.js";
 import {finishSeasonIfComplete} from "../../competitions/service/season.service.js";
-import type {CampaignClubDto,CampaignOverviewResponse,CampaignCalendarResponse,CampaignSquadResponse,CampaignTeamResponse,MatchCenterResponse,MatchPreparationResponse,MatchFixtureDto,MatchLineupPlayerDto,SaveMatchLineupRequest,MatchTacticalChangeRequest} from "../../../shared/src/index.js";
+import type {CampaignClubDto,CampaignOverviewResponse,CampaignCalendarResponse,CampaignSquadResponse,CampaignTeamResponse,MatchCenterResponse,MatchPreparationResponse,MatchFixtureDto,MatchLineupPlayerDto,SaveMatchLineupRequest,MatchTacticalChangeRequest} from "../../../../shared/src/index.js";
 import type {CampaignRepository} from "./campaign.repository.js";
 import {SaveNotFoundError} from "../../saves/save-not-found.error.js";
 export class SqliteCampaignRepository implements CampaignRepository {
  private readonly manager=new SaveManager(masterPath,saveDir);
+ scheduleTacticalChange(id:string,fixtureId:number,input:MatchTacticalChangeRequest):{changeId:number} {
+  return this.withSave(id,db=>{
+   const managedClub=getManagedClub(db);
+   const {minute,type,...payload}=input;
+   const changeId=scheduleMatchTacticalChange(db,fixtureId,managedClub.id,minute,type,payload);
+   return {changeId};
+  });
+ }
  private withSave<T>(id:string,query:(db:SqliteDatabase)=>T):T {
   const save=this.manager.list().find(item=>item.id===id); if(!save) throw new SaveNotFoundError(id);
   const db=this.manager.open(save.filePath); try{return query(db);}finally{db.close();}
