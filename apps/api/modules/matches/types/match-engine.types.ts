@@ -175,6 +175,38 @@ export interface KernelShotEvent {
 }
 
 
+export interface MomentumEventImpact {
+  eventIndex: number;
+  eventType: MatchEventType;
+  clubId: number;
+  xg: number;
+  appliedThreatImpact: number;
+  description: string;
+}
+
+export interface MomentumTeamTrace {
+  clubId: number;
+  previousMomentum: number;
+  structuralPressure: number;
+  territorialControl: number;
+  offensiveThreat: number;
+  defensiveStability: number;
+  intensity: number;
+  physicalCondition: number;
+  finalMomentum: number;
+  eventThreatImpact: number;
+  actionThreatImpact: number;
+}
+
+export interface MomentumMinuteTrace {
+  minute: number;
+  home: MomentumTeamTrace;
+  away: MomentumTeamTrace;
+  events: MomentumEventImpact[];
+  dominance: "HOME" | "AWAY" | "BALANCED";
+  dominanceChanged: boolean;
+}
+
 export interface KernelMinute {
   minute: number;
   homePressure: number;
@@ -183,6 +215,7 @@ export interface KernelMinute {
   awayBasePressure: number;
   homeState: TeamGameState;
   awayState: TeamGameState;
+  momentumTrace?: MomentumMinuteTrace;
   homeScore: number;
   awayScore: number;
   events: KernelShotEvent[];
