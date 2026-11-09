@@ -112,8 +112,15 @@ export function simulateMatch(
             // before processing another minute so subsequent resumes stay deterministic.
             if (newChanges.length > 0) {
                 const updatedConfig = simulationConfig;
-                db.prepare("UPDATE match_simulation_state SET state_json=? WHERE fixture_id=?")
-                    .run(JSON.stringify({ ...checkpoint, config: updatedConfig, minute: startMinute }), fixtureId);
+                const minuteCheckpoint = db.prepare(
+                    "SELECT simulation_minute AS minute,state_json AS stateJson FROM match_simulation_state WHERE fixture_id=?",
+                ).get(fixtureId) as { minute:number; stateJson:string } | undefined;
+                if (!minuteCheckpoint || minuteCheckpoint.minute !== startMinute) {
+                    throw new Error(`Fixture ${fixtureId} checkpoint changed while tactical decisions were being scheduled.`);
+                }
+                const persistedCheckpoint = JSON.parse(minuteCheckpoint.stateJson) as Record<string, unknown>;
+                db.prepare("UPDATE match_simulation_state SET state_json=? WHERE fixture_id=? AND simulation_minute=?")
+                    .run(JSON.stringify({ ...persistedCheckpoint, config: updatedConfig }), fixtureId, startMinute);
             }
         }
         if (startMinute < 0 || startMinute > 90) throw new Error(`Fixture ${fixtureId} checkpoint minute is invalid.`);
