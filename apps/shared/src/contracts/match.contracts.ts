@@ -136,6 +136,8 @@ export interface MatchFixtureDto {
 
 export interface MatchCenterResponse {
   fixture: MatchFixtureDto;
+  managedClubId: ClubId;
+  formations: Array<{ id: number; name: string }>;
   playbackStatus: MatchPlaybackStatus;
   teams: [MatchTeamDto, MatchTeamDto];
   statistics: MatchStatisticsDto;
