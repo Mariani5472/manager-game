@@ -87,6 +87,38 @@ export interface MatchMomentumTeamStateDto {
   momentum: number;
 }
 
+export interface MatchMomentumEventImpactDto {
+  eventIndex: number;
+  eventType: string;
+  clubId: number;
+  xg: number;
+  appliedThreatImpact: number;
+  description: string;
+}
+
+export interface MatchMomentumTeamTraceDto {
+  clubId: number;
+  previousMomentum: number;
+  structuralPressure: number;
+  territorialControl: number;
+  offensiveThreat: number;
+  defensiveStability: number;
+  intensity: number;
+  physicalCondition: number;
+  finalMomentum: number;
+  eventThreatImpact: number;
+  actionThreatImpact: number;
+}
+
+export interface MatchMomentumTraceDto {
+  minute: number;
+  home: MatchMomentumTeamTraceDto;
+  away: MatchMomentumTeamTraceDto;
+  events: MatchMomentumEventImpactDto[];
+  dominance: "HOME" | "AWAY" | "BALANCED";
+  dominanceChanged: boolean;
+}
+
 export interface MatchMomentumPointDto {
   minute: number;
   homePressure: number;
