@@ -4,7 +4,7 @@ import {
 import type {
   BinomialConfidenceInterval,
   MeanConfidenceInterval,
-} from "./types.js";
+} from "../types/match-engine.types.js";
 
 
 export function meanConfidenceInterval(
