@@ -84,8 +84,39 @@ export function simulateMatch(
         try { checkpoint = JSON.parse(existing.state_json) as { seed?: number; completed?: boolean }; }
         catch { throw new Error(`Fixture ${fixtureId} has an invalid simulation checkpoint; refusing to overwrite it.`); }
         if (checkpoint.seed !== seed) throw new Error(`Fixture ${fixtureId} checkpoint seed does not match its fixture seed.`);
-        if (checkpoint.config !== undefined && JSON.stringify(checkpoint.config) !== JSON.stringify(simulationConfig)) {
-            throw new Error(`Fixture ${fixtureId} simulation inputs changed after its checkpoint; refusing a non-deterministic resume.`);
+        if (checkpoint.config !== undefined) {
+            const previous = checkpoint.config as {
+                home?: unknown;
+                away?: unknown;
+                tacticalChanges?: Array<{ id: number; minute: number; clubId: number; type: string; payload: string }>;
+            };
+            const sameTeams = JSON.stringify({ home: previous.home, away: previous.away }) ===
+                JSON.stringify({ home: simulationConfig.home, away: simulationConfig.away });
+            const previousChanges = previous.tacticalChanges ?? [];
+            const currentChanges = simulationConfig.tacticalChanges;
+            const retainedChanges = currentChanges.filter(change =>
+                previousChanges.some(previousChange =>
+                    previousChange.id === change.id &&
+                    previousChange.minute === change.minute &&
+                    previousChange.clubId === change.clubId &&
+                    previousChange.type === change.type &&
+                    previousChange.payload === change.payload
+                )
+            );
+            const onlyFutureChangesWereAdded = previousChanges.every(previousChange =>
+                currentChanges.some(change =>
+                    change.id === previousChange.id &&
+                    change.minute === previousChange.minute &&
+                    change.clubId === previousChange.clubId &&
+                    change.type === previousChange.type &&
+                    change.payload === previousChange.payload
+                )
+            ) && currentChanges.every(change =>
+                previousChanges.some(previousChange => previousChange.id === change.id) || change.minute > startMinute
+            );
+            if (!sameTeams || !onlyFutureChangesWereAdded || retainedChanges.length !== previousChanges.length) {
+                throw new Error(`Fixture ${fixtureId} simulation inputs changed after its checkpoint; only new tactical changes scheduled after minute ${startMinute} can be appended.`);
+            }
         }
         if (startMinute < 0 || startMinute > 90) throw new Error(`Fixture ${fixtureId} checkpoint minute is invalid.`);
     } else if (f.status === "IN_PROGRESS") {
