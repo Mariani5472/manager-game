@@ -30,7 +30,6 @@
 }
 .dashboardHero {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(190px, 0.7fr);
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);

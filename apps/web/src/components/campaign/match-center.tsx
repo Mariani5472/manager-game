@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pause, Play, Radio, RotateCcw, SkipForward, Timer } from 'lucide-react';
+import { Activity, Pause, Play, Radio, RotateCcw, SkipForward, Timer, Zap } from 'lucide-react';
 import type { MatchCenterResponse, MatchTacticalChangeRequest } from '@shared/index';
 import { gameApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LineupList } from './lineup-list';
 import { MatchHeader, MatchMomentum, MatchTimeline } from './match-presentation';
 import styles from './match-section.module.css';
+import { Badge } from '@/components/ui/badge';
 function MomentumChart({ data }: { data: MatchCenterResponse['momentum'] }) {
   const home = data
     .map((point) => `${(point.minute / 90) * 900},${112 - point.homePressure * 0.92}`)
@@ -138,6 +139,14 @@ export function MatchCenter({
       <p className={styles.error}>{center.error?.message ?? 'Unable to load match centre.'}</p>
     );
   const data = center.data;
+  const latestEvent = [...data.events]
+  .filter((event) => event.minute > 0)
+  .sort(
+    (a, b) =>
+      b.minute - a.minute ||
+      b.addedTime - a.addedTime ||
+      b.id - a.id,
+  )[0];
   const home = data.teams[0],
     away = data.teams[1];
   const isFinished = data.fixture.status === 'COMPLETED';
@@ -261,90 +270,7 @@ export function MatchCenter({
           {advance.isError && <p className={styles.error}>{advance.error.message}</p>}
         </CardContent>
       </Card>
-      <div className={styles.centerGrid}>
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              <Activity size={16} /> Match momentum
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <MomentumChart data={data.momentum} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Match statistics</CardTitle>
-          </CardHeader>
-          <CardContent className={styles.stats}>
-            <div className={styles.statTeams}>
-              <span>{home.name}</span>
-              <span>STAT</span>
-              <span>{away.name}</span>
-            </div>
-            {stats.map(([label, h, a]) => (
-              <div className={styles.statRow} key={label}>
-                <strong>{h}</strong>
-                <span>{label}</span>
-                <strong>{a}</strong>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-      <div className={styles.centerGrid}>
-        <LineupList
-          title={`Home XI · ${home.name}`}
-          players={home.lineup}
-          managed={false}
-          selectedIds={[]}
-        />
-        <LineupList
-          title={`Away XI · ${away.name}`}
-          players={away.lineup}
-          managed={false}
-          selectedIds={[]}
-        />
-      </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            <Zap size={16} /> Live commentary
-          </CardTitle>
-        </CardHeader>
-        <CardContent className={styles.commentary}>
-          {latestEvent ? (
-            <div className={styles.latestCommentary} aria-live="polite" aria-atomic="true">
-              <Badge variant="info">{latestEvent.minute}&apos;</Badge>
-              <p>{latestEvent.description ?? latestEvent.type.replaceAll('_', ' ')}</p>
-            </div>
-          ) : (
-            <p className={styles.chartEmpty}>
-              The referee is ready. Start the match to receive live commentary.
-            </p>
-          )}
-          <div
-            className={styles.eventList}
-            role="log"
-            aria-label="Match event commentary"
-            aria-live="polite"
-          >
-            {[...data.events]
-              .reverse()
-              .filter((event) => event.minute > 0)
-              .slice(0, 16)
-              .map((event) => (
-                <div key={event.id}>
-                  <time>{event.minute}&apos;</time>
-                  <span>
-                    <b>{event.type.replaceAll('_', ' ')}</b>
-                    {event.description ? ` · ${event.description}` : ''}
-                  </span>
-                </div>
-              ))}
-          </div>
-        </CardContent>
-      </Card>
+
       <MatchMomentum data={data.momentum} events={data.events} />
       <MatchTimeline events={data.events} teams={data.teams} />
       <Card>

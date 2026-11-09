@@ -68,42 +68,8 @@ export function OverviewSection({ data }: { data: CampaignOverviewResponse }) {
               <span>Your next match will appear here when the calendar is available.</span>
             </div>
           )}
-        </div>
-        <div className={styles.heroAside}>
-          <span className={styles.asideLabel}>LAST RESULT</span>
-          {data.recentResult ? (
-            <>
-              <strong className={styles.lastScore}>{data.recentResult.score ?? '—'}</strong>
-              <span className={styles.lastTeams}>{data.recentResult.homeClub}</span>
-              <span className={styles.lastTeams}>{data.recentResult.awayClub}</span>
-              <span className={styles.lastCompetition}>{data.recentResult.competition}</span>
-            </>
-          ) : (
-            <span className={styles.noResult}>No completed matches yet.</span>
-          )}
-        </div>
+        </div>        
       </section>
-      <div className={styles.statsGrid}>
-        <StatCard label="SQUAD" value={data.squadSize} detail="Registered players" icon={Shield} />
-        <StatCard
-          label="COMPETITIONS"
-          value={data.competitions.length}
-          detail="Season entries"
-          icon={Trophy}
-        />
-        <StatCard
-          label="FIXTURES LEFT"
-          value={pendingFixtures}
-          detail="Across competitions"
-          icon={CalendarDays}
-        />
-        <StatCard
-          label="REPUTATION"
-          value={data.club.reputation}
-          detail="Club reputation"
-          icon={ArrowRight}
-        />
-      </div>
       <div className={styles.dashboardColumns}>
         <Card>
           <CardHeader>
@@ -144,15 +110,6 @@ export function OverviewSection({ data }: { data: CampaignOverviewResponse }) {
                   </div>
                   {competition.standing.length ? (
                     <>
-                      <div className={styles.standingSummary}>
-                        <span>YOUR POSITION</span>
-                        <strong>{standing ? `#${standing.position}` : '—'}</strong>
-                        <span>
-                          {standing
-                            ? `${standing.points} pts · ${standing.played} played`
-                            : 'Not ranked'}
-                        </span>
-                      </div>
                       <Table className={styles.standingTable}>
                         <thead>
                           <tr>
@@ -164,29 +121,45 @@ export function OverviewSection({ data }: { data: CampaignOverviewResponse }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {competition.standing.slice(0, 5).map((row) => (
-                            <tr
-                              key={row.position}
-                              className={row.isManaged ? styles.managedRow : undefined}
-                            >
-                              <TableCell>{row.position}</TableCell>
-                              <TableCell>
-                                <span className={styles.clubCell}>
-                                  {row.club}
-                                  {row.isManaged && <Badge variant="success">You</Badge>}
-                                </span>
-                              </TableCell>
-                              <TableCell className={styles.alignRight}>{row.played}</TableCell>
-                              <TableCell className={styles.alignRight}>
-                                {row.goalDifference > 0
-                                  ? `+${row.goalDifference}`
-                                  : row.goalDifference}
-                              </TableCell>
-                              <TableCell className={styles.alignRight}>
-                                <strong>{row.points}</strong>
-                              </TableCell>
-                            </tr>
-                          ))}
+                          {(() => {
+                            const managedIndex = competition.standing.findIndex((row) => row.isManaged);
+
+                            const startIndex = managedIndex >= 0
+                              ? Math.max(0, managedIndex - 3)
+                              : 0;
+
+                            const endIndex = managedIndex >= 0
+                              ? Math.min(competition.standing.length, managedIndex + 4)
+                              : 6;
+
+                            return competition.standing.slice(startIndex, endIndex).map((row) => (
+                              <tr
+                                key={row.position}
+                                className={row.isManaged ? styles.managedRow : undefined}
+                              >
+                                <TableCell>{row.position}</TableCell>
+
+                                <TableCell>
+                                  <span className={styles.clubCell}>
+                                    {row.club}
+                                    {row.isManaged && <Badge variant="success">You</Badge>}
+                                  </span>
+                                </TableCell>
+
+                                <TableCell className={styles.alignRight}>{row.played}</TableCell>
+
+                                <TableCell className={styles.alignRight}>
+                                  {row.goalDifference > 0
+                                    ? `+${row.goalDifference}`
+                                    : row.goalDifference}
+                                </TableCell>
+
+                                <TableCell className={styles.alignRight}>
+                                  <strong>{row.points}</strong>
+                                </TableCell>
+                              </tr>
+                            ));
+                          })()}
                         </tbody>
                       </Table>
                     </>
