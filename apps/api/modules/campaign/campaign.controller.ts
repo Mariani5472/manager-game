@@ -1,6 +1,6 @@
 import type { RequestHandler } from "express";
 import type { CampaignService } from "./campaign.service.js";
-import { advanceMatchSchema, fixtureIdSchema, saveIdSchema, saveMatchLineupSchema } from "./campaign.schema.js";
+import { advanceMatchSchema, fixtureIdSchema, saveIdSchema, saveMatchLineupSchema, tacticalChangeSchema } from "./campaign.schema.js";
 
 export class CampaignController {
   constructor(private readonly service: CampaignService) {}
@@ -13,4 +13,5 @@ export class CampaignController {
   saveMatchLineup: RequestHandler = (request, response) => response.json(this.service.saveMatchLineup(saveIdSchema.parse(request.params.saveId), fixtureIdSchema.parse(request.params.fixtureId), saveMatchLineupSchema.parse(request.body)));
   matchCenter: RequestHandler = (request, response) => response.json(this.service.matchCenter(saveIdSchema.parse(request.params.saveId), fixtureIdSchema.parse(request.params.fixtureId)));
   advanceMatch: RequestHandler = (request, response) => response.json(this.service.advanceMatch(saveIdSchema.parse(request.params.saveId), fixtureIdSchema.parse(request.params.fixtureId), advanceMatchSchema.parse(request.body).throughMinute));
+  scheduleTacticalChange: RequestHandler = (request, response) => response.status(201).json(this.service.scheduleTacticalChange(saveIdSchema.parse(request.params.saveId), fixtureIdSchema.parse(request.params.fixtureId), tacticalChangeSchema.parse(request.body)));
 }
