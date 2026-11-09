@@ -37,9 +37,27 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 3,
+    description: "Persist per-team match game state for momentum playback",
+    up(db) {
+      db.exec(`
+        ALTER TABLE match_momentum ADD COLUMN home_territorial_control REAL NOT NULL DEFAULT 50;
+        ALTER TABLE match_momentum ADD COLUMN away_territorial_control REAL NOT NULL DEFAULT 50;
+        ALTER TABLE match_momentum ADD COLUMN home_offensive_threat REAL NOT NULL DEFAULT 25;
+        ALTER TABLE match_momentum ADD COLUMN away_offensive_threat REAL NOT NULL DEFAULT 25;
+        ALTER TABLE match_momentum ADD COLUMN home_defensive_stability REAL NOT NULL DEFAULT 50;
+        ALTER TABLE match_momentum ADD COLUMN away_defensive_stability REAL NOT NULL DEFAULT 50;
+        ALTER TABLE match_momentum ADD COLUMN home_intensity REAL NOT NULL DEFAULT 50;
+        ALTER TABLE match_momentum ADD COLUMN away_intensity REAL NOT NULL DEFAULT 50;
+        ALTER TABLE match_momentum ADD COLUMN home_physical_condition REAL NOT NULL DEFAULT 100;
+        ALTER TABLE match_momentum ADD COLUMN away_physical_condition REAL NOT NULL DEFAULT 100;
+      `);
+    },
+  },
 ];
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 export function applyMigrations(db: SqliteDatabase): number {
   const versionTable = db.prepare(
