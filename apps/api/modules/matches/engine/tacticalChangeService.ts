@@ -1,6 +1,6 @@
 import type { SqliteDatabase } from "../../../db/database.js";
 import { loadTeam } from "./teamService.js";
-import type { TacticalChangeType } from "./types.js";
+import type { TacticalChangeType } from "../types/match-engine.types.js";
 
 export function scheduleMatchTacticalChange(
   db: SqliteDatabase,
