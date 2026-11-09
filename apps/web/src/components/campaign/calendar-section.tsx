@@ -9,8 +9,8 @@ import {
   getVisibleFixtures,
   getFixtureCounts,
   getFixtureStatusVariant,
-  FixtureFilter,
 } from '@/lib/campaign/fixtures';
+import type { FixtureFilter } from '@/lib/campaign/fixtures';
 import { PageHeading } from './section-ui';
 import styles from './campaign-sections.module.css';
 import { Button } from '@/components/ui/button';
