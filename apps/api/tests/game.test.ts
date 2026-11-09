@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 import { open, validate } from "../db/database.js";
 import { recoverSquadBeforeMatch } from "../game/matchContext.js";
 import { SaveManager } from "../save/saveManager.js";
+import { previewLineup, saveLineup } from "../game/lineupService.js";
+import { simulateMatch } from "../game/matchEngine/matchSimulationService.js";
 import { auditGameIntegrity } from "../game/integrityAudit.js";
 import { applyRosterSeason, createTransferOffer, respondToTransferOffer } from "../game/rosterLifecycle.js";
 import {
@@ -783,6 +785,81 @@ test("pre-match energy recovery is applied only once even when preparation is re
     assert.equal(afterFirst, 96);
     assert.equal(afterSecond, afterFirst);
     assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_preparation WHERE fixture_id=1").get() as {count:number}).count, 1);
+  } finally {
+    if (db?.open) db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
+test("incremental match playback resumes deterministically and finalizes only at minute 90", async () => {
+  const root = tempRoot();
+  let incremental: ReturnType<typeof open> | undefined;
+  let complete: ReturnType<typeof open> | undefined;
+  try {
+    const masterPath = createMaster(root);
+    const manager = new SaveManager(masterPath, join(root, "saves"));
+    const first = await manager.create({ name: "Incremental Match", managerName: "Test", clubId: 1 });
+    const second = await manager.create({ name: "Full Match", managerName: "Test", clubId: 1 });
+    incremental = manager.open(first.filePath);
+    complete = manager.open(second.filePath);
+
+    const firstChunk = simulateMatch(incremental, 1, 30);
+    assert.equal(firstChunk.minutes, 30);
+    assert.equal((incremental.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "IN_PROGRESS");
+    assert.equal((incremental.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 30);
+    assert.equal((incremental.prepare("SELECT COUNT(*) AS count FROM match_player_state WHERE fixture_id=1").get() as {count:number}).count, 0);
+    assert.equal((incremental.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=1 AND event_type='FULL_TIME'").get() as {count:number}).count, 0);
+
+    const secondChunk = simulateMatch(incremental, 1, 60);
+    assert.equal(secondChunk.minutes, 60);
+    assert.equal((incremental.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 60);
+
+    const incrementalResult = simulateMatch(incremental, 1, 90);
+    const completeResult = simulateMatch(complete, 1, 90);
+    assert.deepEqual(incrementalResult, completeResult);
+    const events = (db: ReturnType<typeof open>) => db.prepare("SELECT minute,club_id AS clubId,player_id AS playerId,secondary_player_id AS secondaryPlayerId,event_type AS type,xg,description FROM match_event WHERE fixture_id=1 ORDER BY minute,id").all();
+    const momentum = (db: ReturnType<typeof open>) => db.prepare("SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,home_score AS homeScore,away_score AS awayScore FROM match_momentum WHERE fixture_id=1 ORDER BY minute").all();
+    assert.deepEqual(events(incremental), events(complete));
+    assert.deepEqual(momentum(incremental), momentum(complete));
+    assert.equal((incremental.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
+    assert.equal((incremental.prepare("SELECT COUNT(*) AS count FROM match_player_state WHERE fixture_id=1").get() as {count:number}).count, 36);
+  } finally {
+    if (incremental?.open) incremental.close();
+    if (complete?.open) complete.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
+test("match playback advances in resumable minute batches and locks the lineup after kickoff", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof open> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Match Playback", 1);
+    db = manager.open(save.filePath);
+    const preview = previewLineup(db, 1, 1);
+    saveLineup(db, 1, 1, preview.starters.map(player => player.playerId), preview.bench.map(player => player.playerId));
+
+    const firstBatch = simulateMatch(db, 1, 15);
+    assert.equal(firstBatch.minutes, 15);
+    assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "IN_PROGRESS");
+    assert.equal((db.prepare("SELECT current_minute AS minute FROM fixture WHERE id=1").get() as {minute:number}).minute, 15);
+    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 15);
+    assert.throws(
+      () => saveLineup(db!, 1, 1, preview.starters.map(player => player.playerId), preview.bench.map(player => player.playerId)),
+      /only before kickoff/,
+    );
+
+    const resumedBatch = simulateMatch(db, 1, 30);
+    assert.equal(resumedBatch.minutes, 30);
+    assert.equal((db.prepare("SELECT COUNT(DISTINCT minute) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 30);
+
+    const finished = simulateMatch(db, 1, 90);
+    assert.equal(finished.minutes, 90);
+    assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
+    assert.equal((db.prepare("SELECT COUNT(DISTINCT minute) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 90);
+    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=1 AND event_type='FULL_TIME'").get() as {count:number}).count, 1);
   } finally {
     if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });

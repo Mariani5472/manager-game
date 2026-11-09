@@ -21,13 +21,36 @@ import type {
 } from "./types.js";
 
 
+function readMatchSummary(db: SqliteDatabase, fixtureId: number, minutes: number): MatchSummary {
+    const fixture = db.prepare("SELECT home_club_id AS homeClubId,away_club_id AS awayClubId FROM fixture WHERE id=?").get(fixtureId) as {homeClubId:number;awayClubId:number};
+    const actual = db.prepare("SELECT club_id AS club,event_type AS type,COALESCE(SUM(xg),0) AS xg,COUNT(*) AS count FROM match_event WHERE fixture_id=? AND club_id IS NOT NULL GROUP BY club_id,event_type").all(fixtureId) as Array<{club:number;type:string;xg:number;count:number}>;
+    const metric = (club:number, types:string[]) => actual.filter(event=>event.club===club&&types.includes(event.type)).reduce((total,event)=>total+event.count,0);
+    const xg = (club:number) => actual.filter(event=>event.club===club&&["GOAL","SAVE","MISS"].includes(event.type)).reduce((total,event)=>total+event.xg,0);
+    const events = (db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=?").get(fixtureId) as {count:number}).count;
+    return {
+      fixtureId,homeClubId:fixture.homeClubId,awayClubId:fixture.awayClubId,
+      homeScore:metric(fixture.homeClubId,["GOAL"]),awayScore:metric(fixture.awayClubId,["GOAL"]),
+      homeShots:metric(fixture.homeClubId,["GOAL","SAVE","MISS"]),awayShots:metric(fixture.awayClubId,["GOAL","SAVE","MISS"]),
+      homeShotsOnTarget:metric(fixture.homeClubId,["GOAL","SAVE"]),awayShotsOnTarget:metric(fixture.awayClubId,["GOAL","SAVE"]),
+      homeXg:xg(fixture.homeClubId),awayXg:xg(fixture.awayClubId),
+      homeFouls:metric(fixture.homeClubId,["FOUL"]),awayFouls:metric(fixture.awayClubId,["FOUL"]),
+      homeYellowCards:metric(fixture.homeClubId,["YELLOW_CARD"]),awayYellowCards:metric(fixture.awayClubId,["YELLOW_CARD"]),
+      homeRedCards:metric(fixture.homeClubId,["RED_CARD"]),awayRedCards:metric(fixture.awayClubId,["RED_CARD"]),
+      homeSubstitutions:metric(fixture.homeClubId,["SUBSTITUTION"]),awaySubstitutions:metric(fixture.awayClubId,["SUBSTITUTION"]),
+      homeInjuries:metric(fixture.homeClubId,["INJURY"]),awayInjuries:metric(fixture.awayClubId,["INJURY"]),
+      events,minutes,
+    };
+}
+
 export function simulateMatch(
     db: SqliteDatabase,
-    fixtureId: number
+    fixtureId: number,
+    throughMinute = 90,
 ): MatchSummary {
     // Match simulation may also run against disposable or imported databases that
     // bypass SaveManager.open; migrate them before touching versioned match tables.
     applyMigrations(db);
+    if (!Number.isSafeInteger(throughMinute) || throughMinute < 1 || throughMinute > 90) throw new Error("throughMinute must be an integer between 1 and 90.");
     const f = db.prepare("SELECT id,home_club_id,away_club_id,random_seed,status FROM fixture WHERE id=?").get(fixtureId) as FixtureRow | undefined;
     if (!f) throw new Error(`Fixture ${fixtureId} not found.`);
     if (f.status === "COMPLETED") throw new Error(`Fixture ${fixtureId} is already completed.`);
@@ -105,7 +128,9 @@ export function simulateMatch(
         db.prepare("UPDATE fixture SET status='IN_PROGRESS',current_minute=?,home_score=?,away_score=? WHERE id=?")
             .run(m.minute, m.homeScore, m.awayScore, fixtureId);
     });
-    for (const m of timeline.minutes) if (m.minute > startMinute) minuteUpdate.immediate(m);
+    for (const m of timeline.minutes) if (m.minute > startMinute && m.minute <= throughMinute) minuteUpdate.immediate(m);
+    const currentMinute = Math.max(startMinute, Math.min(throughMinute, 90));
+    if (currentMinute < 90) return readMatchSummary(db, fixtureId, currentMinute);
     const finalise = db.transaction(() => {
         const alreadyFullTime = db.prepare("SELECT 1 FROM match_event WHERE fixture_id=? AND event_type='FULL_TIME'").get(fixtureId);
         if (!alreadyFullTime) insertEvent.run(fixtureId, 90, null, null, null, "FULL_TIME", 0, "Fim de jogo");

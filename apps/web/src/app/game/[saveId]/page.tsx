@@ -1,8 +1,5 @@
-import { CampaignShell } from '@/components/campaign-shell';
-interface GamePageProps {
-  params: Promise<{ saveId: string }>;
-}
-export default async function GamePage({ params }: GamePageProps) {
+import { redirect } from 'next/navigation';
+export default async function GamePage({ params }: { params: Promise<{ saveId: string }> }) {
   const { saveId } = await params;
-  return <CampaignShell saveId={saveId} />;
+  redirect(`/game/${saveId}/overview`);
 }
