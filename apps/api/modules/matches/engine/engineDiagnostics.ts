@@ -22,7 +22,7 @@ import type {
   MatchEngineDiagnostics,
   Team,
   XgBandDiagnostic,
-} from "./types.js";
+} from "../types/match-engine.types.js";
 
 
 export function runEngineDiagnostics(
