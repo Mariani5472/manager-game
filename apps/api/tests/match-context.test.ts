@@ -84,6 +84,15 @@ test("match context persists weather and pitch, applies substitutions as events,
     scheduleMatchTacticalChange(db, fixture.id, fixture.home, 1, "SUBSTITUTION", {
       playerOutId: starter.playerId, playerInId: substitute.playerId
     });
+    const otherStarter = db.prepare(
+      "SELECT player_id AS playerId FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=1 AND position_code<>'GK' AND player_id<>? ORDER BY slot_number LIMIT 1",
+    ).get(fixture.id, fixture.home, starter.playerId) as {playerId:number};
+    assert.throws(
+      () => scheduleMatchTacticalChange(db, fixture.id, fixture.home, 2, "SUBSTITUTION", {
+        playerOutId: otherStarter.playerId, playerInId: starter.playerId,
+      }),
+      /unused substitute who has not entered the match/,
+    );
     scheduleMatchTacticalChange(db, fixture.id, fixture.home, 70, "MENTALITY", { mentality: "ATTACKING" });
     const formation = db.prepare("SELECT formation_id AS id FROM team_tactic WHERE club_id=?").get(fixture.home) as {id:number};
     scheduleMatchTacticalChange(db, fixture.id, fixture.home, 80, "FORMATION", { formationId: formation.id });
