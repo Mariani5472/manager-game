@@ -11,6 +11,8 @@ export function CampaignLayout({
   saveName,
   season,
   competition,
+  nextFixture,
+  onNextMatch,
   onExit,
   children,
 }: {
@@ -20,6 +22,8 @@ export function CampaignLayout({
   saveName?: string;
   season?: number;
   competition?: string;
+  nextFixture?: { id: number; status: string } | null;
+  onNextMatch?: () => void;
   onExit: () => void;
   children: ReactNode;
 }) {
@@ -31,6 +35,8 @@ export function CampaignLayout({
         saveName={saveName}
         season={season}
         competition={competition}
+        nextFixture={nextFixture}
+        onNextMatch={onNextMatch}
         onExit={onExit}
       />
       <div className={styles.body}>
