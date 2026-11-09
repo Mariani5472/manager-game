@@ -277,10 +277,10 @@ export function MatchMomentum({
               x2="0"
               y2="216"
             >
-              <stop offset="0%" stopColor="#48bd83" stopOpacity=".42" />
+              <stop offset="0%" stopColor="#48bd83" stopOpacity=".58" />
               <stop offset="49%" stopColor="#48bd83" stopOpacity=".42" />
               <stop offset="50%" stopColor="#8c9b91" stopOpacity=".04" />
-              <stop offset="51%" stopColor="#e0a35b" stopOpacity=".28" />
+              <stop offset="51%" stopColor="#e0a35b" stopOpacity=".52" />
               <stop offset="100%" stopColor="#e0a35b" stopOpacity=".28" />
             </linearGradient>
           </defs>
