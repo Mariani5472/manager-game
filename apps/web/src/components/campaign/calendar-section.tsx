@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDate } from '@/lib/formatters/date';
-import { getVisibleFixtures, getFixtureCounts, getFixtureStatusVariant, type FixtureFilter } from '@/lib/campaign/fixtures';
+import { getVisibleFixtures, getFixtureCounts, getFixtureStatusVariant } from '@/lib/campaign/fixtures';
 import { PageHeading } from './section-ui';
 import styles from './campaign-sections.module.css';
 export function CalendarSection({ data, onPrepareMatch }: { data: CampaignCalendarResponse; onPrepareMatch: (fixtureId: number) => void }) {
