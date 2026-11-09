@@ -78,10 +78,21 @@ export interface MatchEventDto {
   description: string | null;
 }
 
+export interface MatchMomentumTeamStateDto {
+  territorialControl: number;
+  offensiveThreat: number;
+  defensiveStability: number;
+  intensity: number;
+  physicalCondition: number;
+  momentum: number;
+}
+
 export interface MatchMomentumPointDto {
   minute: number;
   homePressure: number;
   awayPressure: number;
+  homeState: MatchMomentumTeamStateDto;
+  awayState: MatchMomentumTeamStateDto;
   homeScore: number;
   awayScore: number;
 }
