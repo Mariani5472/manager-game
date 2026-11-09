@@ -178,6 +178,8 @@ export interface KernelMinute {
   minute: number;
   homePressure: number;
   awayPressure: number;
+  homeBasePressure: number;
+  awayBasePressure: number;
   homeScore: number;
   awayScore: number;
   events: KernelShotEvent[];
