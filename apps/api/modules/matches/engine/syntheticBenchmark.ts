@@ -13,7 +13,7 @@ import {
 import type {
   SyntheticScaleBenchmark,
   Team,
-} from "./types.js";
+} from "../types/match-engine.types.js";
 
 
 /**
