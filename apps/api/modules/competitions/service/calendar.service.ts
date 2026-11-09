@@ -248,6 +248,24 @@ export function advanceRoundById(
   }
 
 
+  if (failures.length) {
+    const pending = db.prepare(
+      "SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status IN ('SCHEDULED','IN_PROGRESS','POSTPONED')",
+    ).get(roundId) as { count:number };
+    throw new Error(
+      `Round ${round.roundNumber} simulated ${results.length}/${fixtures.length} matches; ${pending.count} fixture(s) remain pending. Competition standings and knockout progression were not finalized. Failures: ${failures.join(" | ")}`
+    );
+  }
+
+  const remaining = db.prepare(
+    "SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status<>'COMPLETED'",
+  ).get(roundId) as { count:number };
+  if (remaining.count > 0) {
+    throw new Error(
+      `Round ${round.roundNumber} cannot be finalized: ${remaining.count} fixture(s) are not completed.`
+    );
+  }
+
   const finalizeRound = db.transaction(() => {
     progressKnockoutStage(
       db,
@@ -266,16 +284,7 @@ export function advanceRoundById(
     );
   });
 
-
   finalizeRound.immediate();
-
-
-  if (failures.length) {
-    throw new Error(
-      `Round ${round.roundNumber} simulated ${results.length}/${fixtures.length} matches. Failures: ${failures.join(" | ")}`
-    );
-  }
-
 
   return results;
 }
