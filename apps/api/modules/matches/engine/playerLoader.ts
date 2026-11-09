@@ -1,5 +1,5 @@
-import type { SqliteDatabase } from "../../../../db/database.js";
-import type { Player, Tactic } from "./types.js";
+import type { SqliteDatabase } from "../../../db/database.js";
+import type { Player, Tactic } from "../types/match-engine.types.js";
 
 export type PlayerPositions = Map<number, Map<string, number>>;
 
