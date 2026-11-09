@@ -4,11 +4,11 @@ import { dirname } from "node:path";
 
 import { open, validate } from "../../db/database.js";
 import { applyMigrations } from "../../db/migrations.js";
-import { listClubs } from "../../game/clubService.js";
+import { listClubs } from "../../modules/campaign/repo/club.repository.js";
 import {
   ensureFactoryLeagueCalendar,
   ensureFactoryWorld16,
-} from "../../game/world/factoryWorldService.js";
+} from "../../modules/world/service/factory-world.service.js";
 import { masterPath, schemaPath } from "../config.js";
 
 export function registerMasterCommands(program: Command): void {
