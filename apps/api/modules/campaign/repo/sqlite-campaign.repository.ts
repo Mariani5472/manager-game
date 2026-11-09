@@ -175,6 +175,8 @@ export class SqliteCampaignRepository implements CampaignRepository {
     home_physical_condition AS homePhysicalCondition,away_physical_condition AS awayPhysicalCondition
    FROM match_momentum WHERE fixture_id=? ORDER BY minute
   `).all(fixtureId) as Array<Record<string, number>>;
+  const debugRows = db.prepare("SELECT minute,trace_json AS traceJson FROM match_momentum_debug WHERE fixture_id=? ORDER BY minute").all(fixtureId) as Array<{minute:number;traceJson:string}>;
+  const debugByMinute = new Map(debugRows.map(row => [row.minute, JSON.parse(row.traceJson) as NonNullable<MatchCenterResponse["momentum"][number]["debugTrace"]>]));
   const momentum:MatchCenterResponse["momentum"]=momentumRows.map(point=>({
    minute:point.minute!,homePressure:point.homePressure!,awayPressure:point.awayPressure!,
    homeScore:point.homeScore!,awayScore:point.awayScore!,
@@ -188,6 +190,7 @@ export class SqliteCampaignRepository implements CampaignRepository {
     defensiveStability:point.awayDefensiveStability!,intensity:point.awayIntensity!,
     physicalCondition:point.awayPhysicalCondition!,momentum:point.awayPressure!,
    },
+   ...(debugByMinute.has(point.minute!) ? { debugTrace: debugByMinute.get(point.minute!)! } : {}),
   }));
   const aggregate=(clubId:number)=>{const count=(types:string[])=>rows.filter(e=>e.clubId===clubId&&types.includes(e.type)).length;return {shots:count(["GOAL","SAVE","MISS"]),shotsOnTarget:count(["GOAL","SAVE"]),goals:count(["GOAL"]),expectedGoals:rows.filter(e=>e.clubId===clubId&&["GOAL","SAVE","MISS"].includes(e.type)).reduce((sum,e)=>sum+(e.xg??0),0),fouls:count(["FOUL"]),yellowCards:count(["YELLOW_CARD"]),redCards:count(["RED_CARD"]),substitutions:count(["SUBSTITUTION"]),injuries:count(["INJURY"])};};
   const formations=db.prepare("SELECT id,name FROM formation ORDER BY name").all() as Array<{id:number;name:string}>; return {fixture,managedClubId:getManagedClub(db).id,formations,playbackStatus:fixture.status==="COMPLETED"?"FINISHED":fixture.status==="IN_PROGRESS"?"PAUSED":"IDLE",teams:[{clubId:fixture.home.clubId,name:fixture.home.name,isHome:true,lineup:this.lineup(db,fixtureId,fixture.home.clubId)},{clubId:fixture.away.clubId,name:fixture.away.name,isHome:false,lineup:this.lineup(db,fixtureId,fixture.away.clubId)}],statistics:{home:aggregate(fixture.home.clubId),away:aggregate(fixture.away.clubId)},events,momentum};
