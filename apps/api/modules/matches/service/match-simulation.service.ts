@@ -1,7 +1,7 @@
 import type {
     SqliteDatabase,
-} from "../../db/database.js";
-import { applyMigrations } from "../../db/migrations.js";
+} from "../../../db/database.js";
+import { applyMigrations } from "../../../db/migrations.js";
 import {
     persistMatchEnvironment,
     recoverSquadBeforeMatch,
