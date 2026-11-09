@@ -68,13 +68,14 @@ function calculateTeamState(
   const activeRatio = activePlayerRatio(team);
   const opponentActiveRatio = activePlayerRatio(opponent);
   const opponentDefensiveStrength = opponent.defending * opponentActiveRatio;
-  const mentalityModifier = {
+  const mentalityModifiers: Record<string, number> = {
     VERY_DEFENSIVE: -5,
     DEFENSIVE: -2,
     BALANCED: 0,
     ATTACKING: 3,
     VERY_ATTACKING: 5,
-  }[team.tactic.mentality] ?? 0;
+  };
+  const mentalityModifier = mentalityModifiers[team.tactic.mentality] ?? 0;
 
   const territorialTarget = clamp(
     50 +
