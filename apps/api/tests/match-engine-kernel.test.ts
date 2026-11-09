@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { simulateMatchTimeline } from "../modules/matches/engine/timelineSimulator.js";
+import { advanceMatchGameState, createMatchGameState } from "../modules/matches/engine/game-state/gameState.calculator.js";
+import { runMomentumCalibration } from "../modules/matches/engine/momentum/momentumAnalysis.js";
 import type { MatchPlayer, TacticalChange, Team } from "../modules/matches/types/match-engine.types.js";
 
 const roles = ["GK", "CB", "CB", "LB", "RB", "DM", "CM", "CM", "AM", "LW", "ST"];
@@ -305,4 +307,53 @@ test("extreme player ratings remain bounded and never produce invalid match stat
     assert.ok(Number.isFinite(result.homeXg) && Number.isFinite(result.awayXg));
     assert.ok(result.homeXg >= 0 && result.awayXg >= 0);
   }
+});
+
+
+test("momentum builds through sustained territorial pressure and changes dominance", () => {
+  const home = createTeam(1, 60);
+  const away = createTeam(2, 60);
+  let state = createMatchGameState(home, away);
+
+  for (let minute = 1; minute <= 12; minute += 1) {
+    const events = minute === 5
+      ? [{ minute, clubId: home.clubId, playerId: 101, secondaryPlayerId: null, eventType: "SAVE" as const, xg: 0.3, description: "High-quality chance" }]
+      : [];
+    state = advanceMatchGameState(state, home, away, 82, 38, events, minute);
+  }
+  assert.ok(state.home.momentum > state.away.momentum + 5);
+
+  for (let minute = 13; minute <= 35; minute += 1) {
+    const events = minute === 18 || minute === 24
+      ? [{ minute, clubId: away.clubId, playerId: 201, secondaryPlayerId: null, eventType: "SAVE" as const, xg: 0.28, description: "Away high-quality chance" }]
+      : [];
+    state = advanceMatchGameState(state, home, away, 35, 84, events, minute);
+  }
+  assert.ok(state.away.momentum > state.home.momentum + 5);
+});
+
+test("momentum uses chance quality rather than the scoreboard event label", () => {
+  const home = createTeam(1, 60);
+  const away = createTeam(2, 60);
+  const initial = createMatchGameState(home, away);
+  const goalState = advanceMatchGameState(initial, home, away, 55, 50, [
+    { minute: 1, clubId: home.clubId, playerId: 101, secondaryPlayerId: null, eventType: "GOAL", xg: 0.25, description: "Goal" },
+  ], 1);
+  const saveState = advanceMatchGameState(initial, home, away, 55, 50, [
+    { minute: 1, clubId: home.clubId, playerId: 101, secondaryPlayerId: null, eventType: "SAVE", xg: 0.25, description: "Save" },
+  ], 1);
+
+  assert.equal(goalState.home.momentum, saveState.home.momentum);
+  assert.equal(goalState.away.momentum, saveState.away.momentum);
+});
+
+test("momentum calibration reports temporal behavior and deterministic output", () => {
+  const report = runMomentumCalibration(createTeam(1, 70), createTeam(2, 55), 100, 12345);
+
+  assert.equal(report.simulations, 100);
+  assert.equal(report.minutesObserved, 9000);
+  assert.equal(report.deterministic, true);
+  assert.ok(Number.isFinite(report.averageAbsoluteMomentumDifference));
+  assert.ok(Number.isFinite(report.averageAbsoluteStructuralPressureDifference));
+  assert.ok(report.averageLongestDominanceRunMinutes > 0);
 });
