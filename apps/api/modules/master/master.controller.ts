@@ -1,8 +1,6 @@
 import type { RequestHandler } from "express";
-import { z } from "zod";
 import type { MasterService } from "./master.service.js";
-
-const countryIdSchema = z.coerce.number().int().positive();
+import { countryIdSchema } from "./master.schema.js";
 
 export class MasterController {
   constructor(private readonly masterService: MasterService) {}
@@ -12,7 +10,6 @@ export class MasterController {
   };
 
   getCountryClubs: RequestHandler = (request, response) => {
-    const countryId = countryIdSchema.parse(request.params.countryId);
-    response.json(this.masterService.getCountryClubs(countryId));
+    response.json(this.masterService.getCountryClubs(countryIdSchema.parse(request.params.countryId)));
   };
 }
