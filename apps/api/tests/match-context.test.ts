@@ -75,7 +75,7 @@ test("match context persists weather and pitch, applies substitutions as events,
       "SELECT player_id AS playerId FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=1 AND position_code<>'GK' ORDER BY slot_number LIMIT 1",
     ).get(fixture.id, fixture.home) as {playerId:number};
     const substitute = db.prepare(
-      "SELECT player_id AS playerId FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=0 ORDER BY slot_number LIMIT 1",
+      "SELECT ml.player_id AS playerId FROM match_lineup ml JOIN player p ON p.person_id=ml.player_id WHERE ml.fixture_id=? AND ml.club_id=? AND ml.is_starting=0 AND p.goalkeeper=0 ORDER BY ml.slot_number LIMIT 1",
     ).get(fixture.id, fixture.home) as {playerId:number};
     assert.ok(starter.playerId > 0);
     assert.ok(substitute.playerId > 0);
@@ -97,7 +97,7 @@ test("match context persists weather and pitch, applies substitutions as events,
       "SELECT player_id AS playerId FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=1 AND position_code<>'GK' ORDER BY slot_number LIMIT 1",
     ).get(fixture.id, managedAwayClubId) as {playerId:number};
     const awayBench = db.prepare(
-      "SELECT player_id AS playerId FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=0 ORDER BY slot_number LIMIT 1",
+      "SELECT ml.player_id AS playerId FROM match_lineup ml JOIN player p ON p.person_id=ml.player_id WHERE ml.fixture_id=? AND ml.club_id=? AND ml.is_starting=0 AND p.goalkeeper=0 ORDER BY ml.slot_number LIMIT 1",
     ).get(fixture.id, managedAwayClubId) as {playerId:number};
     const awayDecisionId = scheduleMatchTacticalChange(
       db, fixture.id, managedAwayClubId, 85, "SUBSTITUTION",
@@ -115,7 +115,7 @@ test("match context persists weather and pitch, applies substitutions as events,
     // Decisions may be appended during playback, but only for future minutes.
     simulateMatch(db, fixture.id, 20);
     const lateSubstitutionStarter = db.prepare("SELECT player_id AS id FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=1 AND position_code<>'GK' AND player_id<>? ORDER BY slot_number LIMIT 1").get(fixture.id, fixture.home, starter.playerId) as { id:number };
-    const lateSubstitutionBench = db.prepare("SELECT player_id AS id FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=0 AND position_code='BENCH' AND player_id<>? ORDER BY slot_number LIMIT 1").get(fixture.id, fixture.home, substitute.playerId) as { id:number };
+    const lateSubstitutionBench = db.prepare("SELECT ml.player_id AS id FROM match_lineup ml JOIN player p ON p.person_id=ml.player_id WHERE ml.fixture_id=? AND ml.club_id=? AND ml.is_starting=0 AND ml.position_code='BENCH' AND p.goalkeeper=0 AND ml.player_id<>? ORDER BY ml.slot_number LIMIT 1").get(fixture.id, fixture.home, substitute.playerId) as { id:number };
     const lateDecisionId = scheduleMatchTacticalChange(db, fixture.id, fixture.home, 40, "SUBSTITUTION", {
       playerOutId: lateSubstitutionStarter.id, playerInId: lateSubstitutionBench.id
     });
