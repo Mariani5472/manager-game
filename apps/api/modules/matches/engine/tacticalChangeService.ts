@@ -169,20 +169,36 @@ export function scheduleMatchTacticalChange(
     const pendingChanges = db.prepare(
       "SELECT id,minute,club_id,change_type,payload FROM match_tactical_change WHERE fixture_id=? AND club_id=? AND minute<? ORDER BY minute,id",
     ).all(fixtureId, clubId, minute) as Array<{ id:number; minute:number; club_id:number; change_type:string; payload:string }>;
-    const projectedActive = new Set((db.prepare(
-      "SELECT player_id FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=1",
-    ).all(fixtureId, clubId) as Array<{ player_id:number }>).map(player => player.player_id));
+    const projectedLineup = new Map((db.prepare(
+      "SELECT player_id AS playerId,slot_number AS slot,position_code AS role,is_starting AS isStarting FROM match_lineup WHERE fixture_id=? AND club_id=?",
+    ).all(fixtureId, clubId) as Array<{ playerId:number; slot:number; role:string; isStarting:number }>).map(player =>
+      [player.playerId, { slot:player.slot, role:player.role, isStarting:player.isStarting === 1 }]
+    ));
     for (const change of pendingChanges) {
       const changePayload = JSON.parse(change.payload) as Record<string, unknown>;
       if (change.change_type === "SUBSTITUTION") {
-        projectedActive.delete(Number(changePayload.playerOutId));
-        projectedActive.add(Number(changePayload.playerInId));
+        const outgoing = projectedLineup.get(Number(changePayload.playerOutId));
+        const incoming = projectedLineup.get(Number(changePayload.playerInId));
+        if (outgoing && incoming) {
+          incoming.slot = outgoing.slot;
+          incoming.role = outgoing.role;
+          incoming.isStarting = true;
+          outgoing.isStarting = false;
+        }
       }
       if (change.change_type === "FORMATION" && Array.isArray(changePayload.slots)) {
-        projectedActive.clear();
-        for (const slot of changePayload.slots as Array<{ playerId:number }>) projectedActive.add(Number(slot.playerId));
+        for (const player of projectedLineup.values()) player.isStarting = false;
+        for (const rawSlot of changePayload.slots as Array<{ playerId:number; slotNumber:number; positionCode:string }>) {
+          const player = projectedLineup.get(Number(rawSlot.playerId));
+          if (player) {
+            player.slot = Number(rawSlot.slotNumber);
+            player.role = String(rawSlot.positionCode);
+            player.isStarting = true;
+          }
+        }
       }
     }
+    const projectedActive = new Set([...projectedLineup.entries()].filter(([, player]) => player.isStarting).map(([id]) => id));
     if (!projectedActive.has(playerOutId) || projectedActive.has(playerInId)) {
       throw new Error("Select a player projected to be active and another projected to be on the bench at the decision minute.");
     }
