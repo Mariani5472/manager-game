@@ -68,6 +68,7 @@ export function simulateMatchTimeline(
     changesByMinute.set(change.minute, list);
    }
    const substitutionsByClub=new Map<number,number>([[home.clubId,0],[away.clubId,0]]);
+   const playersWhoHavePlayed=new Set([...home.lineup,...away.lineup].filter(player=>player.isStarting).map(player=>player.id));
    for(let minute=1;minute<=90;minute++){
     const minuteEvents:KernelShotEvent[]=[];
     for(const change of changesByMinute.get(minute)??[]){
@@ -84,14 +85,16 @@ export function simulateMatchTimeline(
       // dismissal or automatic substitution. That is a football outcome, not
       // a corrupt match: record the cancelled decision and keep simulating.
       const substitutionsUsed=substitutionsByClub.get(team.clubId)??0;
-      if(!outgoing.isStarting||incoming.isStarting||substitutionsUsed>=3){
+      if(!outgoing.isStarting||incoming.isStarting||playersWhoHavePlayed.has(incoming.id)||substitutionsUsed>=3){
        const reason=substitutionsUsed>=3
         ? "limite de três substituições atingido"
-        : "jogador já não está na condição prevista";
+        : playersWhoHavePlayed.has(incoming.id)
+         ? "jogador já participou da partida e não pode reentrar"
+         : "jogador já não está na condição prevista";
        minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"TACTIC_CHANGE",xg:0,description:`Substituição cancelada: ${reason}`});
       }else{
        if(outgoing.goalkeeper!==incoming.goalkeeper)throw new Error("A goalkeeper can only be replaced by another goalkeeper, and outfield players must replace outfield players.");
-       incoming.role=outgoing.role;incoming.slot=outgoing.slot;incoming.isStarting=true;outgoing.isStarting=false;refreshTeamStrength(team);
+       incoming.role=outgoing.role;incoming.slot=outgoing.slot;incoming.isStarting=true;outgoing.isStarting=false;playersWhoHavePlayed.add(incoming.id);refreshTeamStrength(team);
        minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição: ${outgoing.name} sai, ${incoming.name} entra`});
        substitutionsByClub.set(team.clubId,(substitutionsByClub.get(team.clubId)??0)+1);
       }
