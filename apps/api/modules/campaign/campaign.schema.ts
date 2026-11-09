@@ -18,3 +18,38 @@ export const advanceMatchSchema = z.object({
 
 export type SaveMatchLineupInput = z.infer<typeof saveMatchLineupSchema>;
 export type AdvanceMatchInput = z.infer<typeof advanceMatchSchema>;
+
+export const tacticalChangeSchema = z.discriminatedUnion("type", [
+  z.object({
+    minute: z.number().int().min(1).max(90),
+    type: z.literal("MENTALITY"),
+    mentality: z.enum(["VERY_DEFENSIVE", "DEFENSIVE", "BALANCED", "ATTACKING", "VERY_ATTACKING"]),
+  }),
+  z.object({
+    minute: z.number().int().min(1).max(90),
+    type: z.literal("INSTRUCTION"),
+    key: z.enum(["pressing", "tempo", "defensive_line", "width", "passing_directness", "counter_attack"]),
+    value: z.number().finite(),
+  }).superRefine(({ key, value }, context) => {
+    const maximum = key === "counter_attack" ? 1 : 100;
+    if (value < 0 || value > maximum) {
+      context.addIssue({ code: "custom", message: `${key} must be between 0 and ${maximum}.` });
+    }
+  }),
+  z.object({
+    minute: z.number().int().min(1).max(90),
+    type: z.literal("SUBSTITUTION"),
+    playerOutId: z.number().int().positive(),
+    playerInId: z.number().int().positive(),
+  }).refine(({ playerOutId, playerInId }) => playerOutId !== playerInId, {
+    message: "Incoming and outgoing players must be different.",
+  }),
+  z.object({
+    minute: z.number().int().min(1).max(90),
+    type: z.literal("FORMATION"),
+    formationId: z.number().int().positive(),
+  }),
+]);
+
+export type TacticalChangeInput = z.infer<typeof tacticalChangeSchema>;
+
