@@ -97,7 +97,8 @@ export function runMomentumCalibration(
       absoluteDifferences.push(Math.abs(difference));
       shotSignals.push(
         minute.events.some(event =>
-          ["GOAL", "SAVE", "MISS", "CHANCE"].includes(event.eventType)
+          event.eventType === "GOAL" || event.eventType === "SAVE" ||
+          event.eventType === "MISS" || event.eventType === "CHANCE"
         ) ? 1 : 0,
       );
     }
