@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import {useState} from 'react';
 import {ChevronDown,ChevronRight,PanelLeftClose,PanelLeftOpen,Trophy} from 'lucide-react';
-import {campaignNavigation,type CampaignSectionId} from './campaign-navigation';
+import { campaignNavigation } from './campaign-navigation';
 import styles from './campaign-layout.module.css';
 export function CampaignSidebar({activeSection,basePath}:{activeSection:CampaignSectionId;basePath:string}){
  const [collapsed,setCollapsed]=useState(false);const [groupOpen,setGroupOpen]=useState(true);
