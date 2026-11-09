@@ -316,7 +316,7 @@ test("momentum builds through sustained territorial pressure and changes dominan
   let state = createMatchGameState(home, away);
 
   for (let minute = 1; minute <= 12; minute += 1) {
-    const events = minute === 5
+    const events = [5, 7, 9].includes(minute)
       ? [{ minute, clubId: home.clubId, playerId: 101, secondaryPlayerId: null, eventType: "SAVE" as const, xg: 0.3, description: "High-quality chance" }]
       : [];
     state = advanceMatchGameState(state, home, away, 82, 38, events, minute);
@@ -358,4 +358,39 @@ test("momentum calibration reports temporal behavior and deterministic output", 
   assert.ok(report.averageLongestDominanceRunMinutes > 0);
   assert.ok(report.durationMs >= 0);
   assert.ok(report.simulationsPerSecond > 0);
+});
+
+
+test("tactical intensity, physical condition and manpower affect game state", () => {
+  const balancedHome = createTeam(1, 60);
+  const aggressiveHome = createTeam(1, 60);
+  const away = createTeam(2, 60);
+  aggressiveHome.tactic = {
+    ...aggressiveHome.tactic,
+    mentality: "VERY_ATTACKING",
+    pressing: 90,
+    tempo: 85,
+  };
+
+  let balancedState = createMatchGameState(balancedHome, away);
+  let aggressiveState = createMatchGameState(aggressiveHome, away);
+  for (let minute = 1; minute <= 20; minute += 1) {
+    balancedState = advanceMatchGameState(balancedState, balancedHome, away, 60, 60, [], minute);
+    aggressiveState = advanceMatchGameState(aggressiveState, aggressiveHome, away, 60, 60, [], minute);
+  }
+  assert.ok(aggressiveState.home.momentum > balancedState.home.momentum);
+
+  const tiredHome = createTeam(1, 60);
+  tiredHome.energy = 35;
+  const tiredState = createMatchGameState(tiredHome, away);
+  assert.ok(tiredState.home.momentum < createMatchGameState(balancedHome, away).home.momentum);
+
+  const dismissedHome = createTeam(1, 60);
+  const dismissedPlayer = dismissedHome.lineup.find(player => player.isStarting && player.role !== "GK")!;
+  dismissedPlayer.isStarting = false;
+  let dismissalState = createMatchGameState(dismissedHome, away);
+  for (let minute = 1; minute <= 20; minute += 1) {
+    dismissalState = advanceMatchGameState(dismissalState, dismissedHome, away, 60, 60, [], minute);
+  }
+  assert.ok(dismissalState.away.momentum > dismissalState.home.momentum);
 });
