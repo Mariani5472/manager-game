@@ -7,6 +7,8 @@ export interface MomentumCalibrationReport {
   averageHomeMomentum: number;
   averageAwayMomentum: number;
   averageAbsoluteMomentumDifference: number;
+  averageAbsoluteStructuralPressureDifference: number;
+  structuralPressureStandardDeviation: number;
   momentumStandardDeviation: number;
   averageDominanceChangesPerMatch: number;
   averageLongestDominanceRunMinutes: number;
@@ -51,6 +53,7 @@ export function runMomentumCalibration(
   const homeValues: number[] = [];
   const awayValues: number[] = [];
   const differences: number[] = [];
+  const structuralDifferences: number[] = [];
   const shotSignals: number[] = [];
   const absoluteDifferences: number[] = [];
   let dominanceChanges = 0;
@@ -90,6 +93,7 @@ export function runMomentumCalibration(
       homeValues.push(minute.homePressure);
       awayValues.push(minute.awayPressure);
       differences.push(difference);
+      structuralDifferences.push(minute.homeBasePressure - minute.awayBasePressure);
       absoluteDifferences.push(Math.abs(difference));
       shotSignals.push(
         minute.events.some(event =>
@@ -101,12 +105,15 @@ export function runMomentumCalibration(
   }
 
   const averageDifference = mean(differences);
+  const averageStructuralDifference = mean(structuralDifferences);
   return {
     simulations,
     minutesObserved: simulations * 90,
     averageHomeMomentum: mean(homeValues),
     averageAwayMomentum: mean(awayValues),
     averageAbsoluteMomentumDifference: mean(absoluteDifferences),
+    averageAbsoluteStructuralPressureDifference: mean(structuralDifferences.map(Math.abs)),
+    structuralPressureStandardDeviation: standardDeviation(structuralDifferences, averageStructuralDifference),
     momentumStandardDeviation: standardDeviation(differences, averageDifference),
     averageDominanceChangesPerMatch: dominanceChanges / simulations,
     averageLongestDominanceRunMinutes: longestRunTotal / simulations,
