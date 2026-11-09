@@ -1,9 +1,12 @@
+import { performance } from "node:perf_hooks";
 import { simulateMatchTimeline } from "../timelineSimulator.js";
 import type { Team } from "../../types/match-engine.types.js";
 
 export interface MomentumCalibrationReport {
   simulations: number;
   minutesObserved: number;
+  durationMs: number;
+  simulationsPerSecond: number;
   averageHomeMomentum: number;
   averageAwayMomentum: number;
   averageAbsoluteMomentumDifference: number;
@@ -50,6 +53,7 @@ export function runMomentumCalibration(
     throw new Error("Momentum calibration requires at least 100 simulations.");
   }
 
+  const startedAt = performance.now();
   const homeValues: number[] = [];
   const awayValues: number[] = [];
   const differences: number[] = [];
@@ -105,11 +109,14 @@ export function runMomentumCalibration(
     longestRunTotal += longestRun;
   }
 
+  const durationMs = performance.now() - startedAt;
   const averageDifference = mean(differences);
   const averageStructuralDifference = mean(structuralDifferences);
   return {
     simulations,
     minutesObserved: simulations * 90,
+    durationMs,
+    simulationsPerSecond: durationMs > 0 ? simulations / (durationMs / 1000) : simulations,
     averageHomeMomentum: mean(homeValues),
     averageAwayMomentum: mean(awayValues),
     averageAbsoluteMomentumDifference: mean(absoluteDifferences),
