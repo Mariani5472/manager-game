@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { simulateMatchTimeline } from "../modules/matches/engine/timelineSimulator.js";
 import { advanceMatchGameState, createMatchGameState } from "../modules/matches/engine/game-state/gameState.calculator.js";
+import { resolveTeamGameActions } from "../modules/matches/engine/game-state/gameActionResolver.js";
 import { runMomentumCalibration } from "../modules/matches/engine/momentum/momentumAnalysis.js";
 import type { MatchPlayer, TacticalChange, Team } from "../modules/matches/types/match-engine.types.js";
 
@@ -393,4 +394,25 @@ test("tactical intensity, physical condition and manpower affect game state", ()
     dismissalState = advanceMatchGameState(dismissalState, dismissedHome, away, 60, 60, [], minute);
   }
   assert.ok(dismissalState.away.momentum > dismissalState.home.momentum);
+});
+
+
+test("territorial game actions create meaningful pressure without requiring a shot", () => {
+  const home = createTeam(1, 75);
+  const away = createTeam(2, 45);
+  const initial = createMatchGameState(home, away);
+  const actions = resolveTeamGameActions(
+    home,
+    away,
+    initial.home,
+    initial.away,
+    1,
+    () => 0,
+  );
+  const withoutActions = advanceMatchGameState(initial, home, away, 60, 50, [], 1);
+  const withActions = advanceMatchGameState(initial, home, away, 60, 50, [], 1, actions);
+
+  assert.ok(actions.some(action => action.type === "PROGRESSION"));
+  assert.ok(actions.some(action => action.type === "FINAL_THIRD_ENTRY"));
+  assert.ok(withActions.home.momentum > withoutActions.home.momentum);
 });
