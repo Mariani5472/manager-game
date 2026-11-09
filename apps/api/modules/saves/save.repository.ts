@@ -2,6 +2,6 @@ import type { CreateCareerRequest, SaveSummaryDto } from "../../../shared/src/in
 
 export interface SaveRepository {
   list(): SaveSummaryDto[];
-  create(input: Omit<CreateCareerRequest, "countryId">): Promise<SaveSummaryDto>;
+  create(input: CreateCareerRequest): Promise<SaveSummaryDto>;
   open(saveId: string): void;
 }
