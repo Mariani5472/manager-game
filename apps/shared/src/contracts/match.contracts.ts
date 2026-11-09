@@ -125,6 +125,7 @@ export interface MatchMomentumPointDto {
   awayPressure: number;
   homeState: MatchMomentumTeamStateDto;
   awayState: MatchMomentumTeamStateDto;
+  debugTrace?: MatchMomentumTraceDto;
   homeScore: number;
   awayScore: number;
 }
