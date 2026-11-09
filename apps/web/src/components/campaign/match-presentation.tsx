@@ -173,6 +173,34 @@ export function MatchHeader({
   );
 }
 
+function buildMomentumCurve(points: { x: number; y: number }[]): string {
+  if (points.length < 2) {
+    const point = points[0];
+    return point ? `M ${point.x.toFixed(1)} ${point.y.toFixed(1)}` : '';
+  }
+
+  const commands: string[] = [];
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const previous = points[Math.max(0, index - 1)];
+    const current = points[index];
+    const next = points[index + 1];
+    const following = points[Math.min(points.length - 1, index + 2)];
+    if (!previous || !current || !next || !following) continue;
+
+    const control1X = current.x + (next.x - previous.x) / 6;
+    const control1Y = current.y + (next.y - previous.y) / 6;
+    const control2X = next.x - (following.x - current.x) / 6;
+    const control2Y = next.y - (following.y - current.y) / 6;
+
+    commands.push(
+      `C ${control1X.toFixed(1)} ${control1Y.toFixed(1)} ${control2X.toFixed(1)} ${control2Y.toFixed(1)} ${next.x.toFixed(1)} ${next.y.toFixed(1)}`,
+    );
+  }
+
+  const first = points[0];
+  return first ? `M ${first.x.toFixed(1)} ${first.y.toFixed(1)} ${commands.join(' ')}` : '';
+}
+
 export function MatchMomentum({
   data,
   events,
@@ -183,18 +211,22 @@ export function MatchMomentum({
   const chartWidth = 900;
   const chartHeight = 240;
   const centerY = 112;
+  const maxAmplitude = 78;
+  const visualGain = 3.2;
   const points = data.map((point) => {
     const difference = Math.max(-100, Math.min(100, point.homePressure - point.awayPressure));
+    const amplifiedDifference = Math.max(-maxAmplitude, Math.min(maxAmplitude, difference * visualGain));
     return {
       x: (Math.max(0, Math.min(90, point.minute)) / 90) * chartWidth,
-      y: centerY - difference * 0.9,
+      y: centerY - amplifiedDifference,
     };
   });
-  const linePath = points.map((point, index) =>
-    `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`,
-  ).join(' ');
-  const areaPath = points.length > 0
-    ? `M ${points[0].x.toFixed(1)} ${centerY} ${points.map((point) => `L ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ')} L ${points[points.length - 1].x.toFixed(1)} ${centerY} Z`
+  const linePath = buildMomentumCurve(points);
+  const curveCommands = linePath.replace(/^M\\s+[-\\d.]+\\s+[-\\d.]+\\s*/, '');
+  const firstPoint = points[0];
+  const lastPoint = points[points.length - 1];
+  const areaPath = firstPoint && lastPoint
+    ? `M ${firstPoint.x.toFixed(1)} ${centerY} L ${firstPoint.x.toFixed(1)} ${firstPoint.y.toFixed(1)} ${curveCommands} L ${lastPoint.x.toFixed(1)} ${centerY} Z`
     : '';
   const markedEvents = events.filter((event) =>
     event.type === 'GOAL' || event.type === 'OWN_GOAL' || event.type === 'PENALTY_GOAL' || event.type === 'RED_CARD',
@@ -218,13 +250,13 @@ export function MatchMomentum({
           <defs>
             <linearGradient id="momentum-line-gradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#48bd83" />
-              <stop offset="50%" stopColor="#8c9b91" />
+              <stop offset="50%" stopColor="#a1aaa5" />
               <stop offset="100%" stopColor="#e0a35b" />
             </linearGradient>
             <linearGradient id="momentum-area-gradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#48bd83" stopOpacity=".22" />
-              <stop offset="50%" stopColor="#8c9b91" stopOpacity=".03" />
-              <stop offset="100%" stopColor="#e0a35b" stopOpacity=".22" />
+              <stop offset="0%" stopColor="#48bd83" stopOpacity=".28" />
+              <stop offset="50%" stopColor="#8c9b91" stopOpacity=".025" />
+              <stop offset="100%" stopColor="#e0a35b" stopOpacity=".28" />
             </linearGradient>
           </defs>
           {[0, 30, 60, 90].map((minute) => (
@@ -244,7 +276,7 @@ export function MatchMomentum({
           <line x1="0" y1={centerY} x2={chartWidth} y2={centerY} className={styles.axis} />
           {points.length > 0 && (
             <>
-              <path d={areaPath} fill="url(#momentum-area-gradient)" />
+              <path d={areaPath} className={styles.momentumArea} />
               <path d={linePath} className={styles.momentumLine} />
             </>
           )}
@@ -273,7 +305,6 @@ export function MatchMomentum({
     </Card>
   );
 }
-
 function MatchTimelineItem({
   event,
   side,
