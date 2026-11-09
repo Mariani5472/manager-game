@@ -31,6 +31,18 @@ test("match context persists weather and pitch, applies substitutions as events,
     assert.ok(preview.bench.length > 0);
     saveLineup(db, fixture.id, fixture.home, preview.starters.map(p=>p.playerId), preview.bench.map(p=>p.playerId));
 
+
+    // Match preparation must reject malformed ids and become immutable once
+    // the simulation checkpoint has been created.
+    assert.throws(
+      () => saveLineup(db, fixture.id, fixture.home, [...preview.starters.slice(0, 10).map(p => p.playerId), -1], preview.bench.map(p => p.playerId)),
+      /positive integers/,
+    );
+    assert.throws(
+      () => saveLineup(db, fixture.id, fixture.home, preview.starters.map(p => p.playerId), [preview.starters[0]!.playerId]),
+      /appear twice/,
+    );
+
     const prior = db.prepare("SELECT id FROM fixture WHERE id<>? AND (home_club_id=? OR away_club_id=?) ORDER BY id LIMIT 1").get(fixture.id,fixture.home,fixture.home) as {id:number}|undefined;
     if (prior) {
       db.prepare("UPDATE fixture SET status='COMPLETED',home_score=0,away_score=0,scheduled_at='2026-01-01T12:00:00' WHERE id=?").run(prior.id);
