@@ -713,10 +713,10 @@
 .momentumLine {
   fill: none;
   stroke: url(#momentum-line-gradient);
-  stroke-width: 5.5;
+  stroke-width: 7.5;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 2px 5px rgba(72, 189, 131, .48));
+  filter: drop-shadow(0 2px 8px rgba(72, 189, 131, .68));
 }
 .eventMarkerLine {
   stroke: var(--color-text-muted);
@@ -728,6 +728,7 @@
   fill: var(--color-surface);
   stroke: var(--color-border);
   stroke-width: 2;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .28));
 }
 .eventMarkerIcon {
   font-size: 12px;
