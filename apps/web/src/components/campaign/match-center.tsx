@@ -186,9 +186,6 @@ export function MatchCenter({
         <div>
           <span className={styles.eyebrow}>LIVE MATCH ENGINE</span>
           <h1>Match centre</h1>
-          <p>
-            {data.fixture.competition} · {data.fixture.stage} · {data.fixture.round}
-          </p>
         </div>
         <Button variant="ghost" onClick={onBack}>
           <RotateCcw size={15} /> Calendar
