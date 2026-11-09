@@ -106,8 +106,24 @@ export class SqliteCampaignRepository implements CampaignRepository {
   return this.withSave(id,db=>{
    const fixture=this.fixture(db,fixtureId);
    if(fixture.status==="COMPLETED") return this.matchCenterFromDb(db,fixtureId);
+   const previousMinute=fixture.currentMinute;
    const summary=simulateMatch(db,fixtureId,throughMinute);
    if(summary.minutes===90) {
+    const finalLineups=db.prepare(
+     "SELECT e.club_id AS clubId,e.player_id AS playerId,e.secondary_player_id AS secondaryPlayerId FROM match_event e WHERE e.fixture_id=? AND e.event_type='SUBSTITUTION' AND e.minute>? ORDER BY e.minute,e.id",
+    ).all(fixtureId,previousMinute) as Array<{clubId:number;playerId:number;secondaryPlayerId:number|null}>;
+    const lineupUpdate=db.transaction(()=>{
+     const change=db.prepare("UPDATE match_lineup SET is_starting=CASE WHEN player_id=? THEN 0 ELSE is_starting END,position_code=CASE WHEN player_id=? THEN 'BENCH' ELSE position_code END WHERE fixture_id=? AND club_id=? AND player_id=?");
+     const promote=db.prepare("UPDATE match_lineup SET is_starting=1,slot_number=?,position_code=? WHERE fixture_id=? AND club_id=? AND player_id=?");
+     for(const event of finalLineups){
+      if(event.secondaryPlayerId==null) continue;
+      const outgoing=db.prepare("SELECT slot_number AS slot,position_code AS role FROM match_lineup WHERE fixture_id=? AND club_id=? AND player_id=?").get(fixtureId,event.clubId,event.playerId) as {slot:number;role:string}|undefined;
+      if(!outgoing) continue;
+      change.run(event.playerId,event.playerId,fixtureId,event.clubId,event.playerId);
+      promote.run(outgoing.slot,outgoing.role,fixtureId,event.clubId,event.secondaryPlayerId);
+     }
+    });
+    lineupUpdate.immediate();
     const stage=db.prepare("SELECT r.stage_id AS stageId,r.id AS roundId FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE f.id=?").get(fixtureId) as {stageId:number;roundId:number};
     const finalize=db.transaction(()=>{progressKnockoutStage(db,stage.stageId,stage.roundId);rebuildStandings(db,stage.stageId);finishSeasonIfComplete(db,stage.stageId);});
     finalize.immediate();
