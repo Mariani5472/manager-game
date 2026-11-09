@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import { Activity } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -208,6 +209,10 @@ export function MatchMomentum({
   data: MatchCenterResponse['momentum'];
   events: MatchEventDto[];
 }) {
+  const gradientId = useId().replace(/:/g, '');
+  const lineGradientId = `momentum-line-${gradientId}`;
+  const areaGradientId = `momentum-area-${gradientId}`;
+  const latestPoint = data[data.length - 1];
   const chartWidth = 900;
   const chartHeight = 240;
   const centerY = 112;
@@ -248,12 +253,12 @@ export function MatchMomentum({
           aria-label="Match momentum differential. Above the centre line favours the home team; below favours the away team."
         >
           <defs>
-            <linearGradient id="momentum-line-gradient" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={lineGradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#48bd83" />
               <stop offset="50%" stopColor="#a1aaa5" />
               <stop offset="100%" stopColor="#e0a35b" />
             </linearGradient>
-            <linearGradient id="momentum-area-gradient" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={areaGradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#48bd83" stopOpacity=".28" />
               <stop offset="50%" stopColor="#8c9b91" stopOpacity=".025" />
               <stop offset="100%" stopColor="#e0a35b" stopOpacity=".28" />
@@ -276,8 +281,8 @@ export function MatchMomentum({
           <line x1="0" y1={centerY} x2={chartWidth} y2={centerY} className={styles.axis} />
           {points.length > 0 && (
             <>
-              <path d={areaPath} className={styles.momentumArea} />
-              <path d={linePath} className={styles.momentumLine} />
+              <path d={areaPath} className={styles.momentumArea} style={{ fill: `url(#${areaGradientId})` }} />
+              <path d={linePath} className={styles.momentumLine} style={{ stroke: `url(#${lineGradientId})` }} />
             </>
           )}
           {markedEvents.map((event) => {
@@ -300,6 +305,31 @@ export function MatchMomentum({
         </svg>
         {data.length === 0 && (
           <p className={styles.chartEmpty}>Momentum will build as the match progresses.</p>
+        )}
+        {latestPoint && (
+          <div className={styles.momentumStateGrid}>
+            {([
+              { label: 'Home', state: latestPoint.homeState, tone: 'home' },
+              { label: 'Away', state: latestPoint.awayState, tone: 'away' },
+            ] as const).map(({ label, state, tone }) => (
+              <section className={styles.momentumTeamState} key={label} aria-label={`${label} team game state`}>
+                <strong>{label} team state</strong>
+                {([
+                  ['Territorial control', state.territorialControl],
+                  ['Offensive threat', state.offensiveThreat],
+                  ['Physical condition', state.physicalCondition],
+                ] as const).map(([metric, value]) => (
+                  <div className={styles.momentumMetric} key={metric}>
+                    <span><small>{metric}</small><b>{Math.round(value)}</b></span>
+                    <div className={styles.momentumMetricTrack}>
+                      <i className={tone === 'home' ? styles.momentumMetricHome : styles.momentumMetricAway}
+                        style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </section>
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>
