@@ -222,7 +222,7 @@ export function MatchMomentum({
     };
   });
   const linePath = buildMomentumCurve(points);
-  const curveCommands = linePath.replace(/^M\\s+[-\\d.]+\\s+[-\\d.]+\\s*/, '');
+  const curveCommands = linePath.replace(/^M\s+[-\d.]+\s+[-\d.]+\s*/, '');
   const firstPoint = points[0];
   const lastPoint = points[points.length - 1];
   const areaPath = firstPoint && lastPoint
