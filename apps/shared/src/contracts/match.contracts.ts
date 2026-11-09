@@ -226,12 +226,6 @@ export type MatchInstructionKey =
   | "passing_directness"
   | "counter_attack";
 
-export type MatchTacticalChangeRequest =
-  | { minute: number; type: "MENTALITY"; mentality: MatchMentality }
-  | { minute: number; type: "INSTRUCTION"; key: MatchInstructionKey; value: number }
-  | { minute: number; type: "SUBSTITUTION"; playerOutId: number; playerInId: number }
-  | { minute: number; type: "FORMATION"; formationId: number };
-
 export interface MatchTacticalChangeResponse {
   changeId: number;
   fixtureId: FixtureId;
