@@ -106,21 +106,22 @@ export class SqliteCampaignRepository implements CampaignRepository {
   return this.withSave(id,db=>{
    const fixture=this.fixture(db,fixtureId);
    if(fixture.status==="COMPLETED") return this.matchCenterFromDb(db,fixtureId);
-   const previousMinute=fixture.currentMinute;
    const summary=simulateMatch(db,fixtureId,throughMinute);
    if(summary.minutes===90) {
-    const finalLineups=db.prepare(
-     "SELECT e.club_id AS clubId,e.player_id AS playerId,e.secondary_player_id AS secondaryPlayerId FROM match_event e WHERE e.fixture_id=? AND e.event_type='SUBSTITUTION' AND e.minute>? ORDER BY e.minute,e.id",
-    ).all(fixtureId,previousMinute) as Array<{clubId:number;playerId:number;secondaryPlayerId:number|null}>;
+    // The timeline contains every actual substitution in chronological order.
+    // Persist its last active XI to the match-specific lineup snapshot.
+    const changes=db.prepare(
+     "SELECT club_id AS clubId,player_id AS playerId,secondary_player_id AS secondaryPlayerId,minute FROM match_event WHERE fixture_id=? AND event_type='SUBSTITUTION' AND secondary_player_id IS NOT NULL ORDER BY minute,id",
+    ).all(fixtureId) as Array<{clubId:number;playerId:number;secondaryPlayerId:number}>;
     const lineupUpdate=db.transaction(()=>{
-     const change=db.prepare("UPDATE match_lineup SET is_starting=CASE WHEN player_id=? THEN 0 ELSE is_starting END,position_code=CASE WHEN player_id=? THEN 'BENCH' ELSE position_code END WHERE fixture_id=? AND club_id=? AND player_id=?");
-     const promote=db.prepare("UPDATE match_lineup SET is_starting=1,slot_number=?,position_code=? WHERE fixture_id=? AND club_id=? AND player_id=?");
-     for(const event of finalLineups){
-      if(event.secondaryPlayerId==null) continue;
-      const outgoing=db.prepare("SELECT slot_number AS slot,position_code AS role FROM match_lineup WHERE fixture_id=? AND club_id=? AND player_id=?").get(fixtureId,event.clubId,event.playerId) as {slot:number;role:string}|undefined;
+     const read=db.prepare("SELECT slot_number AS slot,position_code AS role FROM match_lineup WHERE fixture_id=? AND club_id=? AND player_id=?");
+     const benchOutgoing=db.prepare("UPDATE match_lineup SET is_starting=0,slot_number=12+(SELECT COUNT(*) FROM match_lineup other WHERE other.fixture_id=? AND other.club_id=? AND other.is_starting=0 AND other.player_id<>?),position_code='BENCH' WHERE fixture_id=? AND club_id=? AND player_id=?");
+     const benchIncoming=db.prepare("UPDATE match_lineup SET is_starting=1,slot_number=?,position_code=? WHERE fixture_id=? AND club_id=? AND player_id=?");
+     for(const event of changes){
+      const outgoing=read.get(fixtureId,event.clubId,event.playerId) as {slot:number;role:string}|undefined;
       if(!outgoing) continue;
-      change.run(event.playerId,event.playerId,fixtureId,event.clubId,event.playerId);
-      promote.run(outgoing.slot,outgoing.role,fixtureId,event.clubId,event.secondaryPlayerId);
+      benchOutgoing.run(fixtureId,event.clubId,event.playerId,fixtureId,event.clubId,event.playerId);
+      benchIncoming.run(outgoing.slot,outgoing.role,fixtureId,event.clubId,event.secondaryPlayerId);
      }
     });
     lineupUpdate.immediate();
