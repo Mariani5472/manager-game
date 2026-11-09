@@ -64,7 +64,11 @@ export function simulateMatch(
     const home = loadTeam(db, fixtureId, f.home_club_id), away = loadTeam(db, fixtureId, f.away_club_id);
     const changes = db.prepare("SELECT id,minute,club_id,change_type,payload FROM match_tactical_change WHERE fixture_id=? ORDER BY minute,id").all(fixtureId) as TacticalChange[];
     const initiallyStartingPlayerIds = new Set([...home.lineup, ...away.lineup].filter(player => player.isStarting).map(player => player.id));
-    const timeline = simulateMatchTimeline(home, away, seed, changes);
+    const collectMomentumTrace = process.env.MOMENTUM_DEBUG === "true";
+    const timeline = simulateMatchTimeline(
+        home, away, seed, changes,
+        { collectMomentumTrace },
+    );
     const simulationConfig = {
         home: {
             clubId: home.clubId, tactic: home.tactic, context: home.context,
@@ -154,6 +158,9 @@ export function simulateMatch(
         home_physical_condition,away_physical_condition
       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     const checkpoint = db.prepare("UPDATE match_simulation_state SET simulation_minute=?,state_json=?,updated_at=CURRENT_TIMESTAMP WHERE fixture_id=?");
+    const insertMomentumTrace = collectMomentumTrace
+        ? db.prepare("INSERT OR REPLACE INTO match_momentum_debug(fixture_id,minute,trace_json) VALUES(?,?,?)")
+        : null;
     const minuteUpdate = db.transaction((m: KernelMinute) => {
         for (const e of m.events) insertEvent.run(fixtureId, e.minute, e.clubId, e.playerId || null, e.secondaryPlayerId, e.eventType, e.xg, e.description);
         insertMomentum.run(
@@ -164,6 +171,9 @@ export function simulateMatch(
             m.homeState.intensity, m.awayState.intensity,
             m.homeState.physicalCondition, m.awayState.physicalCondition,
         );
+        if (m.momentumTrace && insertMomentumTrace) {
+            insertMomentumTrace.run(fixtureId, m.minute, JSON.stringify(m.momentumTrace));
+        }
         checkpoint.run(m.minute, JSON.stringify({
             engineVersion: "1.0.0", seed, config: simulationConfig, minute: m.minute, homeScore: m.homeScore, awayScore: m.awayScore,
             homeShots: timeline.events.filter(e => e.minute <= m.minute && e.clubId === f.home_club_id && ["GOAL", "SAVE", "MISS"].includes(e.eventType)).length,
