@@ -725,6 +725,10 @@ test("match persistence stores player-level event stats and finalizes the calend
     const { manager, save } = await createSave(root, "Match Persistence", 1);
     db = manager.open(save.filePath);
     const summary = advanceNextFixture(db, 1);
+    const remainingInRound = (db.prepare(
+      "SELECT COUNT(*) AS count FROM fixture WHERE round_id=(SELECT round_id FROM fixture WHERE id=1) AND status<>'COMPLETED'",
+    ).get() as {count:number}).count;
+    assert.equal(remainingInRound, 1, "single-fixture playback must leave the other match pending");
 
     const playerTotals = db.prepare(`
       SELECT
