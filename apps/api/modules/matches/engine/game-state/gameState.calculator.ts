@@ -82,6 +82,7 @@ function calculateTeamState(
       (team.attacking - opponentDefensiveStrength) * 0.18 +
       (team.tactic.pressing - 50) * 0.1 +
       (team.tactic.tempo - 50) * 0.08 +
+      (activeRatio - 1) * 25 +
       mentalityModifier,
     0,
     100,
