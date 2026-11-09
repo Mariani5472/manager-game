@@ -1,16 +1,7 @@
 import type { RequestHandler } from "express";
-import { z } from "zod";
 import type { CreateCareerRequest } from "../../../shared/src/index.js";
 import type { SaveService } from "./save.service.js";
-
-const createCareerSchema = z.object({
-  managerName: z.string().trim().min(2).max(60),
-  saveName: z.string().trim().min(2).max(80),
-  countryId: z.coerce.number().int().positive(),
-  clubId: z.coerce.number().int().positive(),
-});
-
-const saveIdSchema = z.string().uuid();
+import { createCareerSchema, saveIdSchema } from "./save.schema.js";
 
 export class SaveController {
   constructor(private readonly saveService: SaveService) {}
