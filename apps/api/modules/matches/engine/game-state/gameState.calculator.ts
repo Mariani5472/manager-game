@@ -176,8 +176,8 @@ export function advanceMatchGameState(
   homeBasePressure: number,
   awayBasePressure: number,
   minuteEvents: KernelShotEvent[],
-  gameActions: GameAction[],
   minute: number,
+  gameActions: GameAction[] = [],
 ): MatchGameState {
   return {
     home: calculateTeamState(
@@ -195,6 +195,7 @@ export function advanceMatchGameState(
       previous.away,
       awayBasePressure,
       minuteEvents,
+      gameActions,
       minute,
     ),
   };
