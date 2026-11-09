@@ -95,6 +95,8 @@ test("match context persists weather and pitch, applies substitutions as events,
 
     const result = simulateMatch(db, fixture.id);
     assert.equal(result.minutes, 90);
+    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=? AND event_type='SUBSTITUTION' AND minute=40 AND secondary_player_id=?").get(fixture.id, lateSubstitutionBench.id) as {count:number}).count, 1);
+    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=? AND event_type='TACTIC_CHANGE' AND minute=70").get(fixture.id) as {count:number}).count, 1);
     assert.equal((db.prepare("SELECT weather FROM match_environment WHERE fixture_id=?").get(fixture.id) as {weather:string}).weather, "HEAVY_RAIN");
     assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=? AND event_type='SUBSTITUTION' AND minute=60").get(fixture.id) as {count:number}).count, 1);
     assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=? AND event_type='TACTIC_CHANGE' AND minute=70").get(fixture.id) as {count:number}).count, 1);
