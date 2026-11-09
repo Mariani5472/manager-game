@@ -189,6 +189,12 @@ export function advanceRoundById(
       // Recover post-match bookkeeping if the process stopped after the final
       // fixture committed but before knockout progression/standings/season status.
       const recoverRound = db.transaction(() => {
+        const pending = db.prepare(
+          "SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status<>'COMPLETED'",
+        ).get(roundId) as { count:number };
+        if (pending.count > 0) {
+          throw new Error(`Round ${round.roundNumber} cannot recover bookkeeping: ${pending.count} fixture(s) are not completed.`);
+        }
         progressKnockoutStage(
           db,
           stageId,
