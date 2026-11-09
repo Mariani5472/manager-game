@@ -97,7 +97,17 @@ export function advanceNextFixture(
   );
 
 
+  if (summary.minutes !== 90) {
+    throw new Error(`Fixture ${row.id} did not reach full time; competition results were not updated.`);
+  }
+
   const finalizeMatchday = db.transaction(() => {
+    const pending = db.prepare(
+      "SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status<>'COMPLETED'",
+    ).get(stage.roundId) as { count:number };
+    if (pending.count > 0) {
+      throw new Error(`Round ${stage.roundId} still has ${pending.count} unfinished fixture(s); standings and knockout progression were not finalized.`);
+    }
     progressKnockoutStage(
       db,
       stage.id,
