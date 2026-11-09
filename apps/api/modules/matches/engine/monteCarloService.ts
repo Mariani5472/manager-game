@@ -4,7 +4,7 @@ import {
 import type {
   MonteCarloReport,
   Team,
-} from "./types.js";
+} from "../types/match-engine.types.js";
 
 
 export function runMonteCarlo(
