@@ -13,7 +13,7 @@
     "format:check": "prettier --check \"apps/**/*.{ts,tsx,js,mjs,json,md,css}\" README*.md",
     "dev": "tsx apps/api/cli.ts",
     "legacy:game": "tsx apps/api/legacy-cli.ts",
-    "api": "tsx apps/api/http/server.ts",
+    "api": "tsx --watch apps/api/http/server.ts",
     "game": "node dist/api/cli.js",
     "ui": "npm run dev --prefix apps/web",
     "ui:build": "npm run build --prefix apps/web",

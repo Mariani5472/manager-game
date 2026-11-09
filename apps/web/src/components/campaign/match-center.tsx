@@ -135,6 +135,9 @@ export function MatchCenter({
     document.addEventListener('visibilitychange', pauseWhenHidden);
     return () => document.removeEventListener('visibilitychange', pauseWhenHidden);
   }, []);
+  useEffect(() => {
+    setDecisionMinute((minute) => Math.max(currentMinute + 1, minute));
+  }, [currentMinute]);
   if (center.isLoading) return <p className={styles.loading}>Opening match centre…</p>;
   if (center.isError || !center.data)
     return (
@@ -150,9 +153,7 @@ export function MatchCenter({
   const activePlayers = managedLineup.filter((player) => player.isStarting);
   const benchPlayers = managedLineup.filter((player) => !player.isStarting);
   const nextDecisionMinute = Math.max(currentMinute + 1, decisionMinute);
-  useEffect(() => {
-    setDecisionMinute((minute) => Math.max(currentMinute + 1, minute));
-  }, [currentMinute]);
+  
 
   const submitDecision = async (input: MatchTacticalChangeRequest) => {
     setPlaying(false);
