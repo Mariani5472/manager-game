@@ -18,7 +18,7 @@ import {
 import { mean } from "./mathUtils.js";
 import type {
   Team,
-} from "./types.js";
+} from "../types/match-engine.types.js";
 
 
 export function loadTeam(
