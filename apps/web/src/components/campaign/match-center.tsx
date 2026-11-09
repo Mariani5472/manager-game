@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, Pause, Play, Radio, RotateCcw, SkipForward, Timer, Zap } from 'lucide-react';
-import type { MatchCenterResponse } from '@shared/index';
+import type { MatchCenterResponse, MatchTacticalChangeRequest } from '@shared/index';
 import { gameApi } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -78,6 +78,13 @@ export function MatchCenter({
   });
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
+  const [decisionMinute, setDecisionMinute] = useState(1);
+  const [mentality, setMentality] = useState<Extract<MatchTacticalChangeRequest, { type: 'MENTALITY' }>['mentality']>('BALANCED');
+  const [instructionKey, setInstructionKey] = useState<Extract<MatchTacticalChangeRequest, { type: 'INSTRUCTION' }>['key']>('pressing');
+  const [instructionValue, setInstructionValue] = useState(65);
+  const [playerOutId, setPlayerOutId] = useState<number | null>(null);
+  const [playerInId, setPlayerInId] = useState<number | null>(null);
+  const [formationId, setFormationId] = useState('');
   // A ref closes the interval race: state updates from React are asynchronous,
   // while a timer callback can otherwise enqueue another advance immediately.
   const advanceInFlight = useRef(false);
@@ -111,6 +118,12 @@ export function MatchCenter({
     }, 1000);
     return () => window.clearInterval(interval);
   }, [playing, center.data, currentMinute, speed, advance.isPending, advanceMatch]);
+  const scheduleDecision = useMutation({
+    mutationFn: (input: MatchTacticalChangeRequest) => gameApi.scheduleTacticalChange(saveId, fixtureId, input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey });
+    },
+  });
   const latestEvent = useMemo(
     () => center.data?.events.filter((event) => event.minute > 0).at(-1),
     [center.data?.events],
@@ -131,6 +144,17 @@ export function MatchCenter({
   const home = data.teams[0],
     away = data.teams[1];
   const isFinished = data.fixture.status === 'COMPLETED';
+  const managedClubId = data.fixture.home.clubId === data.teams[0].clubId ? data.teams[0].clubId : data.teams[1].clubId;
+  const userCanDecide = data.fixture.status !== 'COMPLETED';
+  const managedLineup = data.teams.find((team) => team.clubId === managedClubId)?.lineup ?? [];
+  const activePlayers = managedLineup.filter((player) => player.isStarting);
+  const benchPlayers = managedLineup.filter((player) => !player.isStarting);
+  const nextDecisionMinute = Math.max(currentMinute + 1, decisionMinute);
+  const submitDecision = async (input: MatchTacticalChangeRequest) => {
+    setPlaying(false);
+    await scheduleDecision.mutateAsync({ ...input, minute: nextDecisionMinute } as MatchTacticalChangeRequest);
+  };
+
   const stats = [
     ['Shots', data.statistics.home.shots, data.statistics.away.shots],
     ['On target', data.statistics.home.shotsOnTarget, data.statistics.away.shotsOnTarget],
@@ -246,6 +270,54 @@ export function MatchCenter({
             <span style={{ width: `${(currentMinute / 90) * 100}%` }} />
           </div>
           {advance.isError && <p className={styles.error}>{advance.error.message}</p>}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Manager decisions</CardTitle>
+        </CardHeader>
+        <CardContent className={styles.playback}>
+          <p className={styles.speedHint}>Decisions are applied at the selected future minute and affect the simulation from that point onward.</p>
+          <label className={styles.decisionField}>
+            Apply at minute
+            <input aria-label="Decision minute" type="number" min={currentMinute + 1} max="90" value={nextDecisionMinute} onChange={(event) => setDecisionMinute(Math.max(currentMinute + 1, Number(event.target.value) || currentMinute + 1))} />
+          </label>
+          <div className={styles.decisionGrid}>
+            <section className={styles.decisionPanel}>
+              <strong>Substitution</strong>
+              <select aria-label="Player to substitute" value={playerOutId ?? ''} onChange={(event) => setPlayerOutId(event.target.value ? Number(event.target.value) : null)}>
+                <option value="">Outgoing starter</option>
+                {activePlayers.map((player) => <option key={player.playerId} value={player.playerId}>{player.name} · {player.position}</option>)}
+              </select>
+              <select aria-label="Substitute player" value={playerInId ?? ''} onChange={(event) => setPlayerInId(event.target.value ? Number(event.target.value) : null)}>
+                <option value="">Incoming substitute</option>
+                {benchPlayers.map((player) => <option key={player.playerId} value={player.playerId}>{player.name} · {player.position}</option>)}
+              </select>
+              <Button size="sm" disabled={!userCanDecide || !playerOutId || !playerInId || scheduleDecision.isPending || nextDecisionMinute > 90} onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'SUBSTITUTION', playerOutId: playerOutId!, playerInId: playerInId! })}>Schedule substitution</Button>
+            </section>
+            <section className={styles.decisionPanel}>
+              <strong>Mentality</strong>
+              <select aria-label="Team mentality" value={mentality} onChange={(event) => setMentality(event.target.value as typeof mentality)}>
+                <option value="VERY_DEFENSIVE">Very defensive</option><option value="DEFENSIVE">Defensive</option><option value="BALANCED">Balanced</option><option value="ATTACKING">Attacking</option><option value="VERY_ATTACKING">Very attacking</option>
+              </select>
+              <Button size="sm" disabled={!userCanDecide || scheduleDecision.isPending || nextDecisionMinute > 90} onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'MENTALITY', mentality })}>Change mentality</Button>
+            </section>
+            <section className={styles.decisionPanel}>
+              <strong>Tactical instruction</strong>
+              <select aria-label="Instruction" value={instructionKey} onChange={(event) => setInstructionKey(event.target.value as typeof instructionKey)}>
+                <option value="pressing">Pressing</option><option value="tempo">Tempo</option><option value="defensive_line">Defensive line</option><option value="width">Width</option><option value="passing_directness">Passing directness</option><option value="counter_attack">Counter attack</option>
+              </select>
+              <input aria-label="Instruction value" type="number" min="0" max={instructionKey === 'counter_attack' ? 1 : 100} value={instructionValue} onChange={(event) => setInstructionValue(Number(event.target.value))} />
+              <Button size="sm" disabled={!userCanDecide || scheduleDecision.isPending || nextDecisionMinute > 90 || instructionValue < 0 || instructionValue > (instructionKey === 'counter_attack' ? 1 : 100)} onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'INSTRUCTION', key: instructionKey, value: instructionValue })}>Apply instruction</Button>
+            </section>
+            <section className={styles.decisionPanel}>
+              <strong>Formation</strong>
+              <input aria-label="Formation id" inputMode="numeric" placeholder="Formation id" value={formationId} onChange={(event) => setFormationId(event.target.value.replace(/[^0-9]/g, ''))} />
+              <Button size="sm" disabled={!userCanDecide || !formationId || scheduleDecision.isPending || nextDecisionMinute > 90} onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'FORMATION', formationId: Number(formationId) })}>Change formation</Button>
+            </section>
+          </div>
+          {scheduleDecision.isError && <p className={styles.error}>{scheduleDecision.error.message}</p>}
+          {scheduleDecision.isSuccess && <p className={styles.speedHint}>Decision #{scheduleDecision.data.changeId} scheduled for minute {nextDecisionMinute}.</p>}
         </CardContent>
       </Card>
       <div className={styles.centerGrid}>
