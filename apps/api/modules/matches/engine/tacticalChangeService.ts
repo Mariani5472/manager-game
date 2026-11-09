@@ -217,6 +217,13 @@ export function scheduleMatchTacticalChange(
       throw new Error("Both players must belong to the selected club.");
     }
 
+    const scheduledSubstitutions = (db.prepare(
+      "SELECT COUNT(*) AS count FROM match_tactical_change WHERE fixture_id=? AND club_id=? AND change_type='SUBSTITUTION'",
+    ).get(fixtureId, clubId) as {count:number}).count;
+    if (scheduledSubstitutions >= 3) {
+      throw new Error("A team can schedule at most three substitutions per match.");
+    }
+
     // Validate against the projected lineup at the requested minute, not
     // only the original XI. Earlier scheduled substitutions may change who is
     // active or on the bench by the time this decision is applied.
