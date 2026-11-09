@@ -8,6 +8,7 @@ interface ProjectedLineupPlayer {
   role: string;
   isStarting: boolean;
   goalkeeper: number;
+  hasPlayed: boolean;
 }
 
 function getProjectedLineup(
@@ -31,6 +32,7 @@ function getProjectedLineup(
     role:player.role,
     isStarting:player.isStarting === 1,
     goalkeeper:player.goalkeeper,
+    hasPlayed:player.isStarting === 1,
   }]));
 
   const changes = db.prepare(
@@ -45,23 +47,37 @@ function getProjectedLineup(
     if (change.changeType === "SUBSTITUTION") {
       const outgoing = projected.get(Number(payload.playerOutId));
       const incoming = projected.get(Number(payload.playerInId));
-      if (!outgoing || !incoming || !outgoing.isStarting || incoming.isStarting) {
-        throw new Error("A previously scheduled substitution has an invalid projected lineup.");
+      if (!outgoing || !incoming) {
+        throw new Error("A previously scheduled substitution references a player outside the match lineup.");
       }
+      // Earlier decisions can become invalid after a prior substitution. The
+      // match engine cancels those decisions; projection must mirror that rule.
+      if (!outgoing.isStarting || incoming.isStarting || incoming.hasPlayed) continue;
       incoming.slot = outgoing.slot;
       incoming.role = outgoing.role;
       incoming.isStarting = true;
+      incoming.hasPlayed = true;
       outgoing.isStarting = false;
     }
 
     if (change.changeType === "FORMATION" && Array.isArray(payload.slots)) {
-      for (const player of projected.values()) player.isStarting = false;
-      for (const raw of payload.slots as Array<{playerId:number;slotNumber:number;positionCode:string}>) {
-        const player = projected.get(Number(raw.playerId));
-        if (!player) throw new Error("A previously scheduled formation references a player outside the lineup.");
-        player.slot = Number(raw.slotNumber);
-        player.role = String(raw.positionCode);
-        player.isStarting = true;
+      const assignments = payload.slots as Array<{playerId:number;slotNumber:number;positionCode:string}>;
+      for (const assignment of assignments) {
+        if (!projected.has(Number(assignment.playerId))) {
+          throw new Error("A previously scheduled formation references a player outside the lineup.");
+        }
+      }
+      const active = [...projected.values()].filter(player => player.isStarting).sort((a,b)=>a.slot-b.slot);
+      const keepers = active.filter(player => player.goalkeeper === 1);
+      if (active.length === 11 && keepers.length === 1) {
+        const keeper = keepers[0]!;
+        const outfield = active.filter(player => player.goalkeeper !== 1);
+        let outfieldIndex = 0;
+        for (const assignment of [...assignments].sort((a,b)=>a.slotNumber-b.slotNumber)) {
+          const player = assignment.positionCode === "GK" ? keeper : outfield[outfieldIndex++]!;
+          player.slot = Number(assignment.slotNumber);
+          player.role = String(assignment.positionCode);
+        }
       }
     }
   }
@@ -229,8 +245,9 @@ export function scheduleMatchTacticalChange(
     // active or on the bench by the time this decision is applied.
     const projectedLineup = getProjectedLineup(db, fixtureId, clubId, minute);
     const projectedActive = new Set([...projectedLineup.entries()].filter(([, player]) => player.isStarting).map(([id]) => id));
-    if (!projectedActive.has(playerOutId) || projectedActive.has(playerInId)) {
-      throw new Error("Select a player projected to be active and another projected to be on the bench at the decision minute.");
+    const projectedIncoming = projectedLineup.get(playerInId);
+    if (!projectedActive.has(playerOutId) || projectedActive.has(playerInId) || !projectedIncoming || projectedIncoming.hasPlayed) {
+      throw new Error("Select an active player and an unused substitute who has not entered the match.");
     }
 
     const matchDate = fixture.scheduledAt?.slice(0, 10) ?? null;
