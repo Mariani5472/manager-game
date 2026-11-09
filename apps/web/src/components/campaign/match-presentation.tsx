@@ -205,9 +205,11 @@ function buildMomentumCurve(points: { x: number; y: number }[]): string {
 export function MatchMomentum({
   data,
   events,
+  teams,
 }: {
   data: MatchCenterResponse['momentum'];
   events: MatchEventDto[];
+  teams: MatchTeams;
 }) {
   const gradientId = useId().replace(/:/g, '');
   const lineGradientId = `momentum-line-${gradientId}`;
