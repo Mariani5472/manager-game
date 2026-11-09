@@ -23,7 +23,7 @@ import type {
   SimulatedMatchResult,
   TacticalChange,
   Team,
-} from "./types.js";
+} from "../types/match-engine.types.js";
 
 
 export function simulateMatchTimeline(
