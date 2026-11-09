@@ -137,7 +137,7 @@ export function MatchHeader({
   const home = teams[0];
   const away = teams[1];
   const goalEvents = events.filter((event) =>
-    event.type === 'GOAL' || event.type === 'OWN_GOAL',
+    event.type === 'GOAL' || event.type === 'OWN_GOAL' || event.type === 'PENALTY_GOAL',
   );
   const homeScorers = goalEvents.filter((event) => event.clubId === home.clubId);
   const awayScorers = goalEvents.filter((event) => event.clubId === away.clubId);
@@ -197,7 +197,7 @@ export function MatchMomentum({
     ? `M ${points[0].x.toFixed(1)} ${centerY} ${points.map((point) => `L ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ')} L ${points[points.length - 1].x.toFixed(1)} ${centerY} Z`
     : '';
   const markedEvents = events.filter((event) =>
-    event.type === 'GOAL' || event.type === 'OWN_GOAL' || event.type === 'RED_CARD',
+    event.type === 'GOAL' || event.type === 'OWN_GOAL' || event.type === 'PENALTY_GOAL' || event.type === 'RED_CARD',
   );
 
   return (
@@ -285,7 +285,7 @@ function MatchTimelineItem({
 }) {
   const playerName = getPlayerName(event, teams);
   const author = playerName ?? event.description;
-  const isKeyEvent = event.type === 'GOAL' || event.type === 'OWN_GOAL' || event.type === 'RED_CARD';
+  const isKeyEvent = event.type === 'GOAL' || event.type === 'OWN_GOAL' || event.type === 'PENALTY_GOAL' || event.type === 'RED_CARD';
 
   return (
     <div className={`${styles.timelineEvent} ${side === 'home' ? styles.timelineHome : styles.timelineAway}`}>
