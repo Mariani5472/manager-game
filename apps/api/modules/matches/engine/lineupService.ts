@@ -13,7 +13,7 @@ import type {
     MatchPlayer,
     Player,
     Tactic,
-} from "./types.js";
+} from "../types/match-engine.types.js";
 
 
 export function selectLineup(
