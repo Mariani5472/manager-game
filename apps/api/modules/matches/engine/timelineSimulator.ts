@@ -86,7 +86,7 @@ export function simulateMatchTimeline(
       if(!outgoing.isStarting||incoming.isStarting){
        minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"TACTIC_CHANGE",xg:0,description:`Substituição cancelada: ${outgoing.name} ou ${incoming.name} já não está na condição prevista`});
       }else{
-       if(outgoing.role==="GK"&&incoming.goalkeeper!==1)throw new Error("A goalkeeper can only be replaced by another goalkeeper.");
+       if(outgoing.goalkeeper!==incoming.goalkeeper)throw new Error("A goalkeeper can only be replaced by another goalkeeper, and outfield players must replace outfield players.");
        incoming.role=outgoing.role;incoming.slot=outgoing.slot;incoming.isStarting=true;outgoing.isStarting=false;refreshTeamStrength(team);
        minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição: ${outgoing.name} sai, ${incoming.name} entra`});
        substitutionsByClub.set(team.clubId,(substitutionsByClub.get(team.clubId)??0)+1);
