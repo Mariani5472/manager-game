@@ -1,4 +1,4 @@
-import type { SqliteDatabase } from "../../../../db/database.js";
+import type { SqliteDatabase } from "../../../db/database.js";
 import { loadTeam } from "./teamService.js";
 import type { TacticalChangeType } from "./types.js";
 

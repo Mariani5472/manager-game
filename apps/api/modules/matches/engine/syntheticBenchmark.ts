@@ -3,7 +3,7 @@ import {
 } from "node:perf_hooks";
 import type {
   SqliteDatabase,
-} from "../../../../db/database.js";
+} from "../../../db/database.js";
 import {
   loadTeam,
 } from "./teamService.js";

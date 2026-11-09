@@ -1,6 +1,6 @@
 import type {
     SqliteDatabase,
-} from "../../../../db/database.js";
+} from "../../../db/database.js";
 import type {
     MatchContext,
 } from "../service/match-context.service.js";

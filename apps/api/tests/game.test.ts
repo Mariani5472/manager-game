@@ -5,19 +5,19 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { open, validate } from "../db/database.js";
-import { recoverSquadBeforeMatch } from "../game/matchContext.js";
-import { SaveManager } from "../save/saveManager.js";
-import { previewLineup, saveLineup } from "../game/lineupService.js";
-import { simulateMatch } from "../game/matchEngine/matchSimulationService.js";
-import { auditGameIntegrity } from "../game/integrityAudit.js";
-import { applyRosterSeason, createTransferOffer, respondToTransferOffer } from "../game/rosterLifecycle.js";
+import { recoverSquadBeforeMatch } from "../modules/matches/service/match-context.service.js";
+import { SaveManager } from "../modules/saves/repo/save-manager.js";
+import { previewLineup, saveLineup } from "../modules/campaign/repo/lineup.repository.js";
+import { simulateMatch } from "../modules/matches/service/match-simulation.service.js";
+import { auditGameIntegrity } from "../modules/world/service/integrity-audit.service.js";
+import { applyRosterSeason, createTransferOffer, respondToTransferOffer } from "../modules/roster/service/roster-lifecycle.service.js";
 import {
   advanceNextFixture, advanceRound, advanceStageRound, ensureFactoryLeagueCalendar,
   resolveKnockoutFixtureWinner, getManagedClub, getSeasonStatus, getStandings,
   listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
-} from "../game/gameService.js";
+} from "../modules/gameplay/gameplay.facade.js";
 
-const schemaPath = resolve("apps/api/schema/game_manager_mvp.sql");
+const schemaPath = resolve("apps/api/modules/world/schema/game_manager_mvp.sql");
 
 function tempRoot(): string {
   return mkdtempSync(join(tmpdir(), "manager-game-issues-"));

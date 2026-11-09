@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, renameSync, rmSync, statSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { open, validate } from "../db/database.js";
-import { applyMigrations, CURRENT_SCHEMA_VERSION } from "../db/migrations.js";
+import { open, validate } from "../../../db/database.js";
+import { applyMigrations, CURRENT_SCHEMA_VERSION } from "../../../db/migrations.js";
 
 export interface CreateSaveOptions {
   masterPath: string;

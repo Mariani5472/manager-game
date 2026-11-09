@@ -1,5 +1,5 @@
 import { masterPath, saveDir } from "../../../client/config.js";
-import { SaveManager } from "../../../save/saveManager.js";
+import { SaveManager } from "./save-manager.js";
 import type { CreateCareerRequest, SaveSummaryDto } from "../../../../shared/src/index.js";
 import type { SaveRepository } from "../save.repository.js";
 import { SaveNotFoundError } from "../save-not-found.error.js";

@@ -1,6 +1,6 @@
 import type {
   SqliteDatabase,
-} from "../../../../db/database.js";
+} from "../../../db/database.js";
 import {
   HOME_SHOT_CHANCE_BONUS,
   MATCH_EVENT_PROBABILITIES,

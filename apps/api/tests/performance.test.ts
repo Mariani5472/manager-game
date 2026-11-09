@@ -4,11 +4,11 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { open, validate } from "../db/database.js";
-import { ensureFactoryWorld16 } from "../game/gameService.js";
-import { runEngineDiagnostics, runMatchBalanceAnalysis, runSyntheticSeasonScaleBenchmarks, runTacticalSensitivityAnalysis } from "../game/matchEngine.js";
-import { runPerformanceBenchmark } from "../game/performance.js";
+import { ensureFactoryWorld16 } from "../modules/gameplay/gameplay.facade.js";
+import { runEngineDiagnostics, runMatchBalanceAnalysis, runSyntheticSeasonScaleBenchmarks, runTacticalSensitivityAnalysis } from "../modules/matches/engine/match-engine.facade.js";
+import { runPerformanceBenchmark } from "../modules/matches/analysis/performance.benchmark.js";
 
-const schemaPath=resolve("apps/api/schema/game_manager_mvp.sql");
+const schemaPath=resolve("apps/api/modules/world/schema/game_manager_mvp.sql");
 function fixtureDb():{root:string;db:ReturnType<typeof open>} {
   const root=mkdtempSync(join(tmpdir(),"gm-p0-performance-"));
   const db=open(join(root,"campaign.sqlite"));

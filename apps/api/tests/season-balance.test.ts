@@ -4,10 +4,10 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { open, validate } from "../db/database.js";
-import { ensureFactoryWorld16 } from "../game/gameService.js";
-import { runSeasonBalanceAnalysis } from "../game/matchEngine.js";
+import { ensureFactoryWorld16 } from "../modules/gameplay/gameplay.facade.js";
+import { runSeasonBalanceAnalysis } from "../modules/matches/engine/match-engine.facade.js";
 
-const schemaPath = resolve("apps/api/schema/game_manager_mvp.sql");
+const schemaPath = resolve("apps/api/modules/world/schema/game_manager_mvp.sql");
 
 test("factory upgrade generates distinct tiered squads and multi-seed season diagnostics", () => {
   const root = mkdtempSync(join(tmpdir(), "manager-game-balance-"));

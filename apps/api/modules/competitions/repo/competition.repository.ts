@@ -1,7 +1,7 @@
 import { SqliteDatabase } from "../../../db/database.js";
 
 
-interface StageRow {
+export interface StageRow {
   stage_id: number;
   season_id: number;
   competition_id: number;

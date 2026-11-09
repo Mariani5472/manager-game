@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildHistoricalCalibrationReport, parseHistoricalJsonl } from "../game/historicalCalibration.js";
-import { runPersistedWorldBenchmarks } from "../game/persistedWorldBenchmark.js";
+import { buildHistoricalCalibrationReport, parseHistoricalJsonl } from "../modules/matches/analysis/historical-calibration.analysis.js";
+import { runPersistedWorldBenchmarks } from "../modules/world/analysis/persisted-world.benchmark.js";
 import { open } from "../db/database.js";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { ensureFactoryWorld16 } from "../game/gameService.js";
+import { ensureFactoryWorld16 } from "../modules/gameplay/gameplay.facade.js";
 
 const historical = [
   {date:"2022-01-01",competition:"League A",homeGoals:2,awayGoals:0,homeShots:10,awayShots:5,homeShotsOnTarget:4,awayShotsOnTarget:1,homeXg:1.4,awayXg:0.3},
@@ -39,7 +39,7 @@ test("persisted-world benchmark validates scale before opening disposable worlds
   const root=mkdtempSync(join(tmpdir(),"gm-world-scale-validation-"));
   const db=open(join(root,"campaign.sqlite"));
   try {
-    db.exec(readFileSync(resolve("apps/api/schema/game_manager_mvp.sql"),"utf8"));
+    db.exec(readFileSync(resolve("apps/api/modules/world/schema/game_manager_mvp.sql"),"utf8"));
     ensureFactoryWorld16(db);
     await assert.rejects(()=>runPersistedWorldBenchmarks(db,[17],1),/even integers/);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM club").get() as {n:number}).n,16);
@@ -50,7 +50,7 @@ test("persisted-world benchmark completes a persisted 16-club league on a dispos
   const root=mkdtempSync(join(tmpdir(),"gm-world-scale-integration-"));
   const db=open(join(root,"campaign.sqlite"));
   try {
-    db.exec(readFileSync(resolve("apps/api/schema/game_manager_mvp.sql"),"utf8"));
+    db.exec(readFileSync(resolve("apps/api/modules/world/schema/game_manager_mvp.sql"),"utf8"));
     ensureFactoryWorld16(db);
     const before=(db.prepare("SELECT COUNT(*) AS n FROM fixture").get() as {n:number}).n;
     const results=await runPersistedWorldBenchmarks(db,[16],42);

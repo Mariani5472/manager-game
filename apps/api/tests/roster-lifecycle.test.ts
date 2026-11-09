@@ -4,14 +4,14 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { open, validate } from "../db/database.js";
-import { SaveManager } from "../save/saveManager.js";
+import { SaveManager } from "../modules/saves/repo/save-manager.js";
 import {
   applyRosterSeason, createTransferOffer, ensureRosterLifecycleSchema, listClubFinances,
   listPlayerHistory, listRosterPlayers, listTransferHistory, respondToTransferOffer,
   renewPlayerContract,
-} from "../game/rosterLifecycle.js";
+} from "../modules/roster/service/roster-lifecycle.service.js";
 
-const schemaPath=resolve("apps/api/schema/game_manager_mvp.sql");
+const schemaPath=resolve("apps/api/modules/world/schema/game_manager_mvp.sql");
 
 test("roster lifecycle develops players, generates youth, manages contracts and records transfers",async()=>{
   const root=mkdtempSync(join(tmpdir(),"manager-game-phase7-"));

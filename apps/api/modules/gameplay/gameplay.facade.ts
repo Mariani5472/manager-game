@@ -1,0 +1,11 @@
+export { advanceRound, advanceStageRound, advanceRoundById } from "../competitions/service/calendar.service.js";
+export { getSeasonStatus, getStage } from "../competitions/repo/competition.repository.js";
+export { resolveKnockoutFixtureWinner, progressKnockoutStage } from "../competitions/service/knockout.service.js";
+export { getStandings, rebuildStandings } from "../competitions/repo/standings.repository.js";
+export { prepareNextLeagueSeason, finishSeasonIfComplete } from "../competitions/service/season.service.js";
+export { advanceNextFixture, advanceFixtureRound } from "../competitions/service/matchday.service.js";
+export { listClubs, getManagedClub } from "../campaign/repo/club.repository.js";
+export { listFixtures } from "../campaign/repo/fixture.repository.js";
+export { listSquad, getTactics } from "../campaign/repo/squad.repository.js";
+export { ensureFactoryWorld16, ensureFactoryLeagueCalendar } from "../world/service/factory-world.service.js";
+export { ensureFactorySquadProfiles } from "../world/service/squad-profile.service.js";

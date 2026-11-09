@@ -1,5 +1,6 @@
 import { SqliteDatabase } from "../../../db/database.js";
-import { ParticipantRow, roundRobin } from "./schedule-generator.service.js";
+import { roundRobin } from "./schedule-generator.service.js";
+import type { ParticipantRow } from "./schedule-generator.service.js";
 import { applyRosterSeason } from "../../roster/service/roster-lifecycle.service.js";
 import {
   getSeasonStatus,

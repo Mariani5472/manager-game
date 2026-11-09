@@ -4,16 +4,16 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { open, validate } from "../db/database.js";
-import { SaveManager } from "../save/saveManager.js";
+import { SaveManager } from "../modules/saves/repo/save-manager.js";
 import {
   advanceFixtureRound, ensureFactoryLeagueCalendar, ensureFactorySquadProfiles,
   ensureFactoryWorld16, listClubs,
-} from "../game/gameService.js";
+} from "../modules/gameplay/gameplay.facade.js";
 
 test("play advances every pending match in the managed club's round", async () => {
   const root = mkdtempSync(join(tmpdir(), "manager-game-round-"));
   const masterPath = join(root, "master.sqlite");
-  const schemaPath = resolve("apps/api/schema/game_manager_mvp.sql");
+  const schemaPath = resolve("apps/api/modules/world/schema/game_manager_mvp.sql");
   const master = open(masterPath);
   try {
     master.exec(readFileSync(schemaPath, "utf8"));

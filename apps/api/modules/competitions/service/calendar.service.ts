@@ -3,7 +3,7 @@ import { progressKnockoutStage } from "./knockout.service.js";
 import { finishSeasonIfComplete } from "./season.service.js";
 import { rebuildStandings } from "../repo/standings.repository.js";
 import { simulateMatch } from "../../matches/service/match-simulation.service.js";
-import { MatchSummary } from "../../matches/types/match-engine.types.js";
+import type { MatchSummary } from "../../matches/types/match-engine.types.js";
 
 
 export function advanceRound(

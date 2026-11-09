@@ -4,13 +4,13 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { open, validate } from "../db/database.js";
-import { SaveManager } from "../save/saveManager.js";
+import { SaveManager } from "../modules/saves/repo/save-manager.js";
 import {
   applyPromotionRelegation, installDataPackage, listInstalledDataPackages,
   parseDataPackage, validateDataPackage,
-} from "../game/dataPackages.js";
+} from "../modules/data-packages/data-package.facade.js";
 
-const schemaPath=resolve("apps/api/schema/game_manager_mvp.sql");
+const schemaPath=resolve("apps/api/modules/world/schema/game_manager_mvp.sql");
 const packagePath=resolve("data/packages/example-regional-leagues.json");
 
 test("versioned data packages validate references, import generically and remain save-isolated",async()=>{

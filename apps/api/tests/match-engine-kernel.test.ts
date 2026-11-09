@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { simulateMatchTimeline } from "../game/matchEngine/timelineSimulator.js";
-import type { MatchPlayer, TacticalChange, Team } from "../game/matchEngine/types.js";
+import { simulateMatchTimeline } from "../modules/matches/engine/timelineSimulator.js";
+import type { MatchPlayer, TacticalChange, Team } from "../modules/matches/types/match-engine.types.js";
 
 const roles = ["GK", "CB", "CB", "LB", "RB", "DM", "CM", "CM", "AM", "LW", "ST"];
 

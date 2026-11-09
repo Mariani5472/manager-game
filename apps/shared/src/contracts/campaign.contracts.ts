@@ -1,5 +1,7 @@
 import type { FixtureStatus } from "./match.contracts.js";
 
+export type SquadStatus = "FIRST_TEAM" | "RESERVE" | "YOUTH";
+
 export interface CampaignClubDto {
   id: number;
   name: string;
@@ -28,7 +30,7 @@ export interface CampaignPlayerDto {
   id: number;
   name: string;
   shirtNumber: number | null;
-  squadStatus: string;
+  squadStatus: SquadStatus;
   positions: string[];
   energy: number;
   morale: number;

@@ -4,12 +4,12 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { open, validate } from "../db/database.js";
-import { SaveManager } from "../save/saveManager.js";
-import { previewLineup, saveLineup } from "../game/lineupService.js";
-import { scheduleMatchTacticalChange, simulateMatch } from "../game/matchEngine.js";
-import { resolveMatchContext } from "../game/matchContext.js";
+import { SaveManager } from "../modules/saves/repo/save-manager.js";
+import { previewLineup, saveLineup } from "../modules/campaign/repo/lineup.repository.js";
+import { scheduleMatchTacticalChange, simulateMatch } from "../modules/matches/engine/match-engine.facade.js";
+import { resolveMatchContext } from "../modules/matches/service/match-context.service.js";
 
-const schemaPath = resolve("apps/api/schema/game_manager_mvp.sql");
+const schemaPath = resolve("apps/api/modules/world/schema/game_manager_mvp.sql");
 
 test("match context persists weather and pitch, applies substitutions as events, and advances suspensions", async () => {
   const root = mkdtempSync(join(tmpdir(), "manager-game-phase6-"));

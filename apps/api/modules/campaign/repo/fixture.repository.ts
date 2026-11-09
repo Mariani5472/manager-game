@@ -1,4 +1,5 @@
-import { SqliteDatabase } from "../../../db/database.js";
+import type { SqliteDatabase } from "../../../db/database.js";
+import type { FixtureStatus } from "../../../../shared/src/index.js";
 
 
 export interface FixtureInfo {
@@ -9,7 +10,7 @@ export interface FixtureInfo {
   scheduledAt: string | null;
   homeClub: string;
   awayClub: string;
-  status: string;
+  status: FixtureStatus;
   score: string | null;
   winnerClub: string | null;
 }
