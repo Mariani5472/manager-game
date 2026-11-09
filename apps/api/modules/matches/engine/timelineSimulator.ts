@@ -430,7 +430,13 @@ export function validateMatchTimeline(
       minute.homePressure < 0 ||
       minute.homePressure > 100 ||
       minute.awayPressure < 0 ||
-      minute.awayPressure > 100
+      minute.awayPressure > 100 ||
+      !Number.isFinite(minute.homeBasePressure) ||
+      !Number.isFinite(minute.awayBasePressure) ||
+      minute.homeBasePressure < 0 ||
+      minute.homeBasePressure > 100 ||
+      minute.awayBasePressure < 0 ||
+      minute.awayBasePressure > 100
     ) {
       throw new Error(`Minute ${minute.minute} contains invalid pressure values.`);
     }
