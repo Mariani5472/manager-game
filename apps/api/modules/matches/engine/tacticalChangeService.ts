@@ -163,25 +163,28 @@ export function scheduleMatchTacticalChange(
       throw new Error("Both players must belong to the selected club.");
     }
 
-    const lineupState = db
-      .prepare(
-        "SELECT player_id AS playerId,is_starting AS isStarting FROM match_lineup WHERE fixture_id=? AND club_id=? AND player_id IN (?,?)",
-      )
-      .all(fixtureId, clubId, playerOutId, playerInId) as Array<{
-      playerId: number;
-      isStarting: number;
-    }>;
-
-    if (
-      lineupState.length !== 2 ||
-      lineupState.find((player) => player.playerId === playerOutId)
-        ?.isStarting !== 1 ||
-      lineupState.find((player) => player.playerId === playerInId)
-        ?.isStarting !== 0
-    ) {
-      throw new Error(
-        "Select a current starter and a saved bench player before scheduling a substitution.",
-      );
+    // Validate against the projected lineup at the requested minute, not
+    // only the original XI. Earlier scheduled substitutions may change who is
+    // active or on the bench by the time this decision is applied.
+    const pendingChanges = db.prepare(
+      "SELECT id,minute,club_id,change_type,payload FROM match_tactical_change WHERE fixture_id=? AND club_id=? AND minute<? ORDER BY minute,id",
+    ).all(fixtureId, clubId, minute) as Array<{ id:number; minute:number; club_id:number; change_type:string; payload:string }>;
+    const projectedActive = new Set((db.prepare(
+      "SELECT player_id FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=1",
+    ).all(fixtureId, clubId) as Array<{ player_id:number }>).map(player => player.player_id));
+    for (const change of pendingChanges) {
+      const changePayload = JSON.parse(change.payload) as Record<string, unknown>;
+      if (change.change_type === "SUBSTITUTION") {
+        projectedActive.delete(Number(changePayload.playerOutId));
+        projectedActive.add(Number(changePayload.playerInId));
+      }
+      if (change.change_type === "FORMATION" && Array.isArray(changePayload.slots)) {
+        projectedActive.clear();
+        for (const slot of changePayload.slots as Array<{ playerId:number }>) projectedActive.add(Number(slot.playerId));
+      }
+    }
+    if (!projectedActive.has(playerOutId) || projectedActive.has(playerInId)) {
+      throw new Error("Select a player projected to be active and another projected to be on the bench at the decision minute.");
     }
 
     const matchDate = fixture.scheduledAt?.slice(0, 10) ?? null;
