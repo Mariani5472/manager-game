@@ -37,14 +37,9 @@ export function CalendarSection({
       <div className={styles.fixtureSummary}>
         <Card>
           <CardContent>
-            <span>Upcoming fixtures</span>
-            <strong>{upcomingCount}</strong>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <span>Completed results</span>
-            <strong>{resultCount}</strong>
+            <span>Completed results <strong>{resultCount}</strong></span>
+            <br />
+            <span>Upcoming fixtures <strong>{upcomingCount}</strong></span>
           </CardContent>
         </Card>
       </div>
