@@ -10,5 +10,6 @@ export function createCampaignRoutes(controller:CampaignController):Router {
  router.put("/:saveId/matches/:fixtureId/lineup",controller.saveMatchLineup);
  router.get("/:saveId/matches/:fixtureId/center",controller.matchCenter);
  router.post("/:saveId/matches/:fixtureId/advance",controller.advanceMatch);
+ router.post("/:saveId/matches/:fixtureId/decisions",controller.scheduleTacticalChange);
  return router;
 }
