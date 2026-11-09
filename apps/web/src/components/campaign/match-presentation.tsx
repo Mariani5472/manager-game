@@ -261,8 +261,8 @@ export function MatchMomentum({
               <stop offset="100%" stopColor="#e0a35b" />
             </linearGradient>
             <linearGradient id={areaGradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#48bd83" stopOpacity=".28" />
-              <stop offset="50%" stopColor="#8c9b91" stopOpacity=".025" />
+              <stop offset="0%" stopColor="#48bd83" stopOpacity=".42" />
+              <stop offset="50%" stopColor="#8c9b91" stopOpacity=".04" />
               <stop offset="100%" stopColor="#e0a35b" stopOpacity=".28" />
             </linearGradient>
           </defs>
