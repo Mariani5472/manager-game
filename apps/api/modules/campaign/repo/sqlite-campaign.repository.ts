@@ -165,7 +165,30 @@ export class SqliteCampaignRepository implements CampaignRepository {
    return {id:-decision.id,fixtureId,minute:decision.minute,addedTime:0,type:"TACTIC_CHANGE" as const,clubId:getManagedClub(db).id,playerId:null,secondaryPlayerId:null,xg:0,description};
   });
   const events=[...rows.map(e=>({id:e.id,fixtureId,minute:e.minute,addedTime:0,type:e.type,clubId:e.clubId,playerId:e.playerId,secondaryPlayerId:e.secondaryPlayerId,xg:e.xg,description:e.description})),...decisionEvents].sort((a,b)=>a.minute-b.minute||a.id-b.id);
-  const momentum=db.prepare("SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,home_score AS homeScore,away_score AS awayScore FROM match_momentum WHERE fixture_id=? ORDER BY minute").all(fixtureId) as MatchCenterResponse["momentum"];
+  const momentumRows=db.prepare(`
+   SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,
+    home_score AS homeScore,away_score AS awayScore,
+    home_territorial_control AS homeTerritorialControl,away_territorial_control AS awayTerritorialControl,
+    home_offensive_threat AS homeOffensiveThreat,away_offensive_threat AS awayOffensiveThreat,
+    home_defensive_stability AS homeDefensiveStability,away_defensive_stability AS awayDefensiveStability,
+    home_intensity AS homeIntensity,away_intensity AS awayIntensity,
+    home_physical_condition AS homePhysicalCondition,away_physical_condition AS awayPhysicalCondition
+   FROM match_momentum WHERE fixture_id=? ORDER BY minute
+  `).all(fixtureId) as Array<Record<string, number>>;
+  const momentum:MatchCenterResponse["momentum"]=momentumRows.map(point=>({
+   minute:point.minute!,homePressure:point.homePressure!,awayPressure:point.awayPressure!,
+   homeScore:point.homeScore!,awayScore:point.awayScore!,
+   homeState:{
+    territorialControl:point.homeTerritorialControl!,offensiveThreat:point.homeOffensiveThreat!,
+    defensiveStability:point.homeDefensiveStability!,intensity:point.homeIntensity!,
+    physicalCondition:point.homePhysicalCondition!,momentum:point.homePressure!,
+   },
+   awayState:{
+    territorialControl:point.awayTerritorialControl!,offensiveThreat:point.awayOffensiveThreat!,
+    defensiveStability:point.awayDefensiveStability!,intensity:point.awayIntensity!,
+    physicalCondition:point.awayPhysicalCondition!,momentum:point.awayPressure!,
+   },
+  }));
   const aggregate=(clubId:number)=>{const count=(types:string[])=>rows.filter(e=>e.clubId===clubId&&types.includes(e.type)).length;return {shots:count(["GOAL","SAVE","MISS"]),shotsOnTarget:count(["GOAL","SAVE"]),goals:count(["GOAL"]),expectedGoals:rows.filter(e=>e.clubId===clubId&&["GOAL","SAVE","MISS"].includes(e.type)).reduce((sum,e)=>sum+(e.xg??0),0),fouls:count(["FOUL"]),yellowCards:count(["YELLOW_CARD"]),redCards:count(["RED_CARD"]),substitutions:count(["SUBSTITUTION"]),injuries:count(["INJURY"])};};
   const formations=db.prepare("SELECT id,name FROM formation ORDER BY name").all() as Array<{id:number;name:string}>; return {fixture,managedClubId:getManagedClub(db).id,formations,playbackStatus:fixture.status==="COMPLETED"?"FINISHED":fixture.status==="IN_PROGRESS"?"PAUSED":"IDLE",teams:[{clubId:fixture.home.clubId,name:fixture.home.name,isHome:true,lineup:this.lineup(db,fixtureId,fixture.home.clubId)},{clubId:fixture.away.clubId,name:fixture.away.name,isHome:false,lineup:this.lineup(db,fixtureId,fixture.away.clubId)}],statistics:{home:aggregate(fixture.home.clubId),away:aggregate(fixture.away.clubId)},events,momentum};
  }
