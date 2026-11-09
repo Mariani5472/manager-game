@@ -867,3 +867,15 @@
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
+
+.matchTeamHome .matchScorers {
+  justify-items: end;
+  text-align: right;
+}
+.matchTeamAway .matchScorers {
+  justify-items: start;
+  text-align: left;
+}
+.timelineAway .timelineMinute {
+  order: 2;
+}
