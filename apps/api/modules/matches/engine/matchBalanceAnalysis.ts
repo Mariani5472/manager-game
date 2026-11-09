@@ -9,7 +9,7 @@ import {
 } from "./monteCarloService.js";
 import type {
   MonteCarloReport,
-} from "./types.js";
+} from "../types/match-engine.types.js";
 
 
 export function runMatchBalanceAnalysis(
