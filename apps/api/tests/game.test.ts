@@ -167,7 +167,13 @@ test("identical fixture seeds and inputs reproduce event, xG and momentum output
     `).all();
     const momentum = (db: ReturnType<typeof open>) => db.prepare(`
       SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,
-        home_score AS homeScore,away_score AS awayScore
+        home_score AS homeScore,away_score AS awayScore,
+        home_territorial_control AS homeTerritorialControl,
+        away_territorial_control AS awayTerritorialControl,
+        home_offensive_threat AS homeOffensiveThreat,
+        away_offensive_threat AS awayOffensiveThreat,
+        home_physical_condition AS homePhysicalCondition,
+        away_physical_condition AS awayPhysicalCondition
       FROM match_momentum WHERE fixture_id=1 ORDER BY minute
     `).all();
     assert.deepEqual(events(first), events(second));
@@ -823,7 +829,17 @@ test("incremental match playback resumes deterministically and finalizes only at
     const completeResult = simulateMatch(complete, 1, 90);
     assert.deepEqual(incrementalResult, completeResult);
     const events = (db: ReturnType<typeof open>) => db.prepare("SELECT minute,club_id AS clubId,player_id AS playerId,secondary_player_id AS secondaryPlayerId,event_type AS type,xg,description FROM match_event WHERE fixture_id=1 ORDER BY minute,id").all();
-    const momentum = (db: ReturnType<typeof open>) => db.prepare("SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,home_score AS homeScore,away_score AS awayScore FROM match_momentum WHERE fixture_id=1 ORDER BY minute").all();
+    const momentum = (db: ReturnType<typeof open>) => db.prepare(`
+      SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,
+        home_score AS homeScore,away_score AS awayScore,
+        home_territorial_control AS homeTerritorialControl,
+        away_territorial_control AS awayTerritorialControl,
+        home_offensive_threat AS homeOffensiveThreat,
+        away_offensive_threat AS awayOffensiveThreat,
+        home_physical_condition AS homePhysicalCondition,
+        away_physical_condition AS awayPhysicalCondition
+      FROM match_momentum WHERE fixture_id=1 ORDER BY minute
+    `).all();
     assert.deepEqual(events(incremental), events(complete));
     assert.deepEqual(momentum(incremental), momentum(complete));
     assert.equal((incremental.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
