@@ -7,7 +7,7 @@ import type {
   ClubSummaryDto,
   CountryClubsResponse,
   CountrySummaryDto,
-} from "../../../shared/src/index.js";
+} from "../../../../shared/src/index.js";
 
 export class SqliteMasterRepository implements MasterRepository {
   private withMaster<T>(query: (db: SqliteDatabase) => T): T {
