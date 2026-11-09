@@ -338,8 +338,8 @@ export function simulateMatchTimeline(
      homeBasePressure,
      awayBasePressure,
      minuteEvents,
-     gameActions,
      minute,
+     gameActions,
     );
     minutes.push({
      minute,
