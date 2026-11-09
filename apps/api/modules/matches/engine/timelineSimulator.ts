@@ -1,6 +1,7 @@
 import {
   MATCH_EVENT_PROBABILITIES,
 } from "./constants.js";
+import { advanceMatchGameState, createMatchGameState } from "./game-state/gameState.calculator.js";
 import {
   clamp,
   mean,
@@ -50,6 +51,7 @@ export function simulateMatchTimeline(
    const homeErrorRandom=rng((seed ^ Math.imul(home.clubId,0xc2b2ae35) ^ 0x27d4eb2f)>>>0);
    const awayErrorRandom=rng((seed ^ Math.imul(away.clubId,0xc2b2ae35) ^ 0x27d4eb2f)>>>0);
    let hs=0,as=0,hShots=0,aShots=0,hOn=0,aOn=0,hxg=0,axg=0;
+   let gameState = createMatchGameState(home, away);
    const events:KernelShotEvent[]=[];
    const minutes:KernelMinute[]=[];
    const changesByMinute=new Map<number,TacticalChange[]>();
@@ -286,10 +288,11 @@ export function simulateMatchTimeline(
       }
      }
     }
-    const hp=teamPressure(home,homeRandom),ap=teamPressure(away,awayRandom);
+    const homeBasePressure=teamPressure(home,homeRandom);
+    const awayBasePressure=teamPressure(away,awayRandom);
     for(const side of [
-      {team:home,opponent:away,isHome:true,pressure:hp,opponentPressure:ap,random:homeRandom,opponentErrorRandom:awayErrorRandom},
-      {team:away,opponent:home,isHome:false,pressure:ap,opponentPressure:hp,random:awayRandom,opponentErrorRandom:homeErrorRandom},
+      {team:home,opponent:away,isHome:true,pressure:gameState.home.momentum,opponentPressure:gameState.away.momentum,random:homeRandom,opponentErrorRandom:awayErrorRandom},
+      {team:away,opponent:home,isHome:false,pressure:gameState.away.momentum,opponentPressure:gameState.home.momentum,random:awayRandom,opponentErrorRandom:homeErrorRandom},
     ]){
      const tactic=side.team.tactic;
      const defensiveError=side.opponentErrorRandom()<MATCH_EVENT_PROBABILITIES.defensiveErrorPerDefendingTeamMinute;
@@ -321,7 +324,23 @@ export function simulateMatchTimeline(
      if(side.isHome){hShots++;hxg+=xg;if(onTarget)hOn++;if(goal)hs++;}
      else{aShots++;axg+=xg;if(onTarget)aOn++;if(goal)as++;}
     }
-    minutes.push({minute,homePressure:hp,awayPressure:ap,homeScore:hs,awayScore:as,events:minuteEvents});
+    gameState = advanceMatchGameState(
+     gameState,
+     home,
+     away,
+     homeBasePressure,
+     awayBasePressure,
+     minuteEvents,
+     minute,
+    );
+    minutes.push({
+     minute,
+     homePressure:gameState.home.momentum,
+     awayPressure:gameState.away.momentum,
+     homeScore:hs,
+     awayScore:as,
+     events:minuteEvents,
+    });
    }
    const timeline: KernelTimeline = {
     events,
