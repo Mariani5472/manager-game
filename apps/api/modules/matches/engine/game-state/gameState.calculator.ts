@@ -1,6 +1,6 @@
 import { clamp } from "../mathUtils.js";
 import type { KernelShotEvent, Team } from "../../types/match-engine.types.js";
-import type { MatchGameState, TeamGameState } from "./gameState.types.js";
+import type { GameAction, MatchGameState, TeamGameState } from "./gameState.types.js";
 
 const TERRITORY_MEMORY = 0.78;
 const THREAT_MEMORY = 0.72;
@@ -63,6 +63,7 @@ function calculateTeamState(
   previous: TeamGameState,
   basePressure: number,
   minuteEvents: KernelShotEvent[],
+  gameActions: GameAction[],
   minute: number,
 ): TeamGameState {
   const activeRatio = activePlayerRatio(team);
@@ -77,6 +78,26 @@ function calculateTeamState(
   };
   const mentalityModifier = mentalityModifiers[team.tactic.mentality] ?? 0;
 
+  const teamActions = gameActions.filter(action => action.clubId === team.clubId);
+  const territorialActionImpact = teamActions.reduce((impact, action) => {
+    switch (action.type) {
+      case "PROGRESSION": return impact + 1;
+      case "FINAL_THIRD_ENTRY": return impact + 3;
+      case "BOX_ENTRY": return impact + 4;
+      case "COUNTER_ATTACK": return impact + 3;
+      default: return impact;
+    }
+  }, 0);
+  const actionThreat = teamActions.reduce((impact, action) => {
+    switch (action.type) {
+      case "PROGRESSION": return impact + 0.5;
+      case "FINAL_THIRD_ENTRY": return impact + 2.5;
+      case "BOX_ENTRY": return impact + 5;
+      case "COUNTER_ATTACK": return impact + 4;
+      default: return impact;
+    }
+  }, 0);
+
   const territorialTarget = clamp(
     50 +
       (basePressure - 50) * 0.55 +
@@ -84,6 +105,7 @@ function calculateTeamState(
       (team.tactic.pressing - 50) * 0.1 +
       (team.tactic.tempo - 50) * 0.08 +
       (activeRatio - 1) * 25 +
+      Math.min(12, territorialActionImpact) +
       mentalityModifier,
     0,
     100,
@@ -95,7 +117,7 @@ function calculateTeamState(
   const passiveThreat = Math.max(0, territorialControl - 45) * 0.12;
   const eventThreat = calculateEventThreat(minuteEvents, team.clubId);
   const offensiveThreat = clamp(
-    previous.offensiveThreat * THREAT_MEMORY + passiveThreat + eventThreat,
+    previous.offensiveThreat * THREAT_MEMORY + passiveThreat + eventThreat + actionThreat,
     0,
     100,
   );
@@ -154,6 +176,7 @@ export function advanceMatchGameState(
   homeBasePressure: number,
   awayBasePressure: number,
   minuteEvents: KernelShotEvent[],
+  gameActions: GameAction[],
   minute: number,
 ): MatchGameState {
   return {
@@ -163,6 +186,7 @@ export function advanceMatchGameState(
       previous.home,
       homeBasePressure,
       minuteEvents,
+      gameActions,
       minute,
     ),
     away: calculateTeamState(
