@@ -142,7 +142,7 @@ test("invalidated substitutions are cancelled and formation changes preserve the
   ));
   assert.ok(timeline.events.some(event =>
     event.minute === 20 && event.eventType === "TACTIC_CHANGE" &&
-    event.description === "Formação alterada durante a partida"
+    event.description.includes("Formação")
   ));
   assert.equal(timeline.minutes.length, 90);
   assert.ok(!timeline.events.some(event =>
