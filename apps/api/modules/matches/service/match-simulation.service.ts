@@ -94,27 +94,18 @@ export function simulateMatch(
                 JSON.stringify({ home: simulationConfig.home, away: simulationConfig.away });
             const previousChanges = previous.tacticalChanges ?? [];
             const currentChanges = simulationConfig.tacticalChanges;
-            const retainedChanges = currentChanges.filter(change =>
-                previousChanges.some(previousChange =>
-                    previousChange.id === change.id &&
-                    previousChange.minute === change.minute &&
-                    previousChange.clubId === change.clubId &&
-                    previousChange.type === change.type &&
-                    previousChange.payload === change.payload
-                )
-            );
-            const onlyFutureChangesWereAdded = previousChanges.every(previousChange =>
-                currentChanges.some(change =>
-                    change.id === previousChange.id &&
-                    change.minute === previousChange.minute &&
-                    change.clubId === previousChange.clubId &&
-                    change.type === previousChange.type &&
-                    change.payload === previousChange.payload
-                )
-            ) && currentChanges.every(change =>
-                previousChanges.some(previousChange => previousChange.id === change.id) || change.minute > startMinute
-            );
-            if (!sameTeams || !onlyFutureChangesWereAdded || retainedChanges.length !== previousChanges.length) {
+            const previousChangeIds = new Set(previousChanges.map(change => change.id));
+            const newChanges = currentChanges.filter(change => !previousChangeIds.has(change.id));
+            const changedExistingInputs = previousChanges.some(previousChange => {
+                const current = currentChanges.find(change => change.id === previousChange.id);
+                return !current ||
+                    current.minute !== previousChange.minute ||
+                    current.clubId !== previousChange.clubId ||
+                    current.type !== previousChange.type ||
+                    current.payload !== previousChange.payload;
+            });
+            const onlyFutureChangesWereAdded = newChanges.every(change => change.minute > startMinute);
+            if (!sameTeams || changedExistingInputs || !onlyFutureChangesWereAdded) {
                 throw new Error(`Fixture ${fixtureId} simulation inputs changed after its checkpoint; only new tactical changes scheduled after minute ${startMinute} can be appended.`);
             }
         }
