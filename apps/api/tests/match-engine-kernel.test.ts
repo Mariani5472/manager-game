@@ -110,7 +110,7 @@ test("invalidated substitutions are cancelled and formation changes preserve the
   const changes: TacticalChange[] = [
     {
       id: 1,
-      minute: 10,
+      minute: 1,
       club_id: home.clubId,
       change_type: "SUBSTITUTION",
       payload: JSON.stringify({ playerOutId: outgoing.id, playerInId: firstIncoming.id }),
@@ -133,7 +133,7 @@ test("invalidated substitutions are cancelled and formation changes preserve the
 
   const timeline = simulateMatchTimeline(home, away, 99173, changes);
   assert.ok(timeline.events.some(event =>
-    event.minute === 10 && event.eventType === "SUBSTITUTION" &&
+    event.minute === 1 && event.eventType === "SUBSTITUTION" &&
     event.playerId === outgoing.id && event.secondaryPlayerId === firstIncoming.id
   ));
   assert.ok(timeline.events.some(event =>
