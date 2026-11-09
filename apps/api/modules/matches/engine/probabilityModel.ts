@@ -7,7 +7,7 @@ import {
 import type {
     Tactic,
     Team,
-} from "./types.js";
+} from "../types/match-engine.types.js";
 
 
 const DEFAULT_CONTEXT = {
