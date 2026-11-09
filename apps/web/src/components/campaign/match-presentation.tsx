@@ -99,7 +99,7 @@ function MatchTeamScore({
   scorers: MatchEventDto[];
 }) {
   return (
-    <div className={styles.matchTeam}>
+    <div className={side === "home" ? `${styles.matchTeam} ${styles.matchTeamHome}` : `${styles.matchTeam} ${styles.matchTeamAway}`}>
       <span className={styles.matchCrest}>{team.name.slice(0, 1)}</span>
       <strong>{team.name}</strong>
       <small>{side === 'home' ? 'HOME' : 'AWAY'}</small>
