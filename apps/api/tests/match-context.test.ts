@@ -105,6 +105,10 @@ test("match context persists weather and pitch, applies substitutions as events,
     assert.equal((db.prepare("SELECT applied FROM match_tactical_change WHERE fixture_id=? AND minute=60").get(fixture.id) as {applied:number}).applied, 1);
     const subState = db.prepare("SELECT minutes_played AS minutes FROM match_player_state WHERE fixture_id=? AND player_id=?").get(fixture.id, substitute.playerId) as {minutes:number};
     assert.equal(subState.minutes, 30);
+    const finalOutgoing = db.prepare("SELECT is_starting AS isStarting FROM match_lineup WHERE fixture_id=? AND club_id=? AND player_id=?").get(fixture.id, fixture.home, lateSubstitutionStarter.id) as {isStarting:number};
+    const finalIncoming = db.prepare("SELECT is_starting AS isStarting FROM match_lineup WHERE fixture_id=? AND club_id=? AND player_id=?").get(fixture.id, fixture.home, lateSubstitutionBench.id) as {isStarting:number};
+    assert.equal(finalOutgoing.isStarting, 0);
+    assert.equal(finalIncoming.isStarting, 1);
     validate(db);
   } finally {
     db.close();
