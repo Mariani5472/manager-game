@@ -24,6 +24,7 @@ test("schema v1 migrates atomically to the current version and backfills complet
     assert.equal(fixture.completedAt, fixture.scheduledAt);
 
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='match_preparation'").get());
+    assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='match_momentum_debug'").get());
     const momentumColumns = db.prepare("PRAGMA table_info(match_momentum)").all() as Array<{ name: string }>;
     for (const column of [
       "home_territorial_control", "away_territorial_control",
