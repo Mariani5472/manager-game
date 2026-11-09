@@ -18,7 +18,7 @@ import type {
     Tactic,
     TacticalSensitivityReport,
     Team,
-} from "./types.js";
+} from "../types/match-engine.types.js";
 
 
 
