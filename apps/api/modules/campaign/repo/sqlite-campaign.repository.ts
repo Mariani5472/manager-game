@@ -151,9 +151,20 @@ export class SqliteCampaignRepository implements CampaignRepository {
  private matchCenterFromDb(db:SqliteDatabase,fixtureId:number):MatchCenterResponse {
   const fixture=this.fixture(db,fixtureId);
   const rows=db.prepare("SELECT id,minute,club_id AS clubId,player_id AS playerId,secondary_player_id AS secondaryPlayerId,event_type AS type,xg,description FROM match_event WHERE fixture_id=? ORDER BY minute,id").all(fixtureId) as Array<{id:number;minute:number;clubId:number|null;playerId:number|null;secondaryPlayerId:number|null;type:MatchCenterResponse["events"][number]["type"];xg:number|null;description:string|null}>;
+  const pendingDecisions=db.prepare("SELECT id,minute,change_type AS type,payload FROM match_tactical_change WHERE fixture_id=? AND applied=0 ORDER BY minute,id").all(fixtureId) as Array<{id:number;minute:number;type:string;payload:string}>;
+  const decisionEvents=pendingDecisions.map(decision=>{
+   const payload=JSON.parse(decision.payload) as Record<string,unknown>;
+   let description="Manager decision scheduled";
+   if(decision.type==="MENTALITY") description=`Mentality changed to ${String(payload.mentality).replaceAll("_"," ").toLowerCase()}`;
+   if(decision.type==="INSTRUCTION") description=`Instruction ${String(payload.key).replaceAll("_"," ")} set to ${String(payload.value)}`;
+   if(decision.type==="SUBSTITUTION") description=`Substitution scheduled: player #${String(payload.playerOutId)} off, player #${String(payload.playerInId)} on`;
+   if(decision.type==="FORMATION") description=`Formation change scheduled (ID ${String(payload.formationId)})`;
+   return {id:-decision.id,fixtureId,minute:decision.minute,addedTime:0,type:"TACTIC_CHANGE" as const,clubId:getManagedClub(db).id,playerId:null,secondaryPlayerId:null,xg:0,description};
+  });
+  const events=[...rows.map(e=>({id:e.id,fixtureId,minute:e.minute,addedTime:0,type:e.type,clubId:e.clubId,playerId:e.playerId,secondaryPlayerId:e.secondaryPlayerId,xg:e.xg,description:e.description})),...decisionEvents].sort((a,b)=>a.minute-b.minute||a.id-b.id);
   const momentum=db.prepare("SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,home_score AS homeScore,away_score AS awayScore FROM match_momentum WHERE fixture_id=? ORDER BY minute").all(fixtureId) as MatchCenterResponse["momentum"];
   const aggregate=(clubId:number)=>{const count=(types:string[])=>rows.filter(e=>e.clubId===clubId&&types.includes(e.type)).length;return {shots:count(["GOAL","SAVE","MISS"]),shotsOnTarget:count(["GOAL","SAVE"]),goals:count(["GOAL"]),expectedGoals:rows.filter(e=>e.clubId===clubId&&["GOAL","SAVE","MISS"].includes(e.type)).reduce((sum,e)=>sum+(e.xg??0),0),fouls:count(["FOUL"]),yellowCards:count(["YELLOW_CARD"]),redCards:count(["RED_CARD"]),substitutions:count(["SUBSTITUTION"]),injuries:count(["INJURY"])};};
-  return {fixture,playbackStatus:fixture.status==="COMPLETED"?"FINISHED":fixture.status==="IN_PROGRESS"?"PAUSED":"IDLE",teams:[{clubId:fixture.home.clubId,name:fixture.home.name,isHome:true,lineup:this.lineup(db,fixtureId,fixture.home.clubId)},{clubId:fixture.away.clubId,name:fixture.away.name,isHome:false,lineup:this.lineup(db,fixtureId,fixture.away.clubId)}],statistics:{home:aggregate(fixture.home.clubId),away:aggregate(fixture.away.clubId)},events:rows.map(e=>({id:e.id,fixtureId,minute:e.minute,addedTime:0,type:e.type,clubId:e.clubId,playerId:e.playerId,secondaryPlayerId:e.secondaryPlayerId,xg:e.xg,description:e.description})),momentum};
+  return {fixture,playbackStatus:fixture.status==="COMPLETED"?"FINISHED":fixture.status==="IN_PROGRESS"?"PAUSED":"IDLE",teams:[{clubId:fixture.home.clubId,name:fixture.home.name,isHome:true,lineup:this.lineup(db,fixtureId,fixture.home.clubId)},{clubId:fixture.away.clubId,name:fixture.away.name,isHome:false,lineup:this.lineup(db,fixtureId,fixture.away.clubId)}],statistics:{home:aggregate(fixture.home.clubId),away:aggregate(fixture.away.clubId)},events,momentum};
  }
 
 }
