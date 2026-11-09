@@ -108,6 +108,13 @@ export function simulateMatch(
             if (!sameTeams || changedExistingInputs || !onlyFutureChangesWereAdded) {
                 throw new Error(`Fixture ${fixtureId} simulation inputs changed after its checkpoint; only new tactical changes scheduled after minute ${startMinute} can be appended.`);
             }
+            // Future decisions are append-only. Promote the new input snapshot
+            // before processing another minute so subsequent resumes stay deterministic.
+            if (newChanges.length > 0) {
+                const updatedConfig = simulationConfig;
+                db.prepare("UPDATE match_simulation_state SET state_json=? WHERE fixture_id=?")
+                    .run(JSON.stringify({ ...checkpoint, config: updatedConfig, minute: startMinute }), fixtureId);
+            }
         }
         if (startMinute < 0 || startMinute > 90) throw new Error(`Fixture ${fixtureId} checkpoint minute is invalid.`);
     } else if (f.status === "IN_PROGRESS") {
