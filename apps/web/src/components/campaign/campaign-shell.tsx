@@ -30,6 +30,14 @@ export function CampaignShell({ saveId, children }: { saveId: string; children: 
       saveName={overview.data?.save.name}
       season={overview.data?.competitions[0]?.seasonYear}
       competition={overview.data?.competitions[0]?.competition}
+      nextFixture={overview.data?.nextFixture ? { id: overview.data.nextFixture.id, status: overview.data.nextFixture.status } : null}
+      onNextMatch={() => {
+        const next = overview.data?.nextFixture;
+        if (!next) return;
+        router.push(next.status === 'IN_PROGRESS'
+          ? `/game/${saveId}/match/${next.id}/center`
+          : `/game/${saveId}/match/${next.id}`);
+      }}
       onExit={() => router.push('/')}
     >
       <div className={styles.contentHeading}>
