@@ -457,3 +457,51 @@
     flex: 1;
   }
 }
+
+.decisionField {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+.decisionField input,
+.decisionPanel input,
+.decisionPanel select {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  background: var(--color-background);
+  font: inherit;
+  font-size: 11px;
+}
+.decisionField input {
+  max-width: 84px;
+}
+.decisionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.decisionPanel {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-surface);
+}
+.decisionPanel strong {
+  color: var(--color-text-primary);
+  font-size: 11px;
+}
+@media (max-width: 560px) {
+  .decisionGrid {
+    grid-template-columns: 1fr;
+  }
+}
