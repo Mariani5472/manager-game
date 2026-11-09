@@ -95,6 +95,62 @@ test("same teams, seed and tactical commands produce an identical timeline witho
   assert.equal(JSON.stringify({ home, away }), before);
 });
 
+test("invalidated substitutions are cancelled and formation changes preserve the current eleven", () => {
+  const home = createTeam(1, 70);
+  const away = createTeam(2, 55);
+  const outgoing = home.lineup[1]!;
+  const firstIncoming = home.lineup[11]!;
+  const secondIncoming = home.lineup[12]!;
+  const originalStarters = home.lineup.slice(0, 11);
+  const formationSlots = originalStarters.map((player, index) => ({
+    playerId: player.id,
+    slotNumber: index + 1,
+    positionCode: roles[index]!,
+  }));
+  const changes: TacticalChange[] = [
+    {
+      id: 1,
+      minute: 10,
+      club_id: home.clubId,
+      change_type: "SUBSTITUTION",
+      payload: JSON.stringify({ playerOutId: outgoing.id, playerInId: firstIncoming.id }),
+    },
+    {
+      id: 2,
+      minute: 15,
+      club_id: home.clubId,
+      change_type: "SUBSTITUTION",
+      payload: JSON.stringify({ playerOutId: outgoing.id, playerInId: secondIncoming.id }),
+    },
+    {
+      id: 3,
+      minute: 20,
+      club_id: home.clubId,
+      change_type: "FORMATION",
+      payload: JSON.stringify({ formationId: 1, slots: formationSlots }),
+    },
+  ];
+
+  const timeline = simulateMatchTimeline(home, away, 99173, changes);
+  assert.ok(timeline.events.some(event =>
+    event.minute === 10 && event.eventType === "SUBSTITUTION" &&
+    event.playerId === outgoing.id && event.secondaryPlayerId === firstIncoming.id
+  ));
+  assert.ok(timeline.events.some(event =>
+    event.minute === 15 && event.eventType === "TACTIC_CHANGE" &&
+    event.description.includes("Substituição cancelada")
+  ));
+  assert.ok(timeline.events.some(event =>
+    event.minute === 20 && event.eventType === "TACTIC_CHANGE" &&
+    event.description === "Formação alterada durante a partida"
+  ));
+  assert.equal(timeline.minutes.length, 90);
+  assert.ok(!timeline.events.some(event =>
+    event.minute > 20 && event.playerId === outgoing.id &&
+    ["GOAL", "SAVE", "MISS", "FOUL", "YELLOW_CARD", "RED_CARD", "INJURY"].includes(event.eventType)
+  ), "a player already substituted out must not be restored by a later formation change");
+});
+
 test("generated timelines keep scores, shots, xG and minute events internally consistent", () => {
   const home = createTeam(1, 72);
   const away = createTeam(2, 48);
