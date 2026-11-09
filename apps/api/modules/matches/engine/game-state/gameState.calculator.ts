@@ -2,9 +2,9 @@ import { clamp } from "../mathUtils.js";
 import type { KernelShotEvent, Team } from "../../types/match-engine.types.js";
 import type { GameAction, MatchGameState, TeamGameState } from "./gameState.types.js";
 
-const TERRITORY_MEMORY = 0.78;
-const THREAT_MEMORY = 0.72;
-const MOMENTUM_MEMORY = 0.65;
+const TERRITORY_MEMORY = 0.58;
+const THREAT_MEMORY = 0.52;
+const MOMENTUM_MEMORY = 0.42;
 
 function activePlayerRatio(team: Team): number {
   return team.lineup.filter(player => player.isStarting).length / 11;
@@ -48,9 +48,9 @@ function calculateEventThreat(events: KernelShotEvent[], clubId: number): number
       case "SAVE":
       case "MISS":
         // xG represents chance quality; the scoreline itself is deliberately ignored.
-        return impact + event.xg * 65;
+        return impact + event.xg * 90;
       case "CHANCE":
-        return impact + 3;
+        return impact + 7;
       default:
         return impact;
     }
@@ -81,31 +81,31 @@ function calculateTeamState(
   const teamActions = gameActions.filter(action => action.clubId === team.clubId);
   const territorialActionImpact = teamActions.reduce((impact, action) => {
     switch (action.type) {
-      case "PROGRESSION": return impact + 1;
-      case "FINAL_THIRD_ENTRY": return impact + 3;
-      case "BOX_ENTRY": return impact + 4;
-      case "COUNTER_ATTACK": return impact + 3;
+      case "PROGRESSION": return impact + 1.5;
+      case "FINAL_THIRD_ENTRY": return impact + 4;
+      case "BOX_ENTRY": return impact + 6;
+      case "COUNTER_ATTACK": return impact + 5;
       default: return impact;
     }
   }, 0);
   const actionThreat = teamActions.reduce((impact, action) => {
     switch (action.type) {
-      case "PROGRESSION": return impact + 0.5;
-      case "FINAL_THIRD_ENTRY": return impact + 2.5;
-      case "BOX_ENTRY": return impact + 5;
-      case "COUNTER_ATTACK": return impact + 4;
+      case "PROGRESSION": return impact + 1;
+      case "FINAL_THIRD_ENTRY": return impact + 4;
+      case "BOX_ENTRY": return impact + 8;
+      case "COUNTER_ATTACK": return impact + 6;
       default: return impact;
     }
   }, 0);
 
   const territorialTarget = clamp(
     50 +
-      (basePressure - 50) * 0.55 +
-      (team.attacking - opponentDefensiveStrength) * 0.18 +
-      (team.tactic.pressing - 50) * 0.1 +
-      (team.tactic.tempo - 50) * 0.08 +
+      (basePressure - 50) * 0.8 +
+      (team.attacking - opponentDefensiveStrength) * 0.22 +
+      (team.tactic.pressing - 50) * 0.08 +
+      (team.tactic.tempo - 50) * 0.06 +
       (activeRatio - 1) * 25 +
-      Math.min(12, territorialActionImpact) +
+      Math.min(18, territorialActionImpact) +
       mentalityModifier,
     0,
     100,
@@ -114,7 +114,7 @@ function calculateTeamState(
     previous.territorialControl * TERRITORY_MEMORY +
     territorialTarget * (1 - TERRITORY_MEMORY);
 
-  const passiveThreat = Math.max(0, territorialControl - 45) * 0.12;
+  const passiveThreat = Math.max(0, territorialControl - 42) * 0.24;
   const eventThreat = calculateEventThreat(minuteEvents, team.clubId);
   const offensiveThreat = clamp(
     previous.offensiveThreat * THREAT_MEMORY + passiveThreat + eventThreat + actionThreat,
@@ -145,8 +145,8 @@ function calculateTeamState(
   );
 
   const rawMomentum = clamp(
-    territorialControl * 0.4 +
-      offensiveThreat * 0.4 +
+    territorialControl * 0.3 +
+      offensiveThreat * 0.5 +
       intensity * 0.1 +
       physicalCondition * 0.1,
     0,
