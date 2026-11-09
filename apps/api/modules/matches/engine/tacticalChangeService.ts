@@ -47,11 +47,9 @@ function getProjectedLineup(
     if (change.changeType === "SUBSTITUTION") {
       const outgoing = projected.get(Number(payload.playerOutId));
       const incoming = projected.get(Number(payload.playerInId));
-      if (!outgoing || !incoming) {
-        throw new Error("A previously scheduled substitution references a player outside the match lineup.");
-      }
-      // Earlier decisions can become invalid after a prior substitution. The
-      // match engine cancels those decisions; projection must mirror that rule.
+      // If a player became unavailable after scheduling, the engine cancels
+      // that decision. Keep projection aligned with the eventual simulation.
+      if (!outgoing || !incoming) continue;
       if (!outgoing.isStarting || incoming.isStarting || incoming.hasPlayed) continue;
       incoming.slot = outgoing.slot;
       incoming.role = outgoing.role;
@@ -62,11 +60,6 @@ function getProjectedLineup(
 
     if (change.changeType === "FORMATION" && Array.isArray(payload.slots)) {
       const assignments = payload.slots as Array<{playerId:number;slotNumber:number;positionCode:string}>;
-      for (const assignment of assignments) {
-        if (!projected.has(Number(assignment.playerId))) {
-          throw new Error("A previously scheduled formation references a player outside the lineup.");
-        }
-      }
       const active = [...projected.values()].filter(player => player.isStarting).sort((a,b)=>a.slot-b.slot);
       const keepers = active.filter(player => player.goalkeeper === 1);
       if (active.length === 11 && keepers.length === 1) {
