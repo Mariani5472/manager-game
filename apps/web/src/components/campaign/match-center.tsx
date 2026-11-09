@@ -87,6 +87,7 @@ export function MatchCenter({
   // A ref closes the interval race: state updates from React are asynchronous,
   // while a timer callback can otherwise enqueue another advance immediately.
   const advanceInFlight = useRef(false);
+  const decisionInFlight = useRef(false);
   const advance = useMutation({
     mutationFn: (minute: number) => gameApi.advanceMatch(saveId, fixtureId, minute),
     onSuccess: (data) => {
@@ -106,7 +107,7 @@ export function MatchCenter({
     const interval = window.setInterval(() => {
       // Advance a small batch per second. This keeps the playback rate intuitive
       // while avoiding four HTTP round-trips per second at 4x speed.
-      if (advanceInFlight.current) return;
+      if (advanceInFlight.current || decisionInFlight.current) return;
       const nextMinute = Math.min(90, currentMinute + speed);
       if (nextMinute <= currentMinute) {
         setPlaying(false);
@@ -149,10 +150,13 @@ export function MatchCenter({
   const activePlayers = managedLineup.filter((player) => player.isStarting);
   const benchPlayers = managedLineup.filter((player) => !player.isStarting);
   const nextDecisionMinute = currentMinute + 1;
-  const decisionBusy = advance.isPending || scheduleDecision.isPending || advanceInFlight.current;
+  const decisionBusy = advance.isPending || scheduleDecision.isPending || advanceInFlight.current || decisionInFlight.current;
 
   const submitDecision = async (input: MatchTacticalChangeRequest) => {
     if (!userCanDecide || decisionBusy || nextDecisionMinute > 90) return;
+    // Lock synchronously before React can tear down the playback interval.
+    // This prevents a minute advance and a tactical decision racing each other.
+    decisionInFlight.current = true;
     setPlaying(false);
     try {
       await scheduleDecision.mutateAsync({ ...input, minute: nextDecisionMinute } as MatchTacticalChangeRequest);
@@ -160,6 +164,8 @@ export function MatchCenter({
       setPlayerInId(null);
     } catch {
       // The mutation error is displayed next to the decision controls.
+    } finally {
+      decisionInFlight.current = false;
     }
   };
 
