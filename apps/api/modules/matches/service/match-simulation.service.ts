@@ -145,11 +145,25 @@ export function simulateMatch(
         begin.immediate();
     }
     const insertEvent = db.prepare("INSERT INTO match_event(fixture_id,minute,club_id,player_id,secondary_player_id,event_type,xg,description) VALUES(?,?,?,?,?,?,?,?)");
-    const insertMomentum = db.prepare("INSERT INTO match_momentum(fixture_id,minute,home_pressure,away_pressure,home_score,away_score) VALUES(?,?,?,?,?,?)");
+    const insertMomentum = db.prepare(`INSERT INTO match_momentum(
+        fixture_id,minute,home_pressure,away_pressure,home_score,away_score,
+        home_territorial_control,away_territorial_control,
+        home_offensive_threat,away_offensive_threat,
+        home_defensive_stability,away_defensive_stability,
+        home_intensity,away_intensity,
+        home_physical_condition,away_physical_condition
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     const checkpoint = db.prepare("UPDATE match_simulation_state SET simulation_minute=?,state_json=?,updated_at=CURRENT_TIMESTAMP WHERE fixture_id=?");
     const minuteUpdate = db.transaction((m: KernelMinute) => {
         for (const e of m.events) insertEvent.run(fixtureId, e.minute, e.clubId, e.playerId || null, e.secondaryPlayerId, e.eventType, e.xg, e.description);
-        insertMomentum.run(fixtureId, m.minute, m.homePressure, m.awayPressure, m.homeScore, m.awayScore);
+        insertMomentum.run(
+            fixtureId, m.minute, m.homePressure, m.awayPressure, m.homeScore, m.awayScore,
+            m.homeState.territorialControl, m.awayState.territorialControl,
+            m.homeState.offensiveThreat, m.awayState.offensiveThreat,
+            m.homeState.defensiveStability, m.awayState.defensiveStability,
+            m.homeState.intensity, m.awayState.intensity,
+            m.homeState.physicalCondition, m.awayState.physicalCondition,
+        );
         checkpoint.run(m.minute, JSON.stringify({
             engineVersion: "1.0.0", seed, config: simulationConfig, minute: m.minute, homeScore: m.homeScore, awayScore: m.awayScore,
             homeShots: timeline.events.filter(e => e.minute <= m.minute && e.clubId === f.home_club_id && ["GOAL", "SAVE", "MISS"].includes(e.eventType)).length,
@@ -157,6 +171,7 @@ export function simulateMatch(
             homeShotsOnTarget: timeline.events.filter(e => e.minute <= m.minute && e.clubId === f.home_club_id && (e.eventType === "GOAL" || e.eventType === "SAVE")).length,
             awayShotsOnTarget: timeline.events.filter(e => e.minute <= m.minute && e.clubId === f.away_club_id && (e.eventType === "GOAL" || e.eventType === "SAVE")).length,
             homePressure: m.homePressure, awayPressure: m.awayPressure,
+            homeState: m.homeState, awayState: m.awayState,
             homeXg: timeline.events.filter(e => e.minute <= m.minute && e.clubId === f.home_club_id && ["GOAL", "SAVE", "MISS"].includes(e.eventType)).reduce((n, e) => n + e.xg, 0),
             awayXg: timeline.events.filter(e => e.minute <= m.minute && e.clubId === f.away_club_id && ["GOAL", "SAVE", "MISS"].includes(e.eventType)).reduce((n, e) => n + e.xg, 0),
             completed: false
