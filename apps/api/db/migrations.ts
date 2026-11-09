@@ -55,9 +55,23 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 4,
+    description: "Persist opt-in per-minute momentum diagnostics",
+    up(db) {
+      db.exec(`
+        CREATE TABLE match_momentum_debug (
+          fixture_id INTEGER NOT NULL REFERENCES fixture(id) ON DELETE CASCADE,
+          minute INTEGER NOT NULL CHECK(minute BETWEEN 1 AND 90),
+          trace_json TEXT NOT NULL,
+          PRIMARY KEY (fixture_id, minute)
+        );
+      `);
+    },
+  },
 ];
 
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 export function applyMigrations(db: SqliteDatabase): number {
   const versionTable = db.prepare(
