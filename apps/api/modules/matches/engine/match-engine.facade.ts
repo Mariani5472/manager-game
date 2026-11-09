@@ -7,3 +7,5 @@ export { runSyntheticSeasonScaleBenchmarks } from "./syntheticBenchmark.js";
 export { runTacticalSensitivityAnalysis } from "./tacticalSensitivityAnalysis.js";
 export { runSeasonBalanceAnalysis } from "./seasonBalanceAnalysis.js";
 export { runTacticalImpactAnalysis } from "./tacticalImpactAnalysis.js";
+
+export { runMomentumCalibration } from "./momentum/momentumAnalysis.js";
