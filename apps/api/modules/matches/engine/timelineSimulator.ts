@@ -78,12 +78,19 @@ export function simulateMatchTimeline(
      try{payload=JSON.parse(change.payload) as Record<string,unknown>;}catch{throw new Error(`Tactical change ${change.id} has invalid JSON.`);}
      if(change.change_type==="SUBSTITUTION"){
       const outId=Number(payload.playerOutId),inId=Number(payload.playerInId);
-      const outgoing=team.lineup.find(p=>p.id===outId&&p.isStarting),incoming=team.lineup.find(p=>p.id===inId&&!p.isStarting);
-      if(!outgoing||!incoming)throw new Error(`Substitution ${change.id} needs an active player and a bench player.`);
-      if(outgoing.role==="GK"&&incoming.goalkeeper!==1)throw new Error("A goalkeeper can only be replaced by another goalkeeper.");
-      incoming.role=outgoing.role;incoming.slot=outgoing.slot;incoming.isStarting=true;outgoing.isStarting=false;refreshTeamStrength(team);
-      minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição: ${outgoing.name} sai, ${incoming.name} entra`});
-      substitutionsByClub.set(team.clubId,(substitutionsByClub.get(team.clubId)??0)+1);
+      const outgoing=team.lineup.find(p=>p.id===outId),incoming=team.lineup.find(p=>p.id===inId);
+      if(!outgoing||!incoming)throw new Error(`Substitution ${change.id} references a player outside the match lineup.`);
+      // A planned substitution can be invalidated by an earlier injury,
+      // dismissal or automatic substitution. That is a football outcome, not
+      // a corrupt match: record the cancelled decision and keep simulating.
+      if(!outgoing.isStarting||incoming.isStarting){
+       minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"TACTIC_CHANGE",xg:0,description:`Substituição cancelada: ${outgoing.name} ou ${incoming.name} já não está na condição prevista`});
+      }else{
+       if(outgoing.role==="GK"&&incoming.goalkeeper!==1)throw new Error("A goalkeeper can only be replaced by another goalkeeper.");
+       incoming.role=outgoing.role;incoming.slot=outgoing.slot;incoming.isStarting=true;outgoing.isStarting=false;refreshTeamStrength(team);
+       minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição: ${outgoing.name} sai, ${incoming.name} entra`});
+       substitutionsByClub.set(team.clubId,(substitutionsByClub.get(team.clubId)??0)+1);
+      }
      }else if(change.change_type==="MENTALITY"){
       const mentality=String(payload.mentality??"");
       if(!["VERY_DEFENSIVE","DEFENSIVE","BALANCED","ATTACKING","VERY_ATTACKING"].includes(mentality))throw new Error(`Tactical change ${change.id} has invalid mentality.`);
@@ -120,7 +127,7 @@ export function simulateMatchTimeline(
        }
        assignedPlayers.add(playerId);
        assignedSlots.add(slot);
-       return { player, slot, role };
+       return { slot, role };
       });
       if (
        assignedPlayers.size !== 11 ||
@@ -129,19 +136,33 @@ export function simulateMatchTimeline(
       ) {
        throw new Error("Formation change must assign eleven distinct players, eleven distinct slots and exactly one goalkeeper.");
       }
-      for (const player of team.lineup) player.isStarting = false;
-      for (const assignment of parsedAssignments) {
-       assignment.player.isStarting = true;
-       assignment.player.slot = assignment.slot;
-       assignment.player.role = assignment.role;
-      }
       const formationId = Number(payload.formationId);
       if (!Number.isSafeInteger(formationId) || formationId <= 0) {
        throw new Error(`Formation change ${change.id} has an invalid formation id.`);
       }
-      team.tactic = { ...team.tactic, formation_id: formationId };
-      refreshTeamStrength(team);
-      minuteEvents.push({minute,clubId:team.clubId,playerId:0,secondaryPlayerId:null,eventType:"TACTIC_CHANGE",xg:0,description:"Formação alterada durante a partida"});
+
+      // The saved formation plan may have been invalidated by red cards,
+      // injuries or automatic substitutions. Reposition the current XI rather
+      // than reintroducing a player who has already left the pitch.
+      const activePlayers = team.lineup.filter(player => player.isStarting).sort((a,b)=>a.slot-b.slot);
+      const keepers = activePlayers.filter(player => player.goalkeeper === 1);
+      if(activePlayers.length!==11||keepers.length!==1){
+       minuteEvents.push({minute,clubId:team.clubId,playerId:0,secondaryPlayerId:null,eventType:"TACTIC_CHANGE",xg:0,description:"Formação não aplicada: o número de jogadores em campo mudou antes da alteração"});
+      }else{
+       const keeper=keepers[0]!;
+       const outfield=activePlayers.filter(player=>player.goalkeeper!==1);
+       let outfieldIndex=0;
+       for(const player of team.lineup) player.isStarting=false;
+       for(const assignment of parsedAssignments.sort((a,b)=>a.slot-b.slot)){
+        const player=assignment.role==="GK"?keeper:outfield[outfieldIndex++]!;
+        player.isStarting=true;
+        player.slot=assignment.slot;
+        player.role=assignment.role;
+       }
+       team.tactic = { ...team.tactic, formation_id: formationId };
+       refreshTeamStrength(team);
+       minuteEvents.push({minute,clubId:team.clubId,playerId:0,secondaryPlayerId:null,eventType:"TACTIC_CHANGE",xg:0,description:"Formação alterada durante a partida"});
+      }
      }
      if(minuteEvents.length>priorEventCount)events.push(minuteEvents[minuteEvents.length-1]!);
     }
