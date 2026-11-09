@@ -236,8 +236,8 @@ export function scheduleMatchTacticalChange(
       throw new Error("Incoming player is unavailable.");
     }
 
-    if (outgoing.goalkeeper === 1 && incoming.goalkeeper !== 1) {
-      throw new Error("A goalkeeper can only be replaced by another goalkeeper.");
+    if (outgoing.goalkeeper !== incoming.goalkeeper) {
+      throw new Error("A goalkeeper can only be replaced by another goalkeeper, and outfield players must replace outfield players.");
     }
 
     payload = { playerOutId, playerInId };
