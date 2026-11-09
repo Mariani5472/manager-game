@@ -12,6 +12,7 @@ import type {
   CampaignTeamResponse,
   MatchCenterResponse,
   MatchPreparationResponse,
+  MatchTacticalChangeRequest,
   SaveMatchLineupRequest,
 } from '@shared/index';
 
@@ -62,5 +63,10 @@ export const gameApi = {
     request<MatchCenterResponse>(`/api/saves/${id}/matches/${fixtureId}/advance`, {
       method: 'POST',
       body: JSON.stringify({ throughMinute }),
+    }),
+  scheduleTacticalChange: (id: string, fixtureId: number, input: MatchTacticalChangeRequest) =>
+    request<{ changeId: number }>(`/api/saves/${id}/matches/${fixtureId}/decisions`, {
+      method: 'POST',
+      body: JSON.stringify(input),
     }),
 };
