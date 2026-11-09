@@ -55,6 +55,9 @@ export type MatchEventType =
   | "HALF_TIME"
   | "FULL_TIME";
 
+export type FixtureId = number;
+export type ClubId = number;
+
 export interface MatchScoreDto {
   home: number;
   away: number;
@@ -119,7 +122,7 @@ export interface MatchTeamDto {
 }
 
 export interface MatchFixtureDto {
-  id: number;
+  id: FixtureId;
   competition: string;
   stage: string;
   round: string;
@@ -187,13 +190,12 @@ export interface AdvanceMatchRequest {
 }
 
 export interface MatchSimulationCheckpointDto {
-  fixtureId: number;
+  fixtureId: FixtureId;
   engineVersion: string;
   simulationMinute: number;
   completed: boolean;
   updatedAt: string;
 }
-
 
 export interface MatchPreparationResponse {
   fixture: MatchFixtureDto;
