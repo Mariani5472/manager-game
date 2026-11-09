@@ -78,6 +78,23 @@ test("match context persists weather and pitch, applies substitutions as events,
     scheduleMatchTacticalChange(db, fixture.id, fixture.home, 70, "MENTALITY", { mentality: "ATTACKING" });
     const formation = db.prepare("SELECT formation_id AS id FROM team_tactic WHERE club_id=?").get(fixture.home) as {id:number};
     scheduleMatchTacticalChange(db, fixture.id, fixture.home, 80, "FORMATION", { formationId: formation.id });
+    // The campaign endpoint must use the save's selected club even when it is
+    // the away side. Tactical choices for the opposite side are not permitted.
+    const managedAwayClubId = fixture.away;
+    const awayLineup = previewLineup(db, managedAwayClubId, fixture.id);
+    const awayStarter = awayLineup.starters.find(player => player.position !== "GK")!;
+    const awayBench = awayLineup.bench.find(player => player.position !== "GK")!;
+    const awayDecisionId = scheduleMatchTacticalChange(
+      db, fixture.id, managedAwayClubId, 85, "SUBSTITUTION",
+      { playerOutId: awayStarter.playerId, playerInId: awayBench.playerId },
+    );
+    assert.ok(awayDecisionId > 0);
+    assert.throws(
+      () => scheduleMatchTacticalChange(db, fixture.id, fixture.home, 86, "SUBSTITUTION",
+        { playerOutId: awayStarter.playerId, playerInId: awayBench.playerId }),
+      /Both players must belong to the selected club/,
+    );
+
 
 
     // Decisions may be appended during playback, but only for future minutes.
