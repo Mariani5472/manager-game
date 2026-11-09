@@ -1,6 +1,6 @@
 import type {
   SqliteDatabase,
-} from "../../../../db/database.js";
+} from "../../../db/database.js";
 import {
   runMonteCarlo,
 } from "./monteCarloService.js";
@@ -11,7 +11,7 @@ import type {
   TacticalImpactReport,
   TacticalImpactScenario,
   Team,
-} from "./types.js";
+} from "../types/match-engine.types.js";
 
 
 export function runTacticalImpactAnalysis(
