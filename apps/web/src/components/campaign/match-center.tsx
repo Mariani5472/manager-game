@@ -150,9 +150,20 @@ export function MatchCenter({
   const activePlayers = managedLineup.filter((player) => player.isStarting);
   const benchPlayers = managedLineup.filter((player) => !player.isStarting);
   const nextDecisionMinute = Math.max(currentMinute + 1, decisionMinute);
+  useEffect(() => {
+    setDecisionMinute((minute) => Math.max(currentMinute + 1, minute));
+  }, [currentMinute]);
+
   const submitDecision = async (input: MatchTacticalChangeRequest) => {
     setPlaying(false);
-    await scheduleDecision.mutateAsync({ ...input, minute: nextDecisionMinute } as MatchTacticalChangeRequest);
+    try {
+      await scheduleDecision.mutateAsync({ ...input, minute: nextDecisionMinute } as MatchTacticalChangeRequest);
+      setDecisionMinute(nextDecisionMinute + 1);
+      setPlayerOutId(null);
+      setPlayerInId(null);
+    } catch {
+      // The mutation error is displayed next to the decision controls.
+    }
   };
 
   const stats = [
