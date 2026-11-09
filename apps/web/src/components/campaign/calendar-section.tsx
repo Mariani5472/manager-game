@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDate } from '@/lib/formatters/date';
-import { getVisibleFixtures, getFixtureCounts, getFixtureStatusVariant } from '@/lib/campaign/fixtures';
+import { getVisibleFixtures, getFixtureCounts, getFixtureStatusVariant, FixtureFilter } from '@/lib/campaign/fixtures';
 import { PageHeading } from './section-ui';
 import styles from './campaign-sections.module.css';
 export function CalendarSection({ data, onPrepareMatch }: { data: CampaignCalendarResponse; onPrepareMatch: (fixtureId: number) => void }) {
@@ -28,8 +28,8 @@ export function CalendarSection({ data, onPrepareMatch }: { data: CampaignCalend
       <CardContent>
         {fixtures.length ? <div className={styles.fixtureList}>
           {fixtures.map(item => <div className={styles.fixtureRow} key={item.id}>
-            <div className={styles.fixtureDate}><strong>{formatDate(item.scheduledAt)}</strong><span>{item.roundName}</span></div>
-            <div className={styles.fixtureTeams}><span>{item.homeTeam.name}</span><strong>{item.status === 'COMPLETED' ? `${item.homeScore} - ${item.awayScore}` : 'vs'}</strong><span>{item.awayTeam.name}</span></div>
+            <div className={styles.fixtureDate}><strong>{formatDate(item.scheduledAt)}</strong><span>{item.round}</span></div>
+            <div className={styles.fixtureTeams}><span>{item.homeClub}</span><strong>{item.status === 'COMPLETED' ? `${item.score}` : 'vs'}</strong><span>{item.awayClub}</span></div>
             <Badge variant={getFixtureStatusVariant(item.status)}>{item.status.replaceAll('_', ' ')}</Badge>
             <Button size="sm" variant="outline" onClick={() => onPrepareMatch(item.id)}>{item.status === 'IN_PROGRESS' ? 'Continue match' : item.status === 'COMPLETED' ? 'View match' : 'Prepare match'}</Button>
           </div>)}
