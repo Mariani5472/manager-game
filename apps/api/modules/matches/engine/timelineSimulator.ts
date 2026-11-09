@@ -22,6 +22,7 @@ import type {
     KernelMinute,
   KernelShotEvent,
   KernelTimeline,
+  MomentumMinuteTrace,
   SimulatedMatchResult,
   TacticalChange,
   Team,
@@ -32,7 +33,8 @@ export function simulateMatchTimeline(
   home: Team,
   away: Team,
   seed: number,
-  changes: TacticalChange[] = []
+  changes: TacticalChange[] = [],
+  options: { collectMomentumTrace?: boolean } = {},
 ): KernelTimeline {
   validateTeamForSimulation(home);
   validateTeamForSimulation(away);
@@ -331,6 +333,7 @@ export function simulateMatchTimeline(
      if(side.isHome){hShots++;hxg+=xg;if(onTarget)hOn++;if(goal)hs++;}
      else{aShots++;axg+=xg;if(onTarget)aOn++;if(goal)as++;}
     }
+    const previousGameState = gameState;
     gameState = advanceMatchGameState(
      gameState,
      home,
@@ -341,8 +344,72 @@ export function simulateMatchTimeline(
      minute,
      gameActions,
     );
+    const momentumTrace: MomentumMinuteTrace | undefined = options.collectMomentumTrace
+      ? (() => {
+          const eventImpacts = minuteEvents.map((event, eventIndex) => ({
+            eventIndex,
+            eventType: event.eventType,
+            clubId: event.clubId,
+            xg: event.xg,
+            appliedThreatImpact: event.eventType === "CHANCE"
+              ? 7
+              : ["GOAL", "SAVE", "MISS"].includes(event.eventType) ? event.xg * 90 : 0,
+            description: event.description,
+          }));
+          const actionImpact = (clubId: number) => gameActions
+            .filter(action => action.clubId === clubId)
+            .reduce((total, action) => total + ({
+              PROGRESSION: 1,
+              FINAL_THIRD_ENTRY: 4,
+              BOX_ENTRY: 8,
+              COUNTER_ATTACK: 6,
+            }[action.type] ?? 0), 0);
+          const eventImpact = (clubId: number) => eventImpacts
+            .filter(event => event.clubId === clubId)
+            .reduce((total, event) => total + event.appliedThreatImpact, 0);
+          const homeTrace = {
+            clubId: home.clubId,
+            previousMomentum: previousGameState.home.momentum,
+            structuralPressure: homeBasePressure,
+            territorialControl: gameState.home.territorialControl,
+            offensiveThreat: gameState.home.offensiveThreat,
+            defensiveStability: gameState.home.defensiveStability,
+            intensity: gameState.home.intensity,
+            physicalCondition: gameState.home.physicalCondition,
+            finalMomentum: gameState.home.momentum,
+            eventThreatImpact: eventImpact(home.clubId),
+            actionThreatImpact: actionImpact(home.clubId),
+          };
+          const awayTrace = {
+            clubId: away.clubId,
+            previousMomentum: previousGameState.away.momentum,
+            structuralPressure: awayBasePressure,
+            territorialControl: gameState.away.territorialControl,
+            offensiveThreat: gameState.away.offensiveThreat,
+            defensiveStability: gameState.away.defensiveStability,
+            intensity: gameState.away.intensity,
+            physicalCondition: gameState.away.physicalCondition,
+            finalMomentum: gameState.away.momentum,
+            eventThreatImpact: eventImpact(away.clubId),
+            actionThreatImpact: actionImpact(away.clubId),
+          };
+          const difference = homeTrace.finalMomentum - awayTrace.finalMomentum;
+          const previousDifference = previousGameState.home.momentum - previousGameState.away.momentum;
+          const dominance = Math.abs(difference) < 0.5 ? "BALANCED" as const : difference > 0 ? "HOME" as const : "AWAY" as const;
+          const previousDominance = Math.abs(previousDifference) < 0.5 ? "BALANCED" : previousDifference > 0 ? "HOME" : "AWAY";
+          return {
+            minute,
+            home: homeTrace,
+            away: awayTrace,
+            events: eventImpacts,
+            dominance,
+            dominanceChanged: dominance !== previousDominance && dominance !== "BALANCED" && previousDominance !== "BALANCED",
+          };
+        })()
+      : undefined;
     minutes.push({
      minute,
+     ...(momentumTrace ? { momentumTrace } : {}),
      homePressure:gameState.home.momentum,
      awayPressure:gameState.away.momentum,
      homeBasePressure,
