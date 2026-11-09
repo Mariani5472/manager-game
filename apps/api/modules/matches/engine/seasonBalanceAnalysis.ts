@@ -11,7 +11,7 @@ import type {
     SeasonBalanceClub,
     SeasonBalanceReport,
     Team,
-} from "./types.js";
+} from "../types/match-engine.types.js";
 
 
 /**
