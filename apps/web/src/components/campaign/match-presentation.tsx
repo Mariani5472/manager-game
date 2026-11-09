@@ -105,7 +105,9 @@ function MatchTeamScore({
       <small>{side === 'home' ? 'HOME' : 'AWAY'}</small>
       <div className={styles.matchScorers}>
         {scorers.length > 0 ? scorers.map((event) => {
-          const name = getPlayerName(event, [team, team] as unknown as MatchTeams);
+          const name = event.playerId === null
+            ? null
+            : team.lineup.find((player) => player.playerId === event.playerId)?.name ?? null;
           return (
             <span key={event.id}>
               {name ?? event.description ?? 'Unknown scorer'} · {formatMinute(event.minute, event.addedTime)}
@@ -342,7 +344,11 @@ export function MatchTimeline({
           return (
             <div className={styles.timelineRow} key={event.id}>
               {side === 'home' ? <MatchTimelineItem event={event} side="home" teams={teams} /> : <span />}
-              <span className={styles.timelineSpine} />
+              {side === null ? (
+                <span className={styles.timelineCenterEvent}>
+                  {formatMinute(event.minute, event.addedTime)} {getEventIcon(event.type)} {event.description ?? getEventLabel(event.type)}
+                </span>
+              ) : <span className={styles.timelineSpine} />}
               {side === 'away' ? <MatchTimelineItem event={event} side="away" teams={teams} /> : <span />}
             </div>
           );
