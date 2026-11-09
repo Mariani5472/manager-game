@@ -8,9 +8,10 @@ import {getSeasonStatus} from "../../competitions/repo/competition.repository.js
 import {getStandings,rebuildStandings} from "../../competitions/repo/standings.repository.js";
 import {previewLineup,saveLineup} from "./lineup.repository.js";
 import {simulateMatch} from "../../matches/service/match-simulation.service.js";
+import {scheduleMatchTacticalChange} from "../../matches/engine/tacticalChangeService.js";
 import {progressKnockoutStage} from "../../competitions/service/knockout.service.js";
 import {finishSeasonIfComplete} from "../../competitions/service/season.service.js";
-import type {CampaignClubDto,CampaignOverviewResponse,CampaignCalendarResponse,CampaignSquadResponse,CampaignTeamResponse,MatchCenterResponse,MatchPreparationResponse,MatchFixtureDto,MatchLineupPlayerDto,SaveMatchLineupRequest} from "../../../shared/src/index.js";
+import type {CampaignClubDto,CampaignOverviewResponse,CampaignCalendarResponse,CampaignSquadResponse,CampaignTeamResponse,MatchCenterResponse,MatchPreparationResponse,MatchFixtureDto,MatchLineupPlayerDto,SaveMatchLineupRequest,MatchTacticalChangeRequest} from "../../../shared/src/index.js";
 import type {CampaignRepository} from "./campaign.repository.js";
 import {SaveNotFoundError} from "../../saves/save-not-found.error.js";
 export class SqliteCampaignRepository implements CampaignRepository {
@@ -109,6 +110,17 @@ export class SqliteCampaignRepository implements CampaignRepository {
    };
    const home=this.lineup(db,fixtureId,fixture.home.clubId),away=this.lineup(db,fixtureId,fixture.away.clubId);
    return {fixture,playbackStatus:fixture.status==="COMPLETED"?"FINISHED":fixture.status==="IN_PROGRESS"?"PAUSED":"IDLE",teams:[{clubId:fixture.home.clubId,name:fixture.home.name,isHome:true,lineup:home},{clubId:fixture.away.clubId,name:fixture.away.name,isHome:false,lineup:away}],statistics:{home:aggregate(fixture.home.clubId),away:aggregate(fixture.away.clubId)},events:rows.map(e=>({id:e.id,fixtureId,minute:e.minute,addedTime:0,type:e.type,clubId:e.clubId,playerId:e.playerId,secondaryPlayerId:e.secondaryPlayerId,xg:e.xg,description:e.description})),momentum};
+  });
+ }
+ scheduleTacticalChange(id:string,fixtureId:number,input:MatchTacticalChangeRequest):{changeId:number} {
+  return this.withSave(id,db=>{
+   const managedClubId=getManagedClub(db).id;
+   const fixture=this.fixture(db,fixtureId);
+   if(fixture.home.clubId!==managedClubId&&fixture.away.clubId!==managedClubId) throw new Error("Managed club is not part of this fixture.");
+   if(input.minute<=fixture.currentMinute) throw new Error("Decision must be scheduled after the current minute.");
+   const {minute,type,...payload}=input;
+   const changeId=scheduleMatchTacticalChange(db,fixtureId,managedClubId,minute,type,payload);
+   return {changeId};
   });
  }
  advanceMatch(id:string,fixtureId:number,throughMinute:number):MatchCenterResponse {
