@@ -1,14 +1,19 @@
 import type { CampaignPlayerDto } from '@shared/index';
 
 export function getSquadPositions(players: CampaignPlayerDto[]): string[] {
-  return [...new Set(players.flatMap(player => player.positions))].sort();
+  return [...new Set(players.flatMap((player) => player.positions))].sort();
 }
 
-export function filterSquadPlayers(players: CampaignPlayerDto[], search: string, position: string): CampaignPlayerDto[] {
+export function filterSquadPlayers(
+  players: CampaignPlayerDto[],
+  search: string,
+  position: string,
+): CampaignPlayerDto[] {
   const normalizedSearch = search.trim().toLowerCase();
-  return players.filter(player =>
-    `${player.name} ${player.positions.join(' ')}`.toLowerCase().includes(normalizedSearch) &&
-    (position === 'ALL' || player.positions.includes(position)),
+  return players.filter(
+    (player) =>
+      `${player.name} ${player.positions.join(' ')}`.toLowerCase().includes(normalizedSearch) &&
+      (position === 'ALL' || player.positions.includes(position)),
   );
 }
 

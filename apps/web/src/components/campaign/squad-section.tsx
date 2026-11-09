@@ -1,14 +1,18 @@
 'use client';
-import {useMemo,useState} from 'react';
-import type {CampaignPlayerDto,CampaignSquadResponse} from '@shared/index';
-import {Search,Shield,SlidersHorizontal,Users} from 'lucide-react';
-import {Badge} from '@/components/ui/badge';
-import {Button} from '@/components/ui/button';
-import {Card,CardContent,CardDescription,CardHeader,CardTitle} from '@/components/ui/card';
-import {Modal} from '@/components/ui/modal';
-import {Table,TableCell,TableHead} from '@/components/ui/table';
-import {getSquadPositions,filterSquadPlayers,getPlayerStatusVariant} from '@/lib/campaign/squad';
-import {PageHeading} from './section-ui';
+import { useMemo, useState } from 'react';
+import type { CampaignPlayerDto, CampaignSquadResponse } from '@shared/index';
+import { Search, Shield, SlidersHorizontal, Users } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Modal } from '@/components/ui/modal';
+import { Table, TableCell, TableHead } from '@/components/ui/table';
+import {
+  getSquadPositions,
+  filterSquadPlayers,
+  getPlayerStatusVariant,
+} from '@/lib/campaign/squad';
+import { PageHeading } from './section-ui';
 import styles from './campaign-sections.module.css';
 function MetricBar({ label, value }: { label: string; value: number }) {
   const safeValue = Math.max(0, Math.min(100, value));
@@ -61,13 +65,9 @@ export function SquadSection({ data }: { data: CampaignSquadResponse }) {
   const [search, setSearch] = useState('');
   const [position, setPosition] = useState('ALL');
   const [selectedPlayer, setSelectedPlayer] = useState<CampaignPlayerDto | null>(null);
-  const positions = useMemo(
-    () => getSquadPositions(data.players),
-    [data.players],
-  );
+  const positions = useMemo(() => getSquadPositions(data.players), [data.players]);
   const players = useMemo(
-    () =>
-      filterSquadPlayers(data.players, search, position),
+    () => filterSquadPlayers(data.players, search, position),
     [data.players, position, search],
   );
   const firstTeamCount = data.players.filter(
@@ -200,4 +200,3 @@ export function SquadSection({ data }: { data: CampaignSquadResponse }) {
     </div>
   );
 }
-

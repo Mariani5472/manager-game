@@ -1,11 +1,11 @@
 'use client';
-import type {CampaignOverviewResponse} from '@shared/index';
-import {ArrowRight,CalendarDays,Shield,Trophy} from 'lucide-react';
-import {Badge} from '@/components/ui/badge';
-import {Card,CardContent,CardDescription,CardHeader,CardTitle} from '@/components/ui/card';
-import {Table,TableCell,TableHead} from '@/components/ui/table';
-import {formatDate} from '@/lib/formatters/date';
-import {PageHeading,StatCard} from './section-ui';
+import type { CampaignOverviewResponse } from '@shared/index';
+import { ArrowRight, CalendarDays, Shield, Trophy } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableCell, TableHead } from '@/components/ui/table';
+import { formatDate } from '@/lib/formatters/date';
+import { PageHeading, StatCard } from './section-ui';
 import styles from './campaign-sections.module.css';
 export function OverviewSection({ data }: { data: CampaignOverviewResponse }) {
   const pendingFixtures = data.competitions.reduce(
@@ -243,4 +243,3 @@ export function OverviewSection({ data }: { data: CampaignOverviewResponse }) {
     </div>
   );
 }
-

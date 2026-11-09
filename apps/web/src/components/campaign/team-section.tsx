@@ -1,10 +1,10 @@
 'use client';
-import type {CampaignTeamResponse} from '@shared/index';
-import {Shield} from 'lucide-react';
-import {Badge} from '@/components/ui/badge';
-import {Card,CardContent,CardDescription,CardHeader,CardTitle} from '@/components/ui/card';
-import {formatAmount} from '@/lib/formatters/number';
-import {PageHeading,TeamStat} from './section-ui';
+import type { CampaignTeamResponse } from '@shared/index';
+import { Shield } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatAmount } from '@/lib/formatters/number';
+import { PageHeading, TeamStat } from './section-ui';
 import styles from './campaign-sections.module.css';
 export function TeamSection({ data }: { data: CampaignTeamResponse }) {
   const wageUsage =
@@ -131,4 +131,3 @@ export function TeamSection({ data }: { data: CampaignTeamResponse }) {
     </div>
   );
 }
-
