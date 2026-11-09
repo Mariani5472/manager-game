@@ -117,6 +117,7 @@ export class SqliteCampaignRepository implements CampaignRepository {
    const managedClubId=getManagedClub(db).id;
    const fixture=this.fixture(db,fixtureId);
    if(fixture.home.clubId!==managedClubId&&fixture.away.clubId!==managedClubId) throw new Error("Managed club is not part of this fixture.");
+   if(fixture.status==="COMPLETED") throw new Error("Cannot change tactics after full time.");
    if(input.minute<=fixture.currentMinute) throw new Error("Decision must be scheduled after the current minute.");
    const {minute,type,...payload}=input;
    const changeId=scheduleMatchTacticalChange(db,fixtureId,managedClubId,minute,type,payload);
