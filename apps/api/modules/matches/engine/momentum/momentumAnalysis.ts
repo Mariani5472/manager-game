@@ -16,6 +16,9 @@ export interface MomentumCalibrationReport {
   averageDominanceChangesPerMatch: number;
   averageLongestDominanceRunMinutes: number;
   shotMinuteCorrelation: number;
+  momentumAutocorrelation: number;
+  averageAbsoluteMomentumDelta: number;
+  eventImpactCorrelation: number;
   deterministic: boolean;
 }
 
@@ -59,6 +62,9 @@ export function runMomentumCalibration(
   const differences: number[] = [];
   const structuralDifferences: number[] = [];
   const shotSignals: number[] = [];
+  const momentumDeltas: number[] = [];
+  const momentumSignals: number[] = [];
+  const eventImpactSignals: number[] = [];
   const absoluteDifferences: number[] = [];
   let dominanceChanges = 0;
   let longestRunTotal = 0;
@@ -66,9 +72,9 @@ export function runMomentumCalibration(
 
   for (let simulation = 0; simulation < simulations; simulation += 1) {
     const simulationSeed = seed + simulation * 7919;
-    const timeline = simulateMatchTimeline(home, away, simulationSeed);
+    const timeline = simulateMatchTimeline(home, away, simulationSeed, [], { collectMomentumTrace: true });
     const repeated = simulation === 0
-      ? simulateMatchTimeline(home, away, simulationSeed)
+      ? simulateMatchTimeline(home, away, simulationSeed, [], { collectMomentumTrace: true })
       : null;
     if (repeated && JSON.stringify(timeline) !== JSON.stringify(repeated)) {
       deterministic = false;
@@ -99,11 +105,21 @@ export function runMomentumCalibration(
       differences.push(difference);
       structuralDifferences.push(minute.homeBasePressure - minute.awayBasePressure);
       absoluteDifferences.push(Math.abs(difference));
-      shotSignals.push(
-        minute.events.some(event =>
-          event.eventType === "GOAL" || event.eventType === "SAVE" ||
-          event.eventType === "MISS" || event.eventType === "CHANCE"
-        ) ? 1 : 0,
+      const previousMinute = timeline.minutes[minute.minute - 2];
+      const delta = previousMinute
+        ? (minute.homePressure - minute.awayPressure) -
+          (previousMinute.homePressure - previousMinute.awayPressure)
+        : 0;
+      momentumDeltas.push(Math.abs(delta));
+      momentumSignals.push(difference);
+      const hasShot = minute.events.some(event =>
+        event.eventType === "GOAL" || event.eventType === "SAVE" ||
+        event.eventType === "MISS" || event.eventType === "CHANCE"
+      );
+      shotSignals.push(hasShot ? 1 : 0);
+      eventImpactSignals.push(
+        (minute.momentumTrace?.home.eventThreatImpact ?? 0) -
+        (minute.momentumTrace?.away.eventThreatImpact ?? 0),
       );
     }
     longestRunTotal += longestRun;
@@ -126,6 +142,12 @@ export function runMomentumCalibration(
     averageDominanceChangesPerMatch: dominanceChanges / simulations,
     averageLongestDominanceRunMinutes: longestRunTotal / simulations,
     shotMinuteCorrelation: correlation(absoluteDifferences, shotSignals),
+    momentumAutocorrelation: correlation(
+      momentumSignals.slice(0, -1),
+      momentumSignals.slice(1),
+    ),
+    averageAbsoluteMomentumDelta: mean(momentumDeltas),
+    eventImpactCorrelation: correlation(momentumDeltas, eventImpactSignals.map(Math.abs)),
     deterministic,
   };
 }
