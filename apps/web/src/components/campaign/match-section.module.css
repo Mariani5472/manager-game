@@ -706,12 +706,17 @@
   height: auto;
   overflow: visible;
 }
+.momentumArea {
+  fill: url(#momentum-area-gradient);
+  stroke: none;
+}
 .momentumLine {
   fill: none;
   stroke: url(#momentum-line-gradient);
-  stroke-width: 3.5;
+  stroke-width: 4;
   stroke-linecap: round;
   stroke-linejoin: round;
+  filter: drop-shadow(0 1px 3px rgba(72, 189, 131, .28));
 }
 .eventMarkerLine {
   stroke: var(--color-text-muted);
