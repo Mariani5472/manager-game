@@ -1,13 +1,13 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, Pause, Play, Radio, RotateCcw, SkipForward, Timer, Zap } from 'lucide-react';
+import { Pause, Play, Radio, RotateCcw, SkipForward, Timer } from 'lucide-react';
 import type { MatchCenterResponse, MatchTacticalChangeRequest } from '@shared/index';
 import { gameApi } from '@/lib/api';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LineupList } from './lineup-list';
+import { MatchHeader, MatchMomentum, MatchTimeline } from './match-presentation';
 import styles from './match-section.module.css';
 function MomentumChart({ data }: { data: MatchCenterResponse['momentum'] }) {
   const home = data
@@ -124,10 +124,6 @@ export function MatchCenter({
       await queryClient.invalidateQueries({ queryKey });
     },
   });
-  const latestEvent = useMemo(
-    () => center.data?.events.filter((event) => event.minute > 0).at(-1),
-    [center.data?.events],
-  );
   useEffect(() => {
     const pauseWhenHidden = () => {
       if (document.hidden) setPlaying(false);
@@ -198,33 +194,14 @@ export function MatchCenter({
           <RotateCcw size={15} /> Calendar
         </Button>
       </div>
-      <Card className={styles.scoreboard}>
-        <div className={styles.teamScore}>
-          <span className={styles.crest}>{home.name.slice(0, 1)}</span>
-          <strong>{home.name}</strong>
-          <small>HOME</small>
-        </div>
-        <div className={styles.scoreBlock}>
-          <span className={styles.matchMinute}>
-            {isFinished
-              ? 'FULL TIME'
-              : data.fixture.status === 'IN_PROGRESS'
-                ? `${currentMinute}'`
-                : 'KICK-OFF'}
-          </span>
-          <strong>
-            {data.fixture.score.home} : {data.fixture.score.away}
-          </strong>
-          <Badge variant={isFinished ? 'success' : 'info'}>
-            {isFinished ? 'Completed' : playing ? 'Live' : 'Paused'}
-          </Badge>
-        </div>
-        <div className={styles.teamScore}>
-          <span className={styles.crest}>{away.name.slice(0, 1)}</span>
-          <strong>{away.name}</strong>
-          <small>AWAY</small>
-        </div>
-      </Card>
+      <MatchHeader
+        fixture={data.fixture}
+        teams={data.teams}
+        events={data.events}
+        isFinished={isFinished}
+        isPlaying={playing}
+        currentMinute={currentMinute}
+      />
       <Card>
         <CardHeader className={styles.controlHeader}>
           <CardTitle>
@@ -287,6 +264,125 @@ export function MatchCenter({
           {advance.isError && <p className={styles.error}>{advance.error.message}</p>}
         </CardContent>
       </Card>
+      <div className={styles.centerGrid}>
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <Activity size={16} /> Match momentum
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <MomentumChart data={data.momentum} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Match statistics</CardTitle>
+          </CardHeader>
+          <CardContent className={styles.stats}>
+            <div className={styles.statTeams}>
+              <span>{home.name}</span>
+              <span>STAT</span>
+              <span>{away.name}</span>
+            </div>
+            {stats.map(([label, h, a]) => (
+              <div className={styles.statRow} key={label}>
+                <strong>{h}</strong>
+                <span>{label}</span>
+                <strong>{a}</strong>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+      <div className={styles.centerGrid}>
+        <LineupList
+          title={`Home XI · ${home.name}`}
+          players={home.lineup}
+          managed={false}
+          selectedIds={[]}
+        />
+        <LineupList
+          title={`Away XI · ${away.name}`}
+          players={away.lineup}
+          managed={false}
+          selectedIds={[]}
+        />
+      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <Zap size={16} /> Live commentary
+          </CardTitle>
+        </CardHeader>
+        <CardContent className={styles.commentary}>
+          {latestEvent ? (
+            <div className={styles.latestCommentary} aria-live="polite" aria-atomic="true">
+              <Badge variant="info">{latestEvent.minute}&apos;</Badge>
+              <p>{latestEvent.description ?? latestEvent.type.replaceAll('_', ' ')}</p>
+            </div>
+          ) : (
+            <p className={styles.chartEmpty}>
+              The referee is ready. Start the match to receive live commentary.
+            </p>
+          )}
+          <div
+            className={styles.eventList}
+            role="log"
+            aria-label="Match event commentary"
+            aria-live="polite"
+          >
+            {[...data.events]
+              .reverse()
+              .filter((event) => event.minute > 0)
+              .slice(0, 16)
+              .map((event) => (
+                <div key={event.id}>
+                  <time>{event.minute}&apos;</time>
+                  <span>
+                    <b>{event.type.replaceAll('_', ' ')}</b>
+                    {event.description ? ` · ${event.description}` : ''}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </CardContent>
+      </Card>
+      <MatchMomentum data={data.momentum} events={data.events} />
+      <MatchTimeline events={data.events} teams={data.teams} />
+      <Card>
+        <CardHeader>
+          <CardTitle>Match statistics</CardTitle>
+        </CardHeader>
+        <CardContent className={styles.stats}>
+          <div className={styles.statTeams}>
+            <span>{home.name}</span>
+            <span>STAT</span>
+            <span>{away.name}</span>
+          </div>
+          {stats.map(([label, h, a]) => (
+            <div className={styles.statRow} key={label}>
+              <strong>{h}</strong>
+              <span>{label}</span>
+              <strong>{a}</strong>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+      <div className={styles.centerGrid}>
+        <LineupList
+          title={`Home XI · ${home.name}`}
+          players={home.lineup}
+          managed={false}
+          selectedIds={[]}
+        />
+        <LineupList
+          title={`Away XI · ${away.name}`}
+          players={away.lineup}
+          managed={false}
+          selectedIds={[]}
+        />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Manager decisions</CardTitle>
@@ -426,90 +522,6 @@ export function MatchCenter({
           </div>
           {scheduleDecision.isError && <p className={styles.error}>{scheduleDecision.error.message}</p>}
           {scheduleDecision.isSuccess && <p className={styles.speedHint}>Decision #{scheduleDecision.data.changeId} scheduled for minute {nextDecisionMinute}.</p>}
-        </CardContent>
-      </Card>
-      <div className={styles.centerGrid}>
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              <Activity size={16} /> Match momentum
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <MomentumChart data={data.momentum} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Match statistics</CardTitle>
-          </CardHeader>
-          <CardContent className={styles.stats}>
-            <div className={styles.statTeams}>
-              <span>{home.name}</span>
-              <span>STAT</span>
-              <span>{away.name}</span>
-            </div>
-            {stats.map(([label, h, a]) => (
-              <div className={styles.statRow} key={label}>
-                <strong>{h}</strong>
-                <span>{label}</span>
-                <strong>{a}</strong>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-      <div className={styles.centerGrid}>
-        <LineupList
-          title={`Home XI · ${home.name}`}
-          players={home.lineup}
-          managed={false}
-          selectedIds={[]}
-        />
-        <LineupList
-          title={`Away XI · ${away.name}`}
-          players={away.lineup}
-          managed={false}
-          selectedIds={[]}
-        />
-      </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            <Zap size={16} /> Live commentary
-          </CardTitle>
-        </CardHeader>
-        <CardContent className={styles.commentary}>
-          {latestEvent ? (
-            <div className={styles.latestCommentary} aria-live="polite" aria-atomic="true">
-              <Badge variant="info">{latestEvent.minute}&apos;</Badge>
-              <p>{latestEvent.description ?? latestEvent.type.replaceAll('_', ' ')}</p>
-            </div>
-          ) : (
-            <p className={styles.chartEmpty}>
-              The referee is ready. Start the match to receive live commentary.
-            </p>
-          )}
-          <div
-            className={styles.eventList}
-            role="log"
-            aria-label="Match event commentary"
-            aria-live="polite"
-          >
-            {[...data.events]
-              .reverse()
-              .filter((event) => event.minute > 0)
-              .slice(0, 16)
-              .map((event) => (
-                <div key={event.id}>
-                  <time>{event.minute}&apos;</time>
-                  <span>
-                    <b>{event.type.replaceAll('_', ' ')}</b>
-                    {event.description ? ` · ${event.description}` : ''}
-                  </span>
-                </div>
-              ))}
-          </div>
         </CardContent>
       </Card>
     </div>
