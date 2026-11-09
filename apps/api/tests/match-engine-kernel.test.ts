@@ -356,4 +356,6 @@ test("momentum calibration reports temporal behavior and deterministic output", 
   assert.ok(Number.isFinite(report.averageAbsoluteMomentumDifference));
   assert.ok(Number.isFinite(report.averageAbsoluteStructuralPressureDifference));
   assert.ok(report.averageLongestDominanceRunMinutes > 0);
+  assert.ok(report.durationMs >= 0);
+  assert.ok(report.simulationsPerSecond > 0);
 });
