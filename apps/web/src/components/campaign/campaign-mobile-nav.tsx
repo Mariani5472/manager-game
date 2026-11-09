@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { campaignNavigation } from './campaign-navigation';
+import type { CampaignSectionId } from './campaign-navigation';
 import styles from './campaign-layout.module.css';
 export function CampaignMobileNav({
   activeSection,
