@@ -1,6 +1,6 @@
-import {masterPath,saveDir} from "../../client/config.js";
-import type {SqliteDatabase} from "../../db/database.js";
-import {SaveManager} from "../../save/saveManager.js";
+import {masterPath,saveDir} from "../../../client/config.js";
+import type {SqliteDatabase} from "../../../db/database.js";
+import {SaveManager} from "../../../save/saveManager.js";
 import {getManagedClub} from "./club.repository.js";
 import {listFixtures} from "./fixture.repository.js";
 import {listSquad,getTactics} from "./squad.repository.js";
@@ -12,7 +12,7 @@ import {progressKnockoutStage} from "../../competitions/service/knockout.service
 import {finishSeasonIfComplete} from "../../competitions/service/season.service.js";
 import type {CampaignClubDto,CampaignOverviewResponse,CampaignCalendarResponse,CampaignSquadResponse,CampaignTeamResponse,MatchCenterResponse,MatchPreparationResponse,MatchFixtureDto,MatchLineupPlayerDto,SaveMatchLineupRequest} from "../../../shared/src/index.js";
 import type {CampaignRepository} from "../campaign.repository.js";
-import {SaveNotFoundError} from "../saves/save-not-found.error.js";
+import {SaveNotFoundError} from "../../saves/save-not-found.error.js";
 export class SqliteCampaignRepository implements CampaignRepository {
  private readonly manager=new SaveManager(masterPath,saveDir);
  private withSave<T>(id:string,query:(db:SqliteDatabase)=>T):T {
