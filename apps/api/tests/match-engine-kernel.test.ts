@@ -99,8 +99,8 @@ test("invalidated substitutions are cancelled and formation changes preserve the
   const home = createTeam(1, 70);
   const away = createTeam(2, 55);
   const outgoing = home.lineup[1]!;
-  const firstIncoming = home.lineup[11]!;
-  const secondIncoming = home.lineup[12]!;
+  const firstIncoming = home.lineup[12]!;
+  const secondIncoming = home.lineup[13]!;
   const originalStarters = home.lineup.slice(0, 11);
   const formationSlots = originalStarters.map((player, index) => ({
     playerId: player.id,
