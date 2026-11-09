@@ -83,8 +83,12 @@ export function simulateMatchTimeline(
       // A planned substitution can be invalidated by an earlier injury,
       // dismissal or automatic substitution. That is a football outcome, not
       // a corrupt match: record the cancelled decision and keep simulating.
-      if(!outgoing.isStarting||incoming.isStarting){
-       minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"TACTIC_CHANGE",xg:0,description:`Substituição cancelada: ${outgoing.name} ou ${incoming.name} já não está na condição prevista`});
+      const substitutionsUsed=substitutionsByClub.get(team.clubId)??0;
+      if(!outgoing.isStarting||incoming.isStarting||substitutionsUsed>=3){
+       const reason=substitutionsUsed>=3
+        ? "limite de três substituições atingido"
+        : "jogador já não está na condição prevista";
+       minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"TACTIC_CHANGE",xg:0,description:`Substituição cancelada: ${reason}`});
       }else{
        if(outgoing.goalkeeper!==incoming.goalkeeper)throw new Error("A goalkeeper can only be replaced by another goalkeeper, and outfield players must replace outfield players.");
        incoming.role=outgoing.role;incoming.slot=outgoing.slot;incoming.isStarting=true;outgoing.isStarting=false;refreshTeamStrength(team);
