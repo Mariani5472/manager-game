@@ -1,6 +1,6 @@
 import type {
   MatchEventProbabilities,
-} from "./types.js";
+} from "../types/match-engine.types.js";
 
 
 export const HOME_SHOT_CHANCE_BONUS = 0.004;
