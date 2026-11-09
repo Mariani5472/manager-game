@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { open } from "../db/database.js";
 import { applyMigrations, CURRENT_SCHEMA_VERSION } from "../db/migrations.js";
 
-test("schema v1 migrates atomically to v2 and backfills completed fixtures", () => {
+test("schema v1 migrates atomically to the current version and backfills completed fixtures", () => {
   const root = mkdtempSync(join(tmpdir(), "manager-game-migrations-"));
   const db = open(join(root, "legacy.sqlite"));
   try {
@@ -17,13 +17,21 @@ test("schema v1 migrates atomically to v2 and backfills completed fixtures", () 
     assert.equal(applyMigrations(db), CURRENT_SCHEMA_VERSION);
 
     const version = db.prepare("SELECT MAX(version) AS version FROM schema_version").get() as { version: number };
-    assert.equal(version.version, 2);
+    assert.equal(version.version, CURRENT_SCHEMA_VERSION);
 
     const fixture = db.prepare("SELECT completed_at AS completedAt,scheduled_at AS scheduledAt FROM fixture WHERE id=1")
       .get() as { completedAt: string; scheduledAt: string };
     assert.equal(fixture.completedAt, fixture.scheduledAt);
 
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='match_preparation'").get());
+    const momentumColumns = db.prepare("PRAGMA table_info(match_momentum)").all() as Array<{ name: string }>;
+    for (const column of [
+      "home_territorial_control", "away_territorial_control",
+      "home_offensive_threat", "away_offensive_threat",
+      "home_defensive_stability", "away_defensive_stability",
+      "home_intensity", "away_intensity",
+      "home_physical_condition", "away_physical_condition",
+    ]) assert.ok(momentumColumns.some(item => item.name === column), column);
     for (const index of [
       "idx_fixture_round_status_schedule",
       "idx_match_event_fixture_timeline",
