@@ -1,4 +1,4 @@
-import { Shield } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import styles from './campaign-sections.module.css';
 export function PageHeading({
@@ -29,7 +29,7 @@ export function StatCard({
   label: string;
   value: string | number;
   detail: string;
-  icon: typeof Shield;
+  icon: LucideIcon;
 }) {
   return (
     <Card className={styles.statCard}>
