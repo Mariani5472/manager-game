@@ -337,6 +337,8 @@ export function simulateMatchTimeline(
      minute,
      homePressure:gameState.home.momentum,
      awayPressure:gameState.away.momentum,
+     homeBasePressure,
+     awayBasePressure,
      homeScore:hs,
      awayScore:as,
      events:minuteEvents,
