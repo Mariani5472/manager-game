@@ -255,14 +255,32 @@ export function MatchMomentum({
           aria-label="Match momentum differential. Above the centre line favours the home team; below favours the away team."
         >
           <defs>
-            <linearGradient id={lineGradientId} x1="0" y1="0" x2="0" y2="1">
+            <linearGradient
+              id={lineGradientId}
+              gradientUnits="userSpaceOnUse"
+              x1="0"
+              y1="8"
+              x2="0"
+              y2="216"
+            >
               <stop offset="0%" stopColor="#48bd83" />
+              <stop offset="49%" stopColor="#48bd83" />
               <stop offset="50%" stopColor="#a1aaa5" />
+              <stop offset="51%" stopColor="#e0a35b" />
               <stop offset="100%" stopColor="#e0a35b" />
             </linearGradient>
-            <linearGradient id={areaGradientId} x1="0" y1="0" x2="0" y2="1">
+            <linearGradient
+              id={areaGradientId}
+              gradientUnits="userSpaceOnUse"
+              x1="0"
+              y1="8"
+              x2="0"
+              y2="216"
+            >
               <stop offset="0%" stopColor="#48bd83" stopOpacity=".42" />
+              <stop offset="49%" stopColor="#48bd83" stopOpacity=".42" />
               <stop offset="50%" stopColor="#8c9b91" stopOpacity=".04" />
+              <stop offset="51%" stopColor="#e0a35b" stopOpacity=".28" />
               <stop offset="100%" stopColor="#e0a35b" stopOpacity=".28" />
             </linearGradient>
           </defs>
@@ -383,7 +401,7 @@ export function MatchTimeline({
   const home = teams[0];
   const away = teams[1];
   const orderedEvents = [...events].sort((a, b) =>
-    a.minute - b.minute || a.addedTime - b.addedTime || a.id - b.id,
+    b.minute - a.minute || b.addedTime - a.addedTime || b.id - a.id,
   );
 
   return (
