@@ -221,13 +221,16 @@ export function simulateMatchTimeline(
        const injuryDays=durationRoll<.70?7:durationRoll<.95?14:28;
        const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:injured.id,secondaryPlayerId:null,eventType:"INJURY",xg:0,injuryDays,description:`Lesão de ${injured.name}; afastamento estimado de ${injuryDays} dias`};
        minuteEvents.push(event);events.push(event);
-       const substitute=incident.team.lineup.find(player=>!player.isStarting&&player.role!=="GK");
+       const substitutionsUsed=substitutionsByClub.get(incident.team.clubId)??0;
+       const substitute=substitutionsUsed<3
+        ? incident.team.lineup.find(player=>!player.isStarting&&player.role!=="GK")
+        : undefined;
        injured.isStarting=false;
        if(substitute) {
         substitute.role=injured.role;substitute.slot=injured.slot;substitute.isStarting=true;
         const subEvent:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:injured.id,secondaryPlayerId:substitute.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição por lesão: ${injured.name} sai, ${substitute.name} entra`};
         minuteEvents.push(subEvent);events.push(subEvent);
-        substitutionsByClub.set(incident.team.clubId,(substitutionsByClub.get(incident.team.clubId)??0)+1);
+        substitutionsByClub.set(incident.team.clubId,substitutionsUsed+1);
        }
        refreshTeamStrength(incident.team);
       }
