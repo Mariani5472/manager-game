@@ -3,7 +3,7 @@ import { advanceRoundById } from "./calendar.service.js";
 import { progressKnockoutStage } from "./knockout.service.js";
 import { finishSeasonIfComplete } from "./season.service.js";
 import { rebuildStandings } from "../repo/standings.repository.js";
-import { MatchSummary, simulateMatch } from "../../game/matchEngine.js";
+import { MatchSummary, simulateMatch } from "../../matches/service/match-simulation.service.js";
 
 
 export function advanceNextFixture(
