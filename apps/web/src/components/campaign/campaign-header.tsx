@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Bell, Settings, ShieldCheck, Trophy } from 'lucide-react';
+import { Bell, Play, Settings, ShieldCheck, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import styles from './campaign-layout.module.css';
@@ -9,12 +9,16 @@ export function CampaignHeader({
   saveName,
   season,
   competition,
+  nextFixture,
+  onNextMatch,
   onExit,
 }: {
   clubName?: string;
   saveName?: string;
   season?: number;
   competition?: string;
+  nextFixture?: { id: number; status: string } | null;
+  onNextMatch?: () => void;
   onExit: () => void;
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -37,6 +41,11 @@ export function CampaignHeader({
           <span>{competition ?? 'No active competition'}</span>
         </div>
         <div className={styles.headerActions}>
+          {nextFixture && onNextMatch && ['SCHEDULED', 'IN_PROGRESS'].includes(nextFixture.status) && (
+            <Button size="sm" onClick={onNextMatch}>
+              <Play size={14} /> {nextFixture.status === 'IN_PROGRESS' ? 'Continuar partida' : 'Próxima partida'}
+            </Button>
+          )}
           <span className={styles.saveStatus}>
             <ShieldCheck size={14} />
             Career loaded
