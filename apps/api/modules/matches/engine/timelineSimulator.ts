@@ -80,23 +80,29 @@ export function simulateMatchTimeline(
      if(change.change_type==="SUBSTITUTION"){
       const outId=Number(payload.playerOutId),inId=Number(payload.playerInId);
       const outgoing=team.lineup.find(p=>p.id===outId),incoming=team.lineup.find(p=>p.id===inId);
-      if(!outgoing||!incoming)throw new Error(`Substitution ${change.id} references a player outside the match lineup.`);
-      // A planned substitution can be invalidated by an earlier injury,
-      // dismissal or automatic substitution. That is a football outcome, not
-      // a corrupt match: record the cancelled decision and keep simulating.
-      const substitutionsUsed=substitutionsByClub.get(team.clubId)??0;
-      if(!outgoing.isStarting||incoming.isStarting||playersWhoHavePlayed.has(incoming.id)||substitutionsUsed>=3){
-       const reason=substitutionsUsed>=3
-        ? "limite de três substituições atingido"
-        : playersWhoHavePlayed.has(incoming.id)
-         ? "jogador já participou da partida e não pode reentrar"
-         : "jogador já não está na condição prevista";
-       minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"TACTIC_CHANGE",xg:0,description:`Substituição cancelada: ${reason}`});
+      // A player can become unavailable after a decision is scheduled
+      // (for example, a late injury or roster change before kickoff).
+      // Cancel the decision instead of aborting the entire match.
+      if(!outgoing||!incoming){
+       minuteEvents.push({minute,clubId:team.clubId,playerId:outId,secondaryPlayerId:inId,eventType:"TACTIC_CHANGE",xg:0,description:"Substituição cancelada: jogador indisponível para esta partida"});
       }else{
-       if(outgoing.goalkeeper!==incoming.goalkeeper)throw new Error("A goalkeeper can only be replaced by another goalkeeper, and outfield players must replace outfield players.");
-       incoming.role=outgoing.role;incoming.slot=outgoing.slot;incoming.isStarting=true;outgoing.isStarting=false;playersWhoHavePlayed.add(incoming.id);refreshTeamStrength(team);
-       minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição: ${outgoing.name} sai, ${incoming.name} entra`});
-       substitutionsByClub.set(team.clubId,(substitutionsByClub.get(team.clubId)??0)+1);
+       // A planned substitution can be invalidated by an earlier injury,
+       // dismissal or automatic substitution. That is a football outcome, not
+       // a corrupt match: record the cancelled decision and keep simulating.
+       const substitutionsUsed=substitutionsByClub.get(team.clubId)??0;
+       if(!outgoing.isStarting||incoming.isStarting||playersWhoHavePlayed.has(incoming.id)||substitutionsUsed>=3){
+        const reason=substitutionsUsed>=3
+         ? "limite de três substituições atingido"
+         : playersWhoHavePlayed.has(incoming.id)
+          ? "jogador já participou da partida e não pode reentrar"
+          : "jogador já não está na condição prevista";
+        minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"TACTIC_CHANGE",xg:0,description:`Substituição cancelada: ${reason}`});
+       }else{
+        if(outgoing.goalkeeper!==incoming.goalkeeper)throw new Error("A goalkeeper can only be replaced by another goalkeeper, and outfield players must replace outfield players.");
+        incoming.role=outgoing.role;incoming.slot=outgoing.slot;incoming.isStarting=true;outgoing.isStarting=false;playersWhoHavePlayed.add(incoming.id);refreshTeamStrength(team);
+        minuteEvents.push({minute,clubId:team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição: ${outgoing.name} sai, ${incoming.name} entra`});
+        substitutionsByClub.set(team.clubId,(substitutionsByClub.get(team.clubId)??0)+1);
+       }
       }
      }else if(change.change_type==="MENTALITY"){
       const mentality=String(payload.mentality??"");
