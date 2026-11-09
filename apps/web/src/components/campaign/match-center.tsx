@@ -271,7 +271,7 @@ export function MatchCenter({
         </CardContent>
       </Card>
 
-      <MatchMomentum data={data.momentum} events={data.events} />
+      <MatchMomentum data={data.momentum} events={data.events} teams={data.teams} />
       <MatchTimeline events={data.events} teams={data.teams} />
       <Card>
         <CardHeader>
