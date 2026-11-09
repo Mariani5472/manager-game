@@ -1,4 +1,4 @@
-import type { SaveMatchLineupRequest } from "../../../shared/src/index.js";
+import type { MatchTacticalChangeRequest, SaveMatchLineupRequest } from "../../../shared/src/index.js";
 import { ApplicationError } from "../../shared/application-error.js";
 import { SaveNotFoundError } from "../saves/save-not-found.error.js";
 import type { CampaignRepository } from "./repo/campaign.repository.js";
@@ -25,4 +25,5 @@ export class CampaignService {
   saveMatchLineup(id: string, fixtureId: number, input: SaveMatchLineupRequest) { return this.execute(() => this.repository.saveMatchLineup(id, fixtureId, input)); }
   matchCenter(id: string, fixtureId: number) { return this.execute(() => this.repository.matchCenter(id, fixtureId)); }
   advanceMatch(id: string, fixtureId: number, throughMinute: number) { return this.execute(() => this.repository.advanceMatch(id, fixtureId, throughMinute)); }
+  scheduleTacticalChange(id: string, fixtureId: number, input: MatchTacticalChangeRequest) { return this.execute(() => this.repository.scheduleTacticalChange(id, fixtureId, input)); }
 }
