@@ -1,11 +1,12 @@
 import { SqliteDatabase } from "../../../db/database.js";
+import type { SquadStatus } from "../../../../shared/src/index.js";
 
 
 export interface PlayerSummary {
   id: number;
   name: string;
   shirtNumber: number | null;
-  squadStatus: string;
+  squadStatus: SquadStatus;
   positions: string[];
   energy: number;
   morale: number;
@@ -22,6 +23,18 @@ interface PlayerSummaryRow {
   energy: number;
   morale: number;
   sharpness: number;
+}
+
+
+function parseSquadStatus(value: string): SquadStatus {
+  switch (value) {
+    case "FIRST_TEAM":
+    case "RESERVE":
+    case "YOUTH":
+      return value;
+    default:
+      throw new Error(`Invalid squad status: ${value}`);
+  }
 }
 
 
@@ -73,8 +86,9 @@ export function listSquad(
 
 
   return rows.map(
-    ({ positionsJson, ...row }) => ({
+    ({ positionsJson, squadStatus, ...row }) => ({
       ...row,
+      squadStatus: parseSquadStatus(squadStatus),
       positions: JSON.parse(positionsJson) as string[],
     })
   );
