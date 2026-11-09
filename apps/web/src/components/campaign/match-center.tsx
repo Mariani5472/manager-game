@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, Pause, Play, Radio, RotateCcw, SkipForward, Timer, Zap } from 'lucide-react';
 import type { MatchCenterResponse } from '@shared/index';
@@ -78,11 +78,17 @@ export function MatchCenter({
   });
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
+  // A ref closes the interval race: state updates from React are asynchronous,
+  // while a timer callback can otherwise enqueue another advance immediately.
+  const advanceInFlight = useRef(false);
   const advance = useMutation({
     mutationFn: (minute: number) => gameApi.advanceMatch(saveId, fixtureId, minute),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKey, data);
       if (data.fixture.status === 'COMPLETED') setPlaying(false);
+    },
+    onSettled: () => {
+      advanceInFlight.current = false;
     },
     onError: () => setPlaying(false),
   });
@@ -94,7 +100,13 @@ export function MatchCenter({
     const interval = window.setInterval(() => {
       // Advance a small batch per second. This keeps the playback rate intuitive
       // while avoiding four HTTP round-trips per second at 4x speed.
+      if (advanceInFlight.current) return;
       const nextMinute = Math.min(90, currentMinute + speed);
+      if (nextMinute <= currentMinute) {
+        setPlaying(false);
+        return;
+      }
+      advanceInFlight.current = true;
       advanceMatch(nextMinute);
     }, 1000);
     return () => window.clearInterval(interval);
@@ -212,8 +224,12 @@ export function MatchCenter({
               </Button>
               <Button
                 variant="secondary"
-                disabled={isFinished || playing || advance.isPending}
-                onClick={() => advance.mutate(Math.min(90, currentMinute + 1))}
+                disabled={isFinished || playing || advance.isPending || currentMinute >= 90}
+                onClick={() => {
+                  if (advanceInFlight.current) return;
+                  advanceInFlight.current = true;
+                  advance.mutate(Math.min(90, currentMinute + 1));
+                }}
               >
                 <SkipForward size={15} /> Next minute
               </Button>
