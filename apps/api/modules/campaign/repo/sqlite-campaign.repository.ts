@@ -115,12 +115,12 @@ export class SqliteCampaignRepository implements CampaignRepository {
     ).all(fixtureId) as Array<{clubId:number;playerId:number;secondaryPlayerId:number}>;
     const lineupUpdate=db.transaction(()=>{
      const read=db.prepare("SELECT slot_number AS slot,position_code AS role FROM match_lineup WHERE fixture_id=? AND club_id=? AND player_id=?");
-     const benchOutgoing=db.prepare("UPDATE match_lineup SET is_starting=0,slot_number=12+(SELECT COUNT(*) FROM match_lineup other WHERE other.fixture_id=? AND other.club_id=? AND other.is_starting=0 AND other.player_id<>?),position_code='BENCH' WHERE fixture_id=? AND club_id=? AND player_id=?");
+     const benchOutgoing=db.prepare("UPDATE match_lineup SET is_starting=0,slot_number=COALESCE((SELECT MAX(other.slot_number)+1 FROM match_lineup other WHERE other.fixture_id=? AND other.club_id=? AND other.is_starting=0),12),position_code='BENCH' WHERE fixture_id=? AND club_id=? AND player_id=?");
      const benchIncoming=db.prepare("UPDATE match_lineup SET is_starting=1,slot_number=?,position_code=? WHERE fixture_id=? AND club_id=? AND player_id=?");
      for(const event of changes){
       const outgoing=read.get(fixtureId,event.clubId,event.playerId) as {slot:number;role:string}|undefined;
       if(!outgoing) continue;
-      benchOutgoing.run(fixtureId,event.clubId,event.playerId,fixtureId,event.clubId,event.playerId);
+      benchOutgoing.run(fixtureId,event.clubId,fixtureId,event.clubId,event.playerId);
       benchIncoming.run(outgoing.slot,outgoing.role,fixtureId,event.clubId,event.secondaryPlayerId);
      }
     });
