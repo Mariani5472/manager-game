@@ -251,13 +251,14 @@ export function simulateMatchTimeline(
        minuteEvents.push(event);events.push(event);
        const substitutionsUsed=substitutionsByClub.get(incident.team.clubId)??0;
        const substitute=substitutionsUsed<3
-        ? incident.team.lineup.find(player=>!player.isStarting&&player.role!=="GK")
+        ? incident.team.lineup.find(player=>!player.isStarting&&player.role!=="GK"&&!playersWhoHavePlayed.has(player.id))
         : undefined;
        injured.isStarting=false;
        if(substitute) {
         substitute.role=injured.role;substitute.slot=injured.slot;substitute.isStarting=true;
         const subEvent:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:injured.id,secondaryPlayerId:substitute.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição por lesão: ${injured.name} sai, ${substitute.name} entra`};
         minuteEvents.push(subEvent);events.push(subEvent);
+        playersWhoHavePlayed.add(substitute.id);
         substitutionsByClub.set(incident.team.clubId,substitutionsUsed+1);
        }
        refreshTeamStrength(incident.team);
@@ -266,11 +267,11 @@ export function simulateMatchTimeline(
      const substitutionsUsed=substitutionsByClub.get(incident.team.clubId)??0;
      if(minute>=60&&substitutionsUsed<3&&incident.random()<MATCH_EVENT_PROBABILITIES.substitutionAttemptPerTeamMinuteAfter60) {
       const activeNow=incident.team.lineup.filter(player=>player.isStarting&&player.role!=="GK");
-      const bench=incident.team.lineup.filter(player=>!player.isStarting&&player.role!=="GK");
+      const bench=incident.team.lineup.filter(player=>!player.isStarting&&player.role!=="GK"&&!playersWhoHavePlayed.has(player.id));
       if(activeNow.length&&bench.length) {
        const outgoing=activeNow[Math.floor(incident.random()*activeNow.length)]!;
        const incoming=bench[Math.floor(incident.random()*bench.length)]!;
-       outgoing.isStarting=false;incoming.isStarting=true;incoming.role=outgoing.role;incoming.slot=outgoing.slot;
+       outgoing.isStarting=false;incoming.isStarting=true;incoming.role=outgoing.role;incoming.slot=outgoing.slot;playersWhoHavePlayed.add(incoming.id);
        refreshTeamStrength(incident.team);
        const event:KernelShotEvent={minute,clubId:incident.team.clubId,playerId:outgoing.id,secondaryPlayerId:incoming.id,eventType:"SUBSTITUTION",xg:0,description:`Substituição tática: ${outgoing.name} sai, ${incoming.name} entra`};
        minuteEvents.push(event);events.push(event);
