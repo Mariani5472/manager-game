@@ -531,6 +531,16 @@ CREATE TABLE match_momentum (
     away_pressure REAL NOT NULL,
     home_score INTEGER NOT NULL,
     away_score INTEGER NOT NULL,
+    home_territorial_control REAL NOT NULL DEFAULT 50,
+    away_territorial_control REAL NOT NULL DEFAULT 50,
+    home_offensive_threat REAL NOT NULL DEFAULT 25,
+    away_offensive_threat REAL NOT NULL DEFAULT 25,
+    home_defensive_stability REAL NOT NULL DEFAULT 50,
+    away_defensive_stability REAL NOT NULL DEFAULT 50,
+    home_intensity REAL NOT NULL DEFAULT 50,
+    away_intensity REAL NOT NULL DEFAULT 50,
+    home_physical_condition REAL NOT NULL DEFAULT 100,
+    away_physical_condition REAL NOT NULL DEFAULT 100,
     PRIMARY KEY (fixture_id, minute)
 );
 
