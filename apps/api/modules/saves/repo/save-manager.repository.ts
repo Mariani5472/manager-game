@@ -11,7 +11,7 @@ export class SaveManagerRepository implements SaveRepository {
     return this.saveManager.list().map(({ filePath: _filePath, ...save }) => save);
   }
 
-  create(input: Omit<CreateCareerRequest, "countryId">): Promise<SaveSummaryDto> {
+  create(input: CreateCareerRequest): Promise<SaveSummaryDto> {
     return this.saveManager.create({
       managerName: input.managerName,
       name: input.saveName,
