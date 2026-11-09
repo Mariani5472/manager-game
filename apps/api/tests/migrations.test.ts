@@ -10,7 +10,7 @@ test("schema v1 migrates atomically to v2 and backfills completed fixtures", () 
   const root = mkdtempSync(join(tmpdir(), "manager-game-migrations-"));
   const db = open(join(root, "legacy.sqlite"));
   try {
-    db.exec(readFileSync(resolve("apps/api/schema/game_manager_mvp.sql"), "utf8"));
+    db.exec(readFileSync(resolve("apps/api/modules/world/schema/game_manager_mvp.sql"), "utf8"));
     db.prepare("UPDATE fixture SET status='COMPLETED' WHERE id=1").run();
 
     assert.equal(applyMigrations(db), CURRENT_SCHEMA_VERSION);
