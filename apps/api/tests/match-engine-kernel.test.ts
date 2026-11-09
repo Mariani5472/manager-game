@@ -416,3 +416,33 @@ test("territorial game actions create meaningful pressure without requiring a sh
   assert.ok(actions.some(action => action.type === "FINAL_THIRD_ENTRY"));
   assert.ok(withActions.home.momentum > withoutActions.home.momentum);
 });
+
+test("momentum diagnostic traces are deterministic and do not alter match outcomes", () => {
+  const home = createTeam(1, 68);
+  const away = createTeam(2, 57);
+  const seed = 441902;
+
+  const normal = simulateMatchTimeline(home, away, seed);
+  const traced = simulateMatchTimeline(home, away, seed, [], { collectMomentumTrace: true });
+  const repeated = simulateMatchTimeline(home, away, seed, [], { collectMomentumTrace: true });
+
+  assert.deepEqual(normal.result, traced.result);
+  assert.deepEqual(normal.events, traced.events);
+  assert.deepEqual(normal.minutes.map(({ minute, homePressure, awayPressure }) =>
+    ({ minute, homePressure, awayPressure })),
+  traced.minutes.map(({ minute, homePressure, awayPressure }) =>
+    ({ minute, homePressure, awayPressure })));
+  assert.deepEqual(traced, repeated);
+  assert.ok(traced.minutes.every(minute => minute.momentumTrace !== undefined));
+  assert.ok(traced.minutes.every(minute =>
+    minute.momentumTrace!.home.clubId === home.clubId &&
+    minute.momentumTrace!.away.clubId === away.clubId
+  ));
+  assert.ok(traced.minutes.every(minute =>
+    minute.momentumTrace!.events.every(event =>
+      event.clubId === home.clubId || event.clubId === away.clubId
+    )
+  ));
+  assert.ok(normal.minutes.every(minute => minute.momentumTrace === undefined));
+});
+
