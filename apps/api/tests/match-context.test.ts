@@ -70,8 +70,15 @@ test("match context persists weather and pitch, applies substitutions as events,
       .get(fixture.away) as {id:number};
     db.prepare("UPDATE player_condition SET suspension_matches=2 WHERE player_id=?").run(suspended.id);
 
-    const starter = preview.starters.find(p=>p.position!=="GK")!;
-    const substitute = preview.bench.find(p=>p.position!=="GK")!;
+    // Use the persisted match lineup as the source of truth for live decisions.
+    const starter = db.prepare(
+      "SELECT player_id AS playerId FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=1 AND position_code<>'GK' ORDER BY slot_number LIMIT 1",
+    ).get(fixture.id, fixture.home) as {playerId:number};
+    const substitute = db.prepare(
+      "SELECT player_id AS playerId FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=0 ORDER BY slot_number LIMIT 1",
+    ).get(fixture.id, fixture.home) as {playerId:number};
+    assert.ok(starter.playerId > 0);
+    assert.ok(substitute.playerId > 0);
     scheduleMatchTacticalChange(db, fixture.id, fixture.home, 60, "SUBSTITUTION", {
       playerOutId: starter.playerId, playerInId: substitute.playerId
     });
@@ -82,8 +89,16 @@ test("match context persists weather and pitch, applies substitutions as events,
     // the away side. Tactical choices for the opposite side are not permitted.
     const managedAwayClubId = fixture.away;
     const awayLineup = previewLineup(db, managedAwayClubId, fixture.id);
-    const awayStarter = awayLineup.starters.find(player => player.position !== "GK")!;
-    const awayBench = awayLineup.bench.find(player => player.position !== "GK")!;
+    saveLineup(db, fixture.id, managedAwayClubId,
+      awayLineup.starters.map(player => player.playerId),
+      awayLineup.bench.map(player => player.playerId),
+    );
+    const awayStarter = db.prepare(
+      "SELECT player_id AS playerId FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=1 AND position_code<>'GK' ORDER BY slot_number LIMIT 1",
+    ).get(fixture.id, managedAwayClubId) as {playerId:number};
+    const awayBench = db.prepare(
+      "SELECT player_id AS playerId FROM match_lineup WHERE fixture_id=? AND club_id=? AND is_starting=0 ORDER BY slot_number LIMIT 1",
+    ).get(fixture.id, managedAwayClubId) as {playerId:number};
     const awayDecisionId = scheduleMatchTacticalChange(
       db, fixture.id, managedAwayClubId, 85, "SUBSTITUTION",
       { playerOutId: awayStarter.playerId, playerInId: awayBench.playerId },
