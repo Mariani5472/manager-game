@@ -334,6 +334,48 @@ export function MatchMomentum({
         {data.length === 0 && (
           <p className={styles.chartEmpty}>Momentum will build as the match progresses.</p>
         )}
+        {data.some(point => point.debugTrace) && (
+          <details className={styles.momentumDebugger}>
+            <summary>Momentum debugger · per-minute trace</summary>
+            <div className={styles.momentumDebugList}>
+              {data.filter(point => point.debugTrace).map(point => {
+                const trace = point.debugTrace!;
+                return (
+                  <details key={trace.minute} className={styles.momentumDebugMinute}>
+                    <summary>
+                      <strong>{trace.minute}&apos;</strong>
+                      <span>{trace.dominance}</span>
+                      {trace.dominanceChanged && <b>Dominance changed</b>}
+                    </summary>
+                    <div className={styles.momentumDebugTeams}>
+                      {([{ label: 'Home', state: trace.home }, { label: 'Away', state: trace.away }] as const).map(({ label, state }) => (
+                        <section key={label}>
+                          <strong>{label} · Club #{state.clubId}</strong>
+                          <span>Momentum {state.previousMomentum.toFixed(1)} → {state.finalMomentum.toFixed(1)}</span>
+                          <span>Structural pressure {state.structuralPressure.toFixed(1)}</span>
+                          <span>Territory {state.territorialControl.toFixed(1)} · Threat {state.offensiveThreat.toFixed(1)}</span>
+                          <span>Defense {state.defensiveStability.toFixed(1)} · Intensity {state.intensity.toFixed(1)}</span>
+                          <span>Physical condition {state.physicalCondition.toFixed(1)}</span>
+                          <span>Event impact {state.eventThreatImpact.toFixed(1)} · Action impact {state.actionThreatImpact.toFixed(1)}</span>
+                        </section>
+                      ))}
+                    </div>
+                    {trace.events.length > 0 && (
+                      <ul>
+                        {trace.events.map((event, index) => (
+                          <li key={index}>
+                            <strong>{event.eventType}</strong> · Club #{event.clubId} · xG {event.xg.toFixed(2)} · threat +{event.appliedThreatImpact.toFixed(1)}
+                            <small>{event.description}</small>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </details>
+                );
+              })}
+            </div>
+          </details>
+        )}
         {latestPoint && (
           <div className={styles.momentumStateGrid}>
             {([
