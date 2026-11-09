@@ -218,8 +218,8 @@ export function MatchMomentum({
   const chartWidth = 900;
   const chartHeight = 240;
   const centerY = 112;
-  const maxAmplitude = 78;
-  const visualGain = 3.2;
+  const maxAmplitude = 88;
+  const visualGain = 5;
   const points = data.map((point) => {
     const difference = Math.max(-100, Math.min(100, point.homePressure - point.awayPressure));
     const amplifiedDifference = Math.max(-maxAmplitude, Math.min(maxAmplitude, difference * visualGain));
@@ -290,15 +290,23 @@ export function MatchMomentum({
           {markedEvents.map((event) => {
             const minute = Math.min(90, event.minute + event.addedTime);
             const x = (minute / 90) * chartWidth;
-            const point = points.reduce((closest, candidate) =>
-              Math.abs(candidate.x - x) < Math.abs(closest.x - x) ? candidate : closest,
-            points[0] ?? { x, y: centerY });
+            const isHomeEvent = event.clubId === teams[0].clubId;
+            const markerY = isHomeEvent ? 18 : 204;
+            const connectorStartY = isHomeEvent ? 31 : 187;
+            const connectorEndY = isHomeEvent ? 43 : 174;
             const icon = event.type === 'RED_CARD' ? '🟥' : '⚽';
+
             return (
               <g key={event.id}>
-                <line x1={x} y1="8" x2={x} y2="216" className={styles.eventMarkerLine} />
-                <circle cx={x} cy={point.y} r="11" className={styles.eventMarker} />
-                <text x={x} y={point.y + 4} textAnchor="middle" className={styles.eventMarkerIcon}>
+                <line
+                  x1={x}
+                  y1={connectorStartY}
+                  x2={x}
+                  y2={connectorEndY}
+                  className={styles.eventMarkerLine}
+                />
+                <circle cx={x} cy={markerY} r="11" className={styles.eventMarker} />
+                <text x={x} y={markerY + 4} textAnchor="middle" className={styles.eventMarkerIcon}>
                   {icon}
                 </text>
               </g>
