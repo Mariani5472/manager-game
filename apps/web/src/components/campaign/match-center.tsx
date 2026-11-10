@@ -226,7 +226,7 @@ export function MatchCenter({
               {[data.history.homeTactics, data.history.awayTactics].map((team) => (
                 <section key={team.clubId}>
                   <strong>{team.clubName}</strong>
-                  <span>Formation ID {team.tactic.formation_id} · {team.tactic.mentality.replaceAll('_', ' ').toLowerCase()}</span>
+                  <span>{team.tactic.formation_name} · {team.tactic.mentality.replaceAll('_', ' ').toLowerCase()}</span>
                   <span>Pressing {team.tactic.pressing} · Tempo {team.tactic.tempo} · Defensive line {team.tactic.defensive_line}</span>
                   <span>Width {team.tactic.width} · Passing {team.tactic.passing_directness} · Counter attack {team.tactic.counter_attack ? 'On' : 'Off'}</span>
                 </section>
