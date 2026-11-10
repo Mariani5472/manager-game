@@ -14,6 +14,7 @@ export function CalendarPage({ saveId }: { saveId: string }) {
   return (
     <CalendarSection
       data={query.data}
+      saveId={saveId}
     />
   );
 }
