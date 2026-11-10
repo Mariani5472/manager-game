@@ -9,12 +9,24 @@ test("complete schema and seeds execute with valid SQLite integrity", () => {
   const dir = mkdtempSync(join(tmpdir(), "manager-game-schema-"));
   const db = open(join(dir, "schema.sqlite"));
   try {
-    db.exec(readFileSync(resolve("apps/api/modules/world/schema/game_manager_mvp.sql"), "utf8"));
+    db.exec(
+      readFileSync(
+        resolve("apps/api/modules/world/schema/game_manager_mvp.sql"),
+        "utf8",
+      ),
+    );
     assert.equal(db.pragma("integrity_check", { simple: true }), "ok");
     assert.deepEqual(db.pragma("foreign_key_check"), []);
-    const trigger = db.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='trg_match_lineup_validate_update'").get();
+    const trigger = db
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='trg_match_lineup_validate_update'",
+      )
+      .get();
     assert.ok(trigger);
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM club").get() as { n: number }).n, 4);
+    assert.equal(
+      (db.prepare("SELECT COUNT(*) AS n FROM club").get() as { n: number }).n,
+      4,
+    );
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });

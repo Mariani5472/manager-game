@@ -100,21 +100,33 @@ function MatchTeamScore({
   scorers: MatchEventDto[];
 }) {
   return (
-    <div className={side === "home" ? `${styles.matchTeam} ${styles.matchTeamHome}` : `${styles.matchTeam} ${styles.matchTeamAway}`}>
+    <div
+      className={
+        side === 'home'
+          ? `${styles.matchTeam} ${styles.matchTeamHome}`
+          : `${styles.matchTeam} ${styles.matchTeamAway}`
+      }
+    >
       <span className={styles.matchCrest}>{team.name.slice(0, 1)}</span>
       <strong>{team.name}</strong>
       <small>{side === 'home' ? 'HOME' : 'AWAY'}</small>
       <div className={styles.matchScorers}>
-        {scorers.length > 0 ? scorers.map((event) => {
-          const name = event.playerId === null
-            ? null
-            : team.lineup.find((player) => player.playerId === event.playerId)?.name ?? null;
-          return (
-            <span key={event.id}>
-              {name ?? event.description ?? 'Unknown scorer'} · {formatMinute(event.minute, event.addedTime)}
-            </span>
-          );
-        }) : <span className={styles.noScorers}>—</span>}
+        {scorers.length > 0 ? (
+          scorers.map((event) => {
+            const name =
+              event.playerId === null
+                ? null
+                : (team.lineup.find((player) => player.playerId === event.playerId)?.name ?? null);
+            return (
+              <span key={event.id}>
+                {name ?? event.description ?? 'Unknown scorer'} ·{' '}
+                {formatMinute(event.minute, event.addedTime)}
+              </span>
+            );
+          })
+        ) : (
+          <span className={styles.noScorers}>—</span>
+        )}
       </div>
     </div>
   );
@@ -137,8 +149,8 @@ export function MatchHeader({
 }) {
   const home = teams[0];
   const away = teams[1];
-  const goalEvents = events.filter((event) =>
-    event.type === 'GOAL' || event.type === 'OWN_GOAL' || event.type === 'PENALTY_GOAL',
+  const goalEvents = events.filter(
+    (event) => event.type === 'GOAL' || event.type === 'OWN_GOAL' || event.type === 'PENALTY_GOAL',
   );
   const homeScorers = goalEvents.filter((event) => event.clubId === home.clubId);
   const awayScorers = goalEvents.filter((event) => event.clubId === away.clubId);
@@ -150,22 +162,36 @@ export function MatchHeader({
       <div className={styles.matchHeaderMeta}>
         <span>{formatScheduledAt(fixture.scheduledAt)}</span>
         <strong>{fixture.competition}</strong>
-        <span>{fixture.stage} · {fixture.round}</span>
+        <span>
+          {fixture.stage} · {fixture.round}
+        </span>
       </div>
       <div className={styles.matchScoreLayout}>
         <MatchTeamScore team={home} side="home" scorers={homeScorers} />
         <div className={styles.matchResult}>
           <span className={styles.matchStatus}>
-            {isFinished ? 'FULL TIME' : fixture.status === 'IN_PROGRESS' ? `${currentMinute}'` : 'KICK-OFF'}
+            {isFinished
+              ? 'FULL TIME'
+              : fixture.status === 'IN_PROGRESS'
+                ? `${currentMinute}'`
+                : 'KICK-OFF'}
           </span>
-          <strong>{fixture.score.home} – {fixture.score.away}</strong>
+          <strong>
+            {fixture.score.home} – {fixture.score.away}
+          </strong>
           {penaltiesAvailable && (
             <span className={styles.penaltyScore}>
               Pens {fixture.score.homePenalties} – {fixture.score.awayPenalties}
             </span>
           )}
           <Badge variant={isFinished ? 'success' : 'info'}>
-            {isFinished ? 'Completed' : isPlaying ? 'Live' : fixture.status === 'IN_PROGRESS' ? 'Paused' : 'Scheduled'}
+            {isFinished
+              ? 'Completed'
+              : isPlaying
+                ? 'Live'
+                : fixture.status === 'IN_PROGRESS'
+                  ? 'Paused'
+                  : 'Scheduled'}
           </Badge>
         </div>
         <MatchTeamScore team={away} side="away" scorers={awayScorers} />
@@ -222,7 +248,10 @@ export function MatchMomentum({
   const visualGain = 5;
   const points = data.map((point) => {
     const difference = Math.max(-100, Math.min(100, point.homePressure - point.awayPressure));
-    const amplifiedDifference = Math.max(-maxAmplitude, Math.min(maxAmplitude, difference * visualGain));
+    const amplifiedDifference = Math.max(
+      -maxAmplitude,
+      Math.min(maxAmplitude, difference * visualGain),
+    );
     return {
       x: (Math.max(0, Math.min(90, point.minute)) / 90) * chartWidth,
       y: centerY - amplifiedDifference,
@@ -232,22 +261,33 @@ export function MatchMomentum({
   const curveCommands = linePath.replace(/^M\s+[-\d.]+\s+[-\d.]+\s*/, '');
   const firstPoint = points[0];
   const lastPoint = points[points.length - 1];
-  const areaPath = firstPoint && lastPoint
-    ? `M ${firstPoint.x.toFixed(1)} ${centerY} L ${firstPoint.x.toFixed(1)} ${firstPoint.y.toFixed(1)} ${curveCommands} L ${lastPoint.x.toFixed(1)} ${centerY} Z`
-    : '';
-  const markedEvents = events.filter((event) =>
-    event.type === 'GOAL' || event.type === 'OWN_GOAL' || event.type === 'PENALTY_GOAL' || event.type === 'RED_CARD',
+  const areaPath =
+    firstPoint && lastPoint
+      ? `M ${firstPoint.x.toFixed(1)} ${centerY} L ${firstPoint.x.toFixed(1)} ${firstPoint.y.toFixed(1)} ${curveCommands} L ${lastPoint.x.toFixed(1)} ${centerY} Z`
+      : '';
+  const markedEvents = events.filter(
+    (event) =>
+      event.type === 'GOAL' ||
+      event.type === 'OWN_GOAL' ||
+      event.type === 'PENALTY_GOAL' ||
+      event.type === 'RED_CARD',
   );
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle><Activity size={16} /> Match momentum</CardTitle>
+        <CardTitle>
+          <Activity size={16} /> Match momentum
+        </CardTitle>
       </CardHeader>
       <CardContent className={styles.momentum}>
         <div className={styles.momentumLegend}>
-          <span><i className={styles.homeDot} /> Home advantage ↑</span>
-          <span><i className={styles.awayDot} /> Away advantage ↓</span>
+          <span>
+            <i className={styles.homeDot} /> Home advantage ↑
+          </span>
+          <span>
+            <i className={styles.awayDot} /> Away advantage ↓
+          </span>
         </div>
         <svg
           viewBox={`0 0 ${chartWidth} ${chartHeight}`}
@@ -301,8 +341,16 @@ export function MatchMomentum({
           <line x1="0" y1={centerY} x2={chartWidth} y2={centerY} className={styles.axis} />
           {points.length > 0 && (
             <>
-              <path d={areaPath} className={styles.momentumArea} style={{ fill: `url(#${areaGradientId})` }} />
-              <path d={linePath} className={styles.momentumLine} style={{ stroke: `url(#${lineGradientId})` }} />
+              <path
+                d={areaPath}
+                className={styles.momentumArea}
+                style={{ fill: `url(#${areaGradientId})` }}
+              />
+              <path
+                d={linePath}
+                className={styles.momentumLine}
+                style={{ stroke: `url(#${lineGradientId})` }}
+              />
             </>
           )}
           {markedEvents.map((event) => {
@@ -334,66 +382,103 @@ export function MatchMomentum({
         {data.length === 0 && (
           <p className={styles.chartEmpty}>Momentum will build as the match progresses.</p>
         )}
-        {data.some(point => point.debugTrace) && (
+        {data.some((point) => point.debugTrace) && (
           <details className={styles.momentumDebugger}>
             <summary>Momentum debugger · per-minute trace</summary>
             <div className={styles.momentumDebugList}>
-              {data.filter(point => point.debugTrace).map(point => {
-                const trace = point.debugTrace!;
-                return (
-                  <details key={trace.minute} className={styles.momentumDebugMinute}>
-                    <summary>
-                      <strong>{trace.minute}&apos;</strong>
-                      <span>{trace.dominance}</span>
-                      {trace.dominanceChanged && <b>Dominance changed</b>}
-                    </summary>
-                    <div className={styles.momentumDebugTeams}>
-                      {([{ label: 'Home', state: trace.home }, { label: 'Away', state: trace.away }] as const).map(({ label, state }) => (
-                        <section key={label}>
-                          <strong>{label} · Club #{state.clubId}</strong>
-                          <span>Momentum {state.previousMomentum.toFixed(1)} → {state.finalMomentum.toFixed(1)}</span>
-                          <span>Structural pressure {state.structuralPressure.toFixed(1)}</span>
-                          <span>Territory {state.territorialControl.toFixed(1)} · Threat {state.offensiveThreat.toFixed(1)}</span>
-                          <span>Defense {state.defensiveStability.toFixed(1)} · Intensity {state.intensity.toFixed(1)}</span>
-                          <span>Physical condition {state.physicalCondition.toFixed(1)}</span>
-                          <span>Event impact {state.eventThreatImpact.toFixed(1)} · Action impact {state.actionThreatImpact.toFixed(1)}</span>
-                        </section>
-                      ))}
-                    </div>
-                    {trace.events.length > 0 && (
-                      <ul>
-                        {trace.events.map((event, index) => (
-                          <li key={index}>
-                            <strong>{event.eventType}</strong> · Club #{event.clubId} · xG {event.xg.toFixed(2)} · threat +{event.appliedThreatImpact.toFixed(1)}
-                            <small>{event.description}</small>
-                          </li>
+              {data
+                .filter((point) => point.debugTrace)
+                .map((point) => {
+                  const trace = point.debugTrace!;
+                  return (
+                    <details key={trace.minute} className={styles.momentumDebugMinute}>
+                      <summary>
+                        <strong>{trace.minute}&apos;</strong>
+                        <span>{trace.dominance}</span>
+                        {trace.dominanceChanged && <b>Dominance changed</b>}
+                      </summary>
+                      <div className={styles.momentumDebugTeams}>
+                        {(
+                          [
+                            { label: 'Home', state: trace.home },
+                            { label: 'Away', state: trace.away },
+                          ] as const
+                        ).map(({ label, state }) => (
+                          <section key={label}>
+                            <strong>
+                              {label} · Club #{state.clubId}
+                            </strong>
+                            <span>
+                              Momentum {state.previousMomentum.toFixed(1)} →{' '}
+                              {state.finalMomentum.toFixed(1)}
+                            </span>
+                            <span>Structural pressure {state.structuralPressure.toFixed(1)}</span>
+                            <span>
+                              Territory {state.territorialControl.toFixed(1)} · Threat{' '}
+                              {state.offensiveThreat.toFixed(1)}
+                            </span>
+                            <span>
+                              Defense {state.defensiveStability.toFixed(1)} · Intensity{' '}
+                              {state.intensity.toFixed(1)}
+                            </span>
+                            <span>Physical condition {state.physicalCondition.toFixed(1)}</span>
+                            <span>
+                              Event impact {state.eventThreatImpact.toFixed(1)} · Action impact{' '}
+                              {state.actionThreatImpact.toFixed(1)}
+                            </span>
+                          </section>
                         ))}
-                      </ul>
-                    )}
-                  </details>
-                );
-              })}
+                      </div>
+                      {trace.events.length > 0 && (
+                        <ul>
+                          {trace.events.map((event, index) => (
+                            <li key={index}>
+                              <strong>{event.eventType}</strong> · Club #{event.clubId} · xG{' '}
+                              {event.xg.toFixed(2)} · threat +{event.appliedThreatImpact.toFixed(1)}
+                              <small>{event.description}</small>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </details>
+                  );
+                })}
             </div>
           </details>
         )}
         {latestPoint && (
           <div className={styles.momentumStateGrid}>
-            {([
-              { label: 'Home', state: latestPoint.homeState, tone: 'home' },
-              { label: 'Away', state: latestPoint.awayState, tone: 'away' },
-            ] as const).map(({ label, state, tone }) => (
-              <section className={styles.momentumTeamState} key={label} aria-label={`${label} team game state`}>
+            {(
+              [
+                { label: 'Home', state: latestPoint.homeState, tone: 'home' },
+                { label: 'Away', state: latestPoint.awayState, tone: 'away' },
+              ] as const
+            ).map(({ label, state, tone }) => (
+              <section
+                className={styles.momentumTeamState}
+                key={label}
+                aria-label={`${label} team game state`}
+              >
                 <strong>{label} team state</strong>
-                {([
-                  ['Territorial control', state.territorialControl],
-                  ['Offensive threat', state.offensiveThreat],
-                  ['Physical condition', state.physicalCondition],
-                ] as const).map(([metric, value]) => (
+                {(
+                  [
+                    ['Territorial control', state.territorialControl],
+                    ['Offensive threat', state.offensiveThreat],
+                    ['Physical condition', state.physicalCondition],
+                  ] as const
+                ).map(([metric, value]) => (
                   <div className={styles.momentumMetric} key={metric}>
-                    <span><small>{metric}</small><b>{Math.round(value)}</b></span>
+                    <span>
+                      <small>{metric}</small>
+                      <b>{Math.round(value)}</b>
+                    </span>
                     <div className={styles.momentumMetricTrack}>
-                      <i className={tone === 'home' ? styles.momentumMetricHome : styles.momentumMetricAway}
-                        style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+                      <i
+                        className={
+                          tone === 'home' ? styles.momentumMetricHome : styles.momentumMetricAway
+                        }
+                        style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+                      />
                     </div>
                   </div>
                 ))}
@@ -416,10 +501,16 @@ function MatchTimelineItem({
 }) {
   const playerName = getPlayerName(event, teams);
   const author = playerName ?? event.description;
-  const isKeyEvent = event.type === 'GOAL' || event.type === 'OWN_GOAL' || event.type === 'PENALTY_GOAL' || event.type === 'RED_CARD';
+  const isKeyEvent =
+    event.type === 'GOAL' ||
+    event.type === 'OWN_GOAL' ||
+    event.type === 'PENALTY_GOAL' ||
+    event.type === 'RED_CARD';
 
   return (
-    <div className={`${styles.timelineEvent} ${side === 'home' ? styles.timelineHome : styles.timelineAway}`}>
+    <div
+      className={`${styles.timelineEvent} ${side === 'home' ? styles.timelineHome : styles.timelineAway}`}
+    >
       <span className={styles.timelineMinute}>{formatMinute(event.minute, event.addedTime)}</span>
       <span className={styles.timelineEventText}>
         <span className={styles.timelineIcon}>{getEventIcon(event.type)}</span>
@@ -433,17 +524,11 @@ function MatchTimelineItem({
   );
 }
 
-export function MatchTimeline({
-  events,
-  teams,
-}: {
-  events: MatchEventDto[];
-  teams: MatchTeams;
-}) {
+export function MatchTimeline({ events, teams }: { events: MatchEventDto[]; teams: MatchTeams }) {
   const home = teams[0];
   const away = teams[1];
-  const orderedEvents = [...events].sort((a, b) =>
-    b.minute - a.minute || b.addedTime - a.addedTime || b.id - a.id,
+  const orderedEvents = [...events].sort(
+    (a, b) => b.minute - a.minute || b.addedTime - a.addedTime || b.id - a.id,
   );
 
   return (
@@ -459,31 +544,56 @@ export function MatchTimeline({
         </div>
         {orderedEvents.length === 0 ? (
           <p className={styles.chartEmpty}>Match events will appear here as the game progresses.</p>
-        ) : orderedEvents.map((event) => {
-          if (event.type === 'HALF_TIME' || event.type === 'FULL_TIME' || event.type === 'KICK_OFF') {
-            const label = event.type === 'HALF_TIME' ? 'HALF TIME' : event.type === 'FULL_TIME' ? 'FULL TIME' : 'KICK-OFF';
+        ) : (
+          orderedEvents.map((event) => {
+            if (
+              event.type === 'HALF_TIME' ||
+              event.type === 'FULL_TIME' ||
+              event.type === 'KICK_OFF'
+            ) {
+              const label =
+                event.type === 'HALF_TIME'
+                  ? 'HALF TIME'
+                  : event.type === 'FULL_TIME'
+                    ? 'FULL TIME'
+                    : 'KICK-OFF';
+              return (
+                <div className={styles.timelinePeriod} key={event.id}>
+                  <span />
+                  <strong>
+                    {label} · {formatMinute(event.minute, event.addedTime)}
+                  </strong>
+                  <span />
+                </div>
+              );
+            }
+
+            const side =
+              event.clubId === home.clubId ? 'home' : event.clubId === away.clubId ? 'away' : null;
             return (
-              <div className={styles.timelinePeriod} key={event.id}>
-                <span />
-                <strong>{label} · {formatMinute(event.minute, event.addedTime)}</strong>
-                <span />
+              <div className={styles.timelineRow} key={event.id}>
+                {side === 'home' ? (
+                  <MatchTimelineItem event={event} side="home" teams={teams} />
+                ) : (
+                  <span />
+                )}
+                {side === null ? (
+                  <span className={styles.timelineCenterEvent}>
+                    {formatMinute(event.minute, event.addedTime)} {getEventIcon(event.type)}{' '}
+                    {event.description ?? getEventLabel(event.type)}
+                  </span>
+                ) : (
+                  <span className={styles.timelineSpine} />
+                )}
+                {side === 'away' ? (
+                  <MatchTimelineItem event={event} side="away" teams={teams} />
+                ) : (
+                  <span />
+                )}
               </div>
             );
-          }
-
-          const side = event.clubId === home.clubId ? 'home' : event.clubId === away.clubId ? 'away' : null;
-          return (
-            <div className={styles.timelineRow} key={event.id}>
-              {side === 'home' ? <MatchTimelineItem event={event} side="home" teams={teams} /> : <span />}
-              {side === null ? (
-                <span className={styles.timelineCenterEvent}>
-                  {formatMinute(event.minute, event.addedTime)} {getEventIcon(event.type)} {event.description ?? getEventLabel(event.type)}
-                </span>
-              ) : <span className={styles.timelineSpine} />}
-              {side === 'away' ? <MatchTimelineItem event={event} side="away" teams={teams} /> : <span />}
-            </div>
-          );
-        })}
+          })
+        )}
       </CardContent>
     </Card>
   );

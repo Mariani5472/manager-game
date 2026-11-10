@@ -11,7 +11,8 @@ export function resolveTeamGameActions(
   random: () => number,
 ): GameAction[] {
   const actions: GameAction[] = [];
-  const activeRatio = team.lineup.filter(player => player.isStarting).length / 11;
+  const activeRatio =
+    team.lineup.filter((player) => player.isStarting).length / 11;
   const attackingMatchup = team.attacking - opponent.defending;
   const fatiguePenalty = (100 - state.physicalCondition) * 0.0008;
 
@@ -31,7 +32,8 @@ export function resolveTeamGameActions(
     if (
       team.tactic.counter_attack &&
       opponentState.territorialControl >= 62 &&
-      random() < clamp(0.08 + (team.attacking - opponent.defending) * 0.001, 0.04, 0.2)
+      random() <
+        clamp(0.08 + (team.attacking - opponent.defending) * 0.001, 0.04, 0.2)
     ) {
       actions.push({ minute, clubId: team.clubId, type: "COUNTER_ATTACK" });
     }

@@ -14,10 +14,13 @@ import { SqliteCampaignRepository } from "./modules/campaign/repo/sqlite-campaig
 export function createContainer() {
   const masterRepository = new SqliteMasterRepository();
   const masterService = new MasterService(masterRepository);
+
   const saveRepository = new SaveManagerRepository();
   const saveService = new SaveService(saveRepository, masterService);
+
   const dataPackageRepository = new SqliteDataPackageRepository();
   const dataPackageService = new DataPackageService(dataPackageRepository);
+
   const campaignService = new CampaignService(new SqliteCampaignRepository());
 
   return {

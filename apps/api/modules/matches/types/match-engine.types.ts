@@ -1,7 +1,6 @@
 import type { TeamGameState } from "../engine/game-state/gameState.types.js";
 import type { MatchContext } from "../service/match-context.service.js";
 
-
 export interface MatchSummary {
   fixtureId: number;
   homeClubId: number;
@@ -28,7 +27,6 @@ export interface MatchSummary {
   awayInjuries: number;
 }
 
-
 export interface FixtureRow {
   id: number;
   home_club_id: number;
@@ -36,7 +34,6 @@ export interface FixtureRow {
   random_seed: number | null;
   status: string;
 }
-
 
 export interface Player {
   id: number;
@@ -69,7 +66,6 @@ export interface Player {
   aerial_reach: number;
 }
 
-
 export interface Tactic {
   formation_id: number;
   mentality: string;
@@ -81,14 +77,12 @@ export interface Tactic {
   counter_attack: number;
 }
 
-
 export interface MatchPlayer extends Player {
   role: string;
   slot: number;
   isStarting: boolean;
   positionRating: number;
 }
-
 
 export interface Team {
   clubId: number;
@@ -102,7 +96,6 @@ export interface Team {
   fitness: number;
   context?: MatchContext;
 }
-
 
 export interface SimulatedMatchResult {
   homeScore: number;
@@ -124,7 +117,6 @@ export interface SimulatedMatchResult {
   homeInjuries: number;
   awayInjuries: number;
 }
-
 
 export interface MonteCarloReport {
   simulations: number;
@@ -149,7 +141,6 @@ export interface MonteCarloReport {
   maxTotalGoals: number;
 }
 
-
 export type MatchEventType =
   | "GOAL"
   | "SAVE"
@@ -162,7 +153,6 @@ export type MatchEventType =
   | "RED_CARD"
   | "INJURY";
 
-
 export interface KernelShotEvent {
   minute: number;
   clubId: number;
@@ -173,7 +163,6 @@ export interface KernelShotEvent {
   description: string;
   injuryDays?: number;
 }
-
 
 export interface MomentumEventImpact {
   eventIndex: number;
@@ -221,7 +210,6 @@ export interface KernelMinute {
   events: KernelShotEvent[];
 }
 
-
 export interface TacticalChange {
   id: number;
   minute: number;
@@ -230,13 +218,11 @@ export interface TacticalChange {
   payload: string;
 }
 
-
 export interface KernelTimeline {
   result: SimulatedMatchResult;
   events: KernelShotEvent[];
   minutes: KernelMinute[];
 }
-
 
 export interface TacticalImpactScenario {
   name: string;
@@ -248,7 +234,6 @@ export interface TacticalImpactScenario {
   averageTotalXgDelta: number;
 }
 
-
 export interface TacticalImpactReport {
   homeClubId: number;
   awayClubId: number;
@@ -256,7 +241,6 @@ export interface TacticalImpactReport {
   seed: number;
   scenarios: TacticalImpactScenario[];
 }
-
 
 export interface MeanConfidenceInterval {
   estimate: number;
@@ -266,7 +250,6 @@ export interface MeanConfidenceInterval {
   confidenceLevel: number;
 }
 
-
 export interface BinomialConfidenceInterval {
   estimate: number;
   lower: number;
@@ -275,7 +258,6 @@ export interface BinomialConfidenceInterval {
   trials: number;
   confidenceLevel: number;
 }
-
 
 export interface XgBandDiagnostic {
   band: string;
@@ -294,7 +276,6 @@ export interface XgBandDiagnostic {
   saves: number;
   misses: number;
 }
-
 
 export interface MatchEngineDiagnostics {
   simulations: number;
@@ -351,7 +332,6 @@ export interface MatchEngineDiagnostics {
   };
 }
 
-
 export interface MatchEventProbabilities {
   readonly foulPerTeamMinute: number;
   readonly yellowCardPerTeamMinute: number;
@@ -360,7 +340,6 @@ export interface MatchEventProbabilities {
   readonly defensiveErrorPerDefendingTeamMinute: number;
   readonly substitutionAttemptPerTeamMinuteAfter60: number;
 }
-
 
 export interface TacticalSensitivityScenario {
   name: string;
@@ -376,7 +355,6 @@ export interface TacticalSensitivityScenario {
   averageTotalXgDelta: number;
 }
 
-
 export interface TacticalSensitivityReport {
   homeClubId: number;
   awayClubId: number;
@@ -385,7 +363,6 @@ export interface TacticalSensitivityReport {
   baseline: MonteCarloReport;
   scenarios: TacticalSensitivityScenario[];
 }
-
 
 export interface SeasonBalanceClub {
   clubId: number;
@@ -401,7 +378,6 @@ export interface SeasonBalanceClub {
   bottomFourRate: number;
 }
 
-
 export interface SeasonBalanceTierSummary {
   tier: string;
   clubs: number;
@@ -409,7 +385,6 @@ export interface SeasonBalanceTierSummary {
   averageGoalDifference: number;
   averageGoalsAgainst: number;
 }
-
 
 export interface SeasonBalanceReport {
   seasons: number;
@@ -424,7 +399,6 @@ export interface SeasonBalanceReport {
   tierSummary: SeasonBalanceTierSummary[];
 }
 
-
 export interface SyntheticScaleBenchmark {
   clubs: number;
   matches: number;
@@ -435,9 +409,5 @@ export interface SyntheticScaleBenchmark {
   drawRate: number;
 }
 
-
 export type TacticalChangeType =
-  | "MENTALITY"
-  | "INSTRUCTION"
-  | "SUBSTITUTION"
-  | "FORMATION";
+  "MENTALITY" | "INSTRUCTION" | "SUBSTITUTION" | "FORMATION";

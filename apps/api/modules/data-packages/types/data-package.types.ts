@@ -1,36 +1,14 @@
-export type PreferredFoot =
-  | "LEFT"
-  | "RIGHT"
-  | "BOTH";
+export type PreferredFoot = "LEFT" | "RIGHT" | "BOTH";
 
-
-export type SquadStatus =
-  | "FIRST_TEAM"
-  | "RESERVE"
-  | "YOUTH";
-
+export type SquadStatus = "FIRST_TEAM" | "RESERVE" | "YOUTH";
 
 export type CompetitionKind =
-  | "LEAGUE"
-  | "CUP"
-  | "SUPER_CUP"
-  | "PLAYOFF"
-  | "OTHER";
-
+  "LEAGUE" | "CUP" | "SUPER_CUP" | "PLAYOFF" | "OTHER";
 
 export type StageKind =
-  | "LEAGUE"
-  | "GROUPS"
-  | "KNOCKOUT"
-  | "SINGLE_MATCH"
-  | "FINAL";
+  "LEAGUE" | "GROUPS" | "KNOCKOUT" | "SINGLE_MATCH" | "FINAL";
 
-
-export type MovementType =
-  | "PROMOTE"
-  | "RELEGATE"
-  | "PLAYOFF";
-
+export type MovementType = "PROMOTE" | "RELEGATE" | "PLAYOFF";
 
 export type EntityType =
   | "nation"
@@ -42,18 +20,15 @@ export type EntityType =
   | "season"
   | "stage";
 
-
 export interface DataPackageDependency {
   id: string;
   version?: string;
 }
 
-
 export interface DataPackageNation {
   code: string;
   name: string;
 }
-
 
 export interface DataPackageCity {
   code: string;
@@ -61,7 +36,6 @@ export interface DataPackageCity {
   name: string;
   climateProfile?: string;
 }
-
 
 export interface DataPackageClub {
   code: string;
@@ -74,7 +48,6 @@ export interface DataPackageClub {
   secondaryColor?: string;
 }
 
-
 export interface DataPackageStadium {
   code: string;
   clubCode?: string;
@@ -84,12 +57,10 @@ export interface DataPackageStadium {
   pitchQuality?: number;
 }
 
-
 export interface DataPackagePlayerPosition {
   code: string;
   rating: number;
 }
-
 
 export interface DataPackagePlayer {
   code: string;
@@ -106,7 +77,6 @@ export interface DataPackagePlayer {
   positions?: DataPackagePlayerPosition[];
 }
 
-
 export interface DataPackageStageFormat {
   groupCount?: number;
   legs?: number;
@@ -119,19 +89,16 @@ export interface DataPackageStageFormat {
   lossPoints?: number;
 }
 
-
 export interface DataPackageGroup {
   code: string;
   name: string;
 }
-
 
 export interface DataPackageParticipant {
   clubCode: string;
   groupCode?: string;
   seed?: number;
 }
-
 
 export interface DataPackageFixture {
   homeClubCode: string;
@@ -140,14 +107,12 @@ export interface DataPackageFixture {
   stadiumCode?: string;
 }
 
-
 export interface DataPackageRound {
   number: number;
   name?: string;
   date?: string;
   fixtures: DataPackageFixture[];
 }
-
 
 export interface DataPackageMovement {
   positionFrom: number;
@@ -157,7 +122,6 @@ export interface DataPackageMovement {
   targetTier?: number;
   priority?: number;
 }
-
 
 export interface DataPackageStage {
   code: string;
@@ -172,14 +136,12 @@ export interface DataPackageStage {
   promotionRelegation?: DataPackageMovement[];
 }
 
-
 export interface DataPackageSeason {
   year: number;
   startDate?: string;
   endDate?: string;
   stages: DataPackageStage[];
 }
-
 
 export interface DataPackageCompetition {
   code: string;
@@ -189,7 +151,6 @@ export interface DataPackageCompetition {
   kind?: CompetitionKind;
   seasons: DataPackageSeason[];
 }
-
 
 export interface DataPackage {
   schemaVersion: 1;
@@ -205,7 +166,6 @@ export interface DataPackage {
   competitions?: DataPackageCompetition[];
 }
 
-
 export interface InstallDataPackageResult {
   packageId: string;
   version: string;
@@ -215,14 +175,12 @@ export interface InstallDataPackageResult {
   fixtures: number;
 }
 
-
 export interface InstalledDataPackage {
   id: string;
   version: string;
   installedAt: string;
   dependencies: string;
 }
-
 
 export interface PromotionRelegationMovement {
   clubId: number;
@@ -231,7 +189,6 @@ export interface PromotionRelegationMovement {
   from: string;
   to: string;
 }
-
 
 export interface PromotionRelegationResult {
   movements: PromotionRelegationMovement[];

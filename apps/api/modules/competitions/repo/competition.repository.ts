@@ -1,6 +1,5 @@
 import { SqliteDatabase } from "../../../db/database.js";
 
-
 export interface StageRow {
   stage_id: number;
   season_id: number;
@@ -12,13 +11,10 @@ export interface StageRow {
   stage_kind: string;
 }
 
-
-export function getStage(
-  db: SqliteDatabase,
-  stageId: number
-): StageRow {
+export function getStage(db: SqliteDatabase, stageId: number): StageRow {
   const row = db
-    .prepare<number, StageRow>(`
+    .prepare<number, StageRow>(
+      `
       SELECT
         st.id AS stage_id,
         st.season_id,
@@ -38,7 +34,8 @@ export function getStage(
         ON co.id = cs.competition_id
 
       WHERE st.id = ?
-    `)
+    `,
+    )
     .get(stageId);
 
   if (!row) {
@@ -47,7 +44,6 @@ export function getStage(
 
   return row;
 }
-
 
 export interface SeasonSummary {
   seasonId: number;
@@ -62,10 +58,9 @@ export interface SeasonSummary {
   completedFixtures: number;
 }
 
-
 export function getSeasonStatus(
   db: SqliteDatabase,
-  stageId?: number
+  stageId?: number,
 ): SeasonSummary[] {
   const query = `
     SELECT
@@ -94,14 +89,12 @@ export function getSeasonStatus(
       st.stage_order
   `;
 
-  const stages = (
+  const stages =
     stageId === undefined
       ? db.prepare<[], StageRow>(query).all()
-      : db.prepare<number, StageRow>(query).all(stageId)
-  );
+      : db.prepare<number, StageRow>(query).all(stageId);
 
-
-  return stages.map(stage => {
+  return stages.map((stage) => {
     const counts = db
       .prepare<
         number,
@@ -109,7 +102,8 @@ export function getSeasonStatus(
           completed: number | null;
           pending: number | null;
         }
-      >(`
+      >(
+        `
         SELECT
           SUM(
             CASE
@@ -135,15 +129,14 @@ export function getSeasonStatus(
           ON r.id = f.round_id
 
         WHERE r.stage_id = ?
-      `)
+      `,
+      )
       .get(stage.stage_id);
-
 
     const completed = counts?.completed ?? 0;
     const pending = counts?.pending ?? 0;
 
     let knockoutFinalComplete = true;
-
 
     if (stage.stage_kind === "KNOCKOUT") {
       const finalRound = db
@@ -154,7 +147,8 @@ export function getSeasonStatus(
             completed: number | null;
             decided: number | null;
           }
-        >(`
+        >(
+          `
           SELECT
             COUNT(f.id) AS total,
 
@@ -191,9 +185,9 @@ export function getSeasonStatus(
               FROM competition_round
               WHERE stage_id = ?
             )
-        `)
+        `,
+        )
         .get(stage.stage_id, stage.stage_id);
-
 
       knockoutFinalComplete =
         finalRound?.total === 1 &&
@@ -201,15 +195,10 @@ export function getSeasonStatus(
         (finalRound.decided ?? 0) === 1;
     }
 
-
     const stageComplete =
       pending === 0 &&
       completed > 0 &&
-      (
-        stage.stage_kind !== "KNOCKOUT" ||
-        knockoutFinalComplete
-      );
-
+      (stage.stage_kind !== "KNOCKOUT" || knockoutFinalComplete);
 
     return {
       seasonId: stage.season_id,
@@ -220,9 +209,7 @@ export function getSeasonStatus(
       stageId: stage.stage_id,
       stage: stage.stage,
       stageKind: stage.stage_kind,
-      stageStatus: stageComplete
-        ? "COMPLETED"
-        : "IN_PROGRESS",
+      stageStatus: stageComplete ? "COMPLETED" : "IN_PROGRESS",
 
       pendingFixtures: pending,
       completedFixtures: completed,

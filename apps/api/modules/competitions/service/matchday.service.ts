@@ -6,14 +6,14 @@ import { rebuildStandings } from "../repo/standings.repository.js";
 import { simulateMatch } from "../../matches/service/match-simulation.service.js";
 import type { MatchSummary } from "../../matches/types/match-engine.types.js";
 
-
 export function advanceNextFixture(
   db: SqliteDatabase,
-  fixtureId?: number
+  fixtureId?: number,
 ): MatchSummary {
   const row = fixtureId
-    ? db
-        .prepare(`
+    ? (db
+        .prepare(
+          `
           SELECT id
 
           FROM fixture
@@ -23,13 +23,16 @@ export function advanceNextFixture(
               'SCHEDULED',
               'IN_PROGRESS'
             )
-        `)
-        .get(fixtureId) as {
-          id: number;
-        } | undefined
-
-    : db
-        .prepare(`
+        `,
+        )
+        .get(fixtureId) as
+        | {
+            id: number;
+          }
+        | undefined)
+    : (db
+        .prepare(
+          `
           SELECT id
 
           FROM fixture
@@ -48,23 +51,25 @@ export function advanceNextFixture(
             id
 
           LIMIT 1
-        `)
-        .get() as {
-          id: number;
-        } | undefined;
-
+        `,
+        )
+        .get() as
+        | {
+            id: number;
+          }
+        | undefined);
 
   if (!row) {
     throw new Error(
       fixtureId
         ? `Scheduled fixture ${fixtureId} not found (it may already be completed or is not playable).`
-        : "No scheduled or in-progress fixtures remain."
+        : "No scheduled or in-progress fixtures remain.",
     );
   }
 
-
   const stage = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         r.stage_id AS id,
         r.id AS roundId
@@ -75,57 +80,46 @@ export function advanceNextFixture(
         ON r.id = f.round_id
 
       WHERE f.id = ?
-    `)
-    .get(row.id) as {
-      id: number;
-      roundId: number;
-    } | undefined;
-
+    `,
+    )
+    .get(row.id) as
+    | {
+        id: number;
+        roundId: number;
+      }
+    | undefined;
 
   if (!stage) {
-    throw new Error(
-      `Fixture ${row.id} has no competition stage.`
-    );
+    throw new Error(`Fixture ${row.id} has no competition stage.`);
   }
-
 
   // simulateMatch commits a checkpoint after every minute. Do not wrap it in an
   // outer transaction, otherwise SQLite would defer every checkpoint until FT.
-  const summary = simulateMatch(
-    db,
-    row.id
-  );
-
+  const summary = simulateMatch(db, row.id);
 
   if (summary.minutes !== 90) {
-    throw new Error(`Fixture ${row.id} did not reach full time; competition results were not updated.`);
+    throw new Error(
+      `Fixture ${row.id} did not reach full time; competition results were not updated.`,
+    );
   }
 
   const finalizeMatchday = db.transaction(() => {
-    const pending = db.prepare(
-      "SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status<>'COMPLETED'",
-    ).get(stage.roundId) as { count:number };
+    const pending = db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status<>'COMPLETED'",
+      )
+      .get(stage.roundId) as { count: number };
 
     // Standings are a live view of completed fixtures, not a round-level
     // snapshot. Refresh them after every match, even when its round is partial.
-    rebuildStandings(
-      db,
-      stage.id
-    );
+    rebuildStandings(db, stage.id);
 
     // Knockout progression and season completion are round-level operations:
     // never create the next bracket round until every fixture is completed.
     if (pending.count === 0) {
-      progressKnockoutStage(
-        db,
-        stage.id,
-        stage.roundId
-      );
+      progressKnockoutStage(db, stage.id, stage.roundId);
 
-      finishSeasonIfComplete(
-        db,
-        stage.id
-      );
+      finishSeasonIfComplete(db, stage.id);
     }
   });
 
@@ -133,10 +127,8 @@ export function advanceNextFixture(
   // bookkeeping is atomic and can be safely retried after a process restart.
   finalizeMatchday.immediate();
 
-
   return summary;
 }
-
 
 /**
  * Simulate every pending fixture in the round containing the managed club's
@@ -145,16 +137,18 @@ export function advanceNextFixture(
  */
 export function advanceFixtureRound(
   db: SqliteDatabase,
-  fixtureId?: number
+  fixtureId?: number,
 ): MatchSummary[] {
-  let selected: {
-    id: number;
-  } | undefined;
-
+  let selected:
+    | {
+        id: number;
+      }
+    | undefined;
 
   if (fixtureId !== undefined) {
     selected = db
-      .prepare(`
+      .prepare(
+        `
         SELECT id
 
         FROM fixture
@@ -164,41 +158,46 @@ export function advanceFixtureRound(
             'SCHEDULED',
             'IN_PROGRESS'
           )
-      `)
-      .get(fixtureId) as {
-        id: number;
-      } | undefined;
-
+      `,
+      )
+      .get(fixtureId) as
+      | {
+          id: number;
+        }
+      | undefined;
 
     if (!selected) {
       throw new Error(
-        `Scheduled fixture ${fixtureId} not found (it may already be completed or is not playable).`
+        `Scheduled fixture ${fixtureId} not found (it may already be completed or is not playable).`,
       );
     }
   } else {
     const metadata = db
-      .prepare(`
+      .prepare(
+        `
         SELECT
           selected_club_id AS clubId
 
         FROM game_save_metadata
 
         LIMIT 1
-      `)
-      .get() as {
-        clubId: number;
-      } | undefined;
-
+      `,
+      )
+      .get() as
+      | {
+          clubId: number;
+        }
+      | undefined;
 
     if (!metadata) {
       throw new Error(
-        "Campaign metadata is missing; cannot find the managed club's next match."
+        "Campaign metadata is missing; cannot find the managed club's next match.",
       );
     }
 
-
     selected = db
-      .prepare(`
+      .prepare(
+        `
         SELECT
           f.id
 
@@ -222,25 +221,24 @@ export function advanceFixtureRound(
           f.id
 
         LIMIT 1
-      `)
-      .get(
-        metadata.clubId,
-        metadata.clubId
-      ) as {
-        id: number;
-      } | undefined;
-
+      `,
+      )
+      .get(metadata.clubId, metadata.clubId) as
+      | {
+          id: number;
+        }
+      | undefined;
 
     if (!selected) {
       throw new Error(
-        "No scheduled or in-progress fixtures remain for your club."
+        "No scheduled or in-progress fixtures remain for your club.",
       );
     }
   }
 
-
   const round = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         r.id AS roundId,
         r.stage_id AS stageId
@@ -251,23 +249,18 @@ export function advanceFixtureRound(
         ON r.id = f.round_id
 
       WHERE f.id = ?
-    `)
-    .get(selected.id) as {
-      roundId: number;
-      stageId: number;
-    } | undefined;
-
+    `,
+    )
+    .get(selected.id) as
+    | {
+        roundId: number;
+        stageId: number;
+      }
+    | undefined;
 
   if (!round) {
-    throw new Error(
-      `Fixture ${selected.id} has no competition round.`
-    );
+    throw new Error(`Fixture ${selected.id} has no competition round.`);
   }
 
-
-  return advanceRoundById(
-    db,
-    round.roundId,
-    round.stageId
-  );
+  return advanceRoundById(db, round.roundId, round.stageId);
 }

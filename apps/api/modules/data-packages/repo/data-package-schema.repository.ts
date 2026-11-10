@@ -1,9 +1,6 @@
 import type { SqliteDatabase } from "../../../db/database.js";
 
-
-export function ensureDataPackageSchema(
-  db: SqliteDatabase
-): void {
+export function ensureDataPackageSchema(db: SqliteDatabase): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS data_package_install (
       package_id TEXT PRIMARY KEY,

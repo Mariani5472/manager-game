@@ -1,7 +1,6 @@
 import type { SqliteDatabase } from "../../../db/database.js";
 import type { FixtureStatus } from "../../../../shared/src/index.js";
 
-
 export interface FixtureInfo {
   id: number;
   competition: string;
@@ -15,19 +14,15 @@ export interface FixtureInfo {
   winnerClub: string | null;
 }
 
-
 export function listFixtures(
   db: SqliteDatabase,
-  pendingOnly = false
+  pendingOnly = false,
 ): FixtureInfo[] {
-  const statusFilter =
-    pendingOnly
-      ? "WHERE f.status = 'SCHEDULED'"
-      : "";
-
+  const statusFilter = pendingOnly ? "WHERE f.status = 'SCHEDULED'" : "";
 
   return db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         f.id,
         co.name AS competition,
@@ -107,6 +102,7 @@ export function listFixtures(
       ORDER BY
         f.scheduled_at,
         f.id
-    `)
+    `,
+    )
     .all() as FixtureInfo[];
 }

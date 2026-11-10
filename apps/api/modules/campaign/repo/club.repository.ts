@@ -1,9 +1,6 @@
 import { SqliteDatabase } from "../../../db/database.js";
 
-
-export function listClubs(
-  db: SqliteDatabase
-): Array<{
+export function listClubs(db: SqliteDatabase): Array<{
   id: number;
   name: string;
   nation: string;
@@ -16,7 +13,8 @@ export function listClubs(
         name: string;
         nation: string;
       }
-    >(`
+    >(
+      `
       SELECT
         c.id,
         c.name,
@@ -30,10 +28,10 @@ export function listClubs(
       ORDER BY
         c.reputation DESC,
         c.name
-    `)
+    `,
+    )
     .all();
 }
-
 
 export interface ClubSummary {
   id: number;
@@ -42,39 +40,32 @@ export interface ClubSummary {
   isManaged: boolean;
 }
 
-
-export function getManagedClub(
-  db: SqliteDatabase
-): ClubSummary {
+export function getManagedClub(db: SqliteDatabase): ClubSummary {
   const metadata = db
     .prepare<
       [],
       {
         clubId: number;
       }
-    >(`
+    >(
+      `
       SELECT
         selected_club_id AS clubId
 
       FROM game_save_metadata
 
       LIMIT 1
-    `)
+    `,
+    )
     .get();
 
-
   if (!metadata) {
-    throw new Error(
-      "Campaign metadata is missing."
-    );
+    throw new Error("Campaign metadata is missing.");
   }
 
-
   const club = db
-    .prepare<
-      number,
-      Omit<ClubSummary, "isManaged">
-    >(`
+    .prepare<number, Omit<ClubSummary, "isManaged">>(
+      `
       SELECT
         c.id,
         c.name,
@@ -86,16 +77,15 @@ export function getManagedClub(
         ON n.id = c.nation_id
 
       WHERE c.id = ?
-    `)
+    `,
+    )
     .get(metadata.clubId);
-
 
   if (!club) {
     throw new Error(
-      `Managed club ${metadata.clubId} is missing from this save.`
+      `Managed club ${metadata.clubId} is missing from this save.`,
     );
   }
-
 
   return {
     ...club,

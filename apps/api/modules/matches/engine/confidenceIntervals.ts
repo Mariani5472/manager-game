@@ -1,21 +1,16 @@
-import {
-  clamp,
-} from "./mathUtils.js";
+import { clamp } from "./mathUtils.js";
 import type {
   BinomialConfidenceInterval,
   MeanConfidenceInterval,
 } from "../types/match-engine.types.js";
 
-
 export function meanConfidenceInterval(
   sum: number,
   sumSquares: number,
   observations: number,
-  confidenceLevel = 0.95
+  confidenceLevel = 0.95,
 ): MeanConfidenceInterval {
-  const estimate = observations
-    ? sum / observations
-    : 0;
+  const estimate = observations ? sum / observations : 0;
 
   if (observations < 2) {
     return {
@@ -27,47 +22,28 @@ export function meanConfidenceInterval(
     };
   }
 
-
   const variance = Math.max(
     0,
-    (
-      sumSquares -
-      sum * sum / observations
-    ) /
-    (observations - 1)
+    (sumSquares - (sum * sum) / observations) / (observations - 1),
   );
 
-  const margin =
-    1.959963984540054 *
-    Math.sqrt(
-      variance / observations
-    );
-
+  const margin = 1.959963984540054 * Math.sqrt(variance / observations);
 
   return {
     estimate,
-    lower: Math.max(
-      0,
-      estimate - margin
-    ),
-    upper: Math.min(
-      0.38,
-      estimate + margin
-    ),
+    lower: Math.max(0, estimate - margin),
+    upper: Math.min(0.38, estimate + margin),
     observations,
     confidenceLevel,
   };
 }
 
-
 export function wilsonInterval(
   rate: number,
   trials: number,
-  confidenceLevel = 0.95
+  confidenceLevel = 0.95,
 ): BinomialConfidenceInterval {
-  const successes = Math.round(
-    clamp(rate, 0, 1) * trials
-  );
+  const successes = Math.round(clamp(rate, 0, 1) * trials);
 
   const z =
     confidenceLevel === 0.95
@@ -76,46 +52,25 @@ export function wilsonInterval(
         ? 2.5758293035489004
         : 1.959963984540054;
 
-  const probability =
-    successes / trials;
+  const probability = successes / trials;
 
   const zSquared = z * z;
 
-  const denominator =
-    1 + zSquared / trials;
+  const denominator = 1 + zSquared / trials;
 
-  const center =
-    (
-      probability +
-      zSquared / (2 * trials)
-    ) /
-    denominator;
+  const center = (probability + zSquared / (2 * trials)) / denominator;
 
   const margin =
-    (
-      z *
+    (z *
       Math.sqrt(
-        (
-          probability *
-          (1 - probability) +
-          zSquared / (4 * trials)
-        ) /
-        trials
-      )
-    ) /
+        (probability * (1 - probability) + zSquared / (4 * trials)) / trials,
+      )) /
     denominator;
-
 
   return {
     estimate: probability,
-    lower: Math.max(
-      0,
-      center - margin
-    ),
-    upper: Math.min(
-      1,
-      center + margin
-    ),
+    lower: Math.max(0, center - margin),
+    upper: Math.min(1, center + margin),
     successes,
     trials,
     confidenceLevel,

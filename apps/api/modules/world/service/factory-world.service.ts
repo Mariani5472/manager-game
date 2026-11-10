@@ -8,32 +8,25 @@ import {
   FactoryCalendarRepair,
 } from "./squad-profile.service.js";
 
-
 /**
  * Upgrade only the untouched factory world to 16 playable clubs.
  * Existing saves are independent copies.
  */
-export function ensureFactoryWorld16(
-  db: SqliteDatabase
-): {
+export function ensureFactoryWorld16(db: SqliteDatabase): {
   upgraded: boolean;
   clubs: number;
   leagueFixtures: number;
   cupEntrants: number;
 } {
   const clubCount = (
-    db
-      .prepare(
-        "SELECT COUNT(*) AS count FROM club"
-      )
-      .get() as {
-        count: number;
-      }
+    db.prepare("SELECT COUNT(*) AS count FROM club").get() as {
+      count: number;
+    }
   ).count;
 
-
   const league = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         st.id AS stageId,
         cs.id AS seasonId
@@ -49,15 +42,18 @@ export function ensureFactoryWorld16(
       WHERE co.name = 'Liga Nacional de Teste'
         AND cs.season_year = 2026
         AND st.stage_kind = 'LEAGUE'
-    `)
-    .get() as {
-      stageId: number;
-      seasonId: number;
-    } | undefined;
-
+    `,
+    )
+    .get() as
+    | {
+        stageId: number;
+        seasonId: number;
+      }
+    | undefined;
 
   const cup = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         st.id AS stageId,
         cs.id AS seasonId
@@ -73,45 +69,45 @@ export function ensureFactoryWorld16(
       WHERE co.name = 'Copa Nacional de Teste'
         AND cs.season_year = 2026
         AND st.stage_kind = 'KNOCKOUT'
-    `)
-    .get() as {
-      stageId: number;
-      seasonId: number;
-    } | undefined;
-
+    `,
+    )
+    .get() as
+    | {
+        stageId: number;
+        seasonId: number;
+      }
+    | undefined;
 
   if (!league || !cup) {
     throw new Error(
-      "The factory league or cup was not found; the 16-club upgrade was not applied."
+      "The factory league or cup was not found; the 16-club upgrade was not applied.",
     );
   }
-
 
   const leagueCount = (
     db
       .prepare(
-        "SELECT COUNT(*) AS count FROM stage_participant WHERE stage_id=?"
+        "SELECT COUNT(*) AS count FROM stage_participant WHERE stage_id=?",
       )
       .get(league.stageId) as {
-        count: number;
-      }
+      count: number;
+    }
   ).count;
-
 
   const cupCount = (
     db
       .prepare(
-        "SELECT COUNT(*) AS count FROM stage_participant WHERE stage_id=?"
+        "SELECT COUNT(*) AS count FROM stage_participant WHERE stage_id=?",
       )
       .get(cup.stageId) as {
-        count: number;
-      }
+      count: number;
+    }
   ).count;
-
 
   const leagueFixtures = (
     db
-      .prepare(`
+      .prepare(
+        `
         SELECT
           COUNT(*) AS count
 
@@ -121,18 +117,14 @@ export function ensureFactoryWorld16(
           ON r.id = f.round_id
 
         WHERE r.stage_id = ?
-      `)
+      `,
+      )
       .get(league.stageId) as {
-        count: number;
-      }
+      count: number;
+    }
   ).count;
 
-
-  if (
-    clubCount === 16 &&
-    leagueCount === 16 &&
-    cupCount === 16
-  ) {
+  if (clubCount === 16 && leagueCount === 16 && cupCount === 16) {
     ensureFactorySquadProfiles(db);
 
     return {
@@ -143,140 +135,80 @@ export function ensureFactoryWorld16(
     };
   }
 
-
-  if (
-    clubCount !== 4 ||
-    leagueCount !== 4 ||
-    cupCount !== 4
-  ) {
+  if (clubCount !== 4 || leagueCount !== 4 || cupCount !== 4) {
     throw new Error(
-      "Factory world is neither the original four-club seed nor a complete 16-club world; no automatic upgrade was attempted."
+      "Factory world is neither the original four-club seed nor a complete 16-club world; no automatic upgrade was attempted.",
     );
   }
 
-
   const played = (
     db
-      .prepare(`
+      .prepare(
+        `
         SELECT
           COUNT(*) AS count
 
         FROM fixture
 
         WHERE status <> 'SCHEDULED'
-      `)
+      `,
+      )
       .get() as {
-        count: number;
-      }
+      count: number;
+    }
   ).count;
-
 
   if (played > 0) {
     throw new Error(
-      "The factory world contains played or non-scheduled fixtures. It was not upgraded; existing saves are not changed."
+      "The factory world contains played or non-scheduled fixtures. It was not upgraded; existing saves are not changed.",
     );
   }
 
-
   const names = [
-    [
-      "Atlético das Palmeiras",
-      "ADP",
-      46,
-    ],
-    [
-      "Real de Santa Luzia",
-      "RSL",
-      44,
-    ],
-    [
-      "Grêmio da Serra",
-      "GDS",
-      42,
-    ],
-    [
-      "Ferroviário do Litoral",
-      "FDL",
-      40,
-    ],
-    [
-      "Esportivo Campo Azul",
-      "ECA",
-      38,
-    ],
-    [
-      "Nacional de Pedra Branca",
-      "NPB",
-      36,
-    ],
-    [
-      "Desportivo São Bento",
-      "DSB",
-      34,
-    ],
-    [
-      "Associação Vila Nova",
-      "AVN",
-      32,
-    ],
-    [
-      "Clube Atlético do Cerrado",
-      "CAC",
-      30,
-    ],
-    [
-      "União das Águas",
-      "UDA",
-      28,
-    ],
-    [
-      "Operário de Santa Rita",
-      "OSR",
-      26,
-    ],
-    [
-      "Independente do Sul",
-      "IDS",
-      24,
-    ],
+    ["Atlético das Palmeiras", "ADP", 46],
+    ["Real de Santa Luzia", "RSL", 44],
+    ["Grêmio da Serra", "GDS", 42],
+    ["Ferroviário do Litoral", "FDL", 40],
+    ["Esportivo Campo Azul", "ECA", 38],
+    ["Nacional de Pedra Branca", "NPB", 36],
+    ["Desportivo São Bento", "DSB", 34],
+    ["Associação Vila Nova", "AVN", 32],
+    ["Clube Atlético do Cerrado", "CAC", 30],
+    ["União das Águas", "UDA", 28],
+    ["Operário de Santa Rita", "OSR", 26],
+    ["Independente do Sul", "IDS", 24],
   ] as const;
 
-
   const attributeColumns = (
-    db.pragma(
-      "table_info(player_attribute)"
-    ) as Array<{
+    db.pragma("table_info(player_attribute)") as Array<{
       name: string;
     }>
   )
-    .map(row => row.name)
-    .filter(name => name !== "player_id");
-
+    .map((row) => row.name)
+    .filter((name) => name !== "player_id");
 
   const playerColumns = (
-    db.pragma(
-      "table_info(player)"
-    ) as Array<{
+    db.pragma("table_info(player)") as Array<{
       name: string;
     }>
   )
-    .map(row => row.name)
-    .filter(name => name !== "person_id");
-
+    .map((row) => row.name)
+    .filter((name) => name !== "person_id");
 
   const nextPersonId = (
     db
-      .prepare(`
+      .prepare(
+        `
         SELECT
           COALESCE(MAX(id), 0) + 1 AS id
 
         FROM person
-      `)
+      `,
+      )
       .get() as {
-        id: number;
-      }
+      id: number;
+    }
   ).id;
-
 
   const insertWorld = db.transaction(() => {
     const insertClub = db.prepare(`
@@ -291,7 +223,6 @@ export function ensureFactoryWorld16(
       VALUES (?, 1, ?, ?, ?, ?)
     `);
 
-
     const insertStadium = db.prepare(`
       INSERT INTO stadium (
         club_id,
@@ -303,7 +234,6 @@ export function ensureFactoryWorld16(
       VALUES (?, ?, ?, ?, ?)
     `);
 
-
     const insertPerson = db.prepare(`
       INSERT INTO person (
         id,
@@ -314,24 +244,21 @@ export function ensureFactoryWorld16(
       VALUES (?, ?, ?, 1)
     `);
 
-
     const insertPlayer = db.prepare(
       "INSERT INTO player(person_id," +
-      playerColumns.join(",") +
-      ") SELECT ?," +
-      playerColumns.join(",") +
-      " FROM player WHERE person_id=?"
+        playerColumns.join(",") +
+        ") SELECT ?," +
+        playerColumns.join(",") +
+        " FROM player WHERE person_id=?",
     );
-
 
     const insertAttributes = db.prepare(
       "INSERT INTO player_attribute(player_id," +
-      attributeColumns.join(",") +
-      ") SELECT ?," +
-      attributeColumns.join(",") +
-      " FROM player_attribute WHERE player_id=?"
+        attributeColumns.join(",") +
+        ") SELECT ?," +
+        attributeColumns.join(",") +
+        " FROM player_attribute WHERE player_id=?",
     );
-
 
     const insertPositions = db.prepare(`
       INSERT INTO player_position (
@@ -347,7 +274,6 @@ export function ensureFactoryWorld16(
       WHERE player_id = ?
     `);
 
-
     const insertMembership = db.prepare(`
       INSERT INTO squad_membership (
         player_id,
@@ -357,7 +283,6 @@ export function ensureFactoryWorld16(
       )
       VALUES (?, ?, ?, 'FIRST_TEAM')
     `);
-
 
     const insertCondition = db.prepare(`
       INSERT INTO player_condition (
@@ -379,7 +304,6 @@ export function ensureFactoryWorld16(
       WHERE player_id = ?
     `);
 
-
     const sourceSquads = db.prepare(`
       SELECT
         sm.player_id AS playerId,
@@ -398,150 +322,84 @@ export function ensureFactoryWorld16(
         sm.player_id
     `);
 
-
     let personId = nextPersonId;
 
-
-    for (
-      let index = 0;
-      index < names.length;
-      index++
-    ) {
+    for (let index = 0; index < names.length; index++) {
       const clubId = 5 + index;
 
-      const cityId =
-        clubId % 2 === 1
-          ? 1
-          : 2;
+      const cityId = clubId % 2 === 1 ? 1 : 2;
 
-      const [
-        name,
-        short,
-        reputation,
-      ] = names[index]!;
+      const [name, short, reputation] = names[index]!;
 
-
-      insertClub.run(
-        clubId,
-        cityId,
-        name,
-        short,
-        reputation
-      );
-
+      insertClub.run(clubId, cityId, name, short, reputation);
 
       insertStadium.run(
         clubId,
         cityId,
         "Estádio " + name,
         7000 + reputation * 250,
-        58 + Math.floor(reputation / 4)
+        58 + Math.floor(reputation / 4),
       );
 
-
-      db
-        .prepare(
-          "INSERT INTO team_tactic(club_id,formation_id) VALUES(?,1)"
-        )
-        .run(clubId);
-
+      db.prepare(
+        "INSERT INTO team_tactic(club_id,formation_id) VALUES(?,1)",
+      ).run(clubId);
 
       const sourceClub = 1 + (index % 4);
 
-
-      for (
-        const source of sourceSquads.all(
-          sourceClub
-        ) as Array<{
-          playerId: number;
-          shirtNumber: number;
-          birthDate: string | null;
-        }>
-      ) {
+      for (const source of sourceSquads.all(sourceClub) as Array<{
+        playerId: number;
+        shirtNumber: number;
+        birthDate: string | null;
+      }>) {
         const id = personId++;
 
+        insertPerson.run(id, "Jogador " + id + " - " + name, source.birthDate);
 
-        insertPerson.run(
-          id,
-          "Jogador " + id + " - " + name,
-          source.birthDate
-        );
+        insertPlayer.run(id, source.playerId);
 
-        insertPlayer.run(
-          id,
-          source.playerId
-        );
+        insertAttributes.run(id, source.playerId);
 
-        insertAttributes.run(
-          id,
-          source.playerId
-        );
+        insertPositions.run(id, source.playerId);
 
-        insertPositions.run(
-          id,
-          source.playerId
-        );
+        insertMembership.run(id, clubId, source.shirtNumber);
 
-        insertMembership.run(
-          id,
-          clubId,
-          source.shirtNumber
-        );
-
-        insertCondition.run(
-          id,
-          source.playerId
-        );
+        insertCondition.run(id, source.playerId);
       }
     }
 
+    db.prepare("DELETE FROM competition_round WHERE stage_id IN (?,?)").run(
+      league.stageId,
+      cup.stageId,
+    );
 
-    db
-      .prepare(
-        "DELETE FROM competition_round WHERE stage_id IN (?,?)"
-      )
-      .run(
-        league.stageId,
-        cup.stageId
-      );
+    db.prepare("DELETE FROM stage_standing WHERE stage_id=?").run(
+      league.stageId,
+    );
 
-    db
-      .prepare(
-        "DELETE FROM stage_standing WHERE stage_id=?"
-      )
-      .run(league.stageId);
+    db.prepare("DELETE FROM stage_participant WHERE stage_id IN (?,?)").run(
+      league.stageId,
+      cup.stageId,
+    );
 
-    db
-      .prepare(
-        "DELETE FROM stage_participant WHERE stage_id IN (?,?)"
-      )
-      .run(
-        league.stageId,
-        cup.stageId
-      );
-
-    db
-      .prepare(
-        "DELETE FROM competition_entry WHERE season_id IN (?,?)"
-      )
-      .run(
-        league.seasonId,
-        cup.seasonId
-      );
-
+    db.prepare("DELETE FROM competition_entry WHERE season_id IN (?,?)").run(
+      league.seasonId,
+      cup.seasonId,
+    );
 
     const clubs = db
-      .prepare(`
+      .prepare(
+        `
         SELECT id
 
         FROM club
 
         ORDER BY id
-      `)
+      `,
+      )
       .all() as Array<{
-        id: number;
-      }>;
-
+      id: number;
+    }>;
 
     const insertParticipant = db.prepare(`
       INSERT INTO stage_participant (
@@ -562,72 +420,43 @@ export function ensureFactoryWorld16(
       VALUES (?, ?, ?)
     `);
 
-
     clubs.forEach((club, index) => {
       const seed = index + 1;
 
+      insertParticipant.run(league.stageId, club.id, 1, seed);
 
-      insertParticipant.run(
-        league.stageId,
-        club.id,
-        1,
-        seed
-      );
+      insertParticipant.run(cup.stageId, club.id, 2, seed);
 
-      insertParticipant.run(
-        cup.stageId,
-        club.id,
-        2,
-        seed
-      );
+      insertEntry.run(league.seasonId, club.id, seed);
 
-      insertEntry.run(
-        league.seasonId,
-        club.id,
-        seed
-      );
+      insertEntry.run(cup.seasonId, club.id, seed);
 
-      insertEntry.run(
-        cup.seasonId,
-        club.id,
-        seed
-      );
-
-
-      db
-        .prepare(`
+      db.prepare(
+        `
           INSERT INTO stage_standing (
             stage_id,
             club_id,
             group_id
           )
           VALUES (?, ?, 1)
-        `)
-        .run(
-          league.stageId,
-          club.id
-        );
+        `,
+      ).run(league.stageId, club.id);
     });
 
-
-    db
-      .prepare(`
+    db.prepare(
+      `
         UPDATE competition_season
         SET status = 'PLANNED'
         WHERE id IN (?, ?)
-      `)
-      .run(
-        league.seasonId,
-        cup.seasonId
-      );
-
+      `,
+    ).run(league.seasonId, cup.seasonId);
 
     const cupStart = "2026-03-01";
 
-
     const cupRoundId = Number(
       db
-        .prepare(`
+        .prepare(
+          `
           INSERT INTO competition_round (
             stage_id,
             round_number,
@@ -636,15 +465,10 @@ export function ensureFactoryWorld16(
             end_date
           )
           VALUES (?, 1, 'Oitavas de final', ?, ?)
-        `)
-        .run(
-          cup.stageId,
-          cupStart,
-          cupStart
+        `,
         )
-        .lastInsertRowid
+        .run(cup.stageId, cupStart, cupStart).lastInsertRowid,
     );
-
 
     const insertFixture = db.prepare(`
       INSERT INTO fixture (
@@ -658,24 +482,17 @@ export function ensureFactoryWorld16(
       VALUES (?, ?, ?, ?, ?, ?)
     `);
 
-
-    for (
-      let i = 0;
-      i < clubs.length;
-      i += 2
-    ) {
+    for (let i = 0; i < clubs.length; i += 2) {
       const home = clubs[i]!;
       const away = clubs[i + 1]!;
 
-
       const stadium = db
-        .prepare(
-          "SELECT id FROM stadium WHERE club_id=? ORDER BY id LIMIT 1"
-        )
-        .get(home.id) as {
-          id: number;
-        } | undefined;
-
+        .prepare("SELECT id FROM stadium WHERE club_id=? ORDER BY id LIMIT 1")
+        .get(home.id) as
+        | {
+            id: number;
+          }
+        | undefined;
 
       insertFixture.run(
         cupRoundId,
@@ -684,31 +501,26 @@ export function ensureFactoryWorld16(
         stadium?.id ?? null,
         cupStart +
           "T" +
-          String(14 + (i / 2 % 4) * 2)
-            .padStart(2, "0") +
+          String(14 + ((i / 2) % 4) * 2).padStart(2, "0") +
           ":00:00",
-        22001 + i
+        22001 + i,
       );
     }
   });
 
-
   insertWorld();
-
 
   const calendar = ensureFactoryLeagueCalendar(db);
 
   ensureFactorySquadProfiles(db);
 
-
   if (calendar.fixtures !== 240) {
     throw new Error(
       "The 16-club league calendar was not generated correctly (" +
-      calendar.fixtures +
-      " fixtures)."
+        calendar.fixtures +
+        " fixtures).",
     );
   }
-
 
   return {
     upgraded: true,
@@ -718,15 +530,15 @@ export function ensureFactoryWorld16(
   };
 }
 
-
 /**
  * Reconcile the untouched factory league calendar without modifying played matches.
  */
 export function ensureFactoryLeagueCalendar(
-  db: SqliteDatabase
+  db: SqliteDatabase,
 ): FactoryCalendarRepair {
   const stage = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         st.id AS stageId,
         cs.season_year AS year,
@@ -751,19 +563,18 @@ export function ensureFactoryLeagueCalendar(
       ORDER BY st.id
 
       LIMIT 1
-    `)
-    .get() as {
-      stageId: number;
-      year: number;
-      startDate: string | null;
-      legs: number;
-    } | undefined;
+    `,
+    )
+    .get() as
+    | {
+        stageId: number;
+        year: number;
+        startDate: string | null;
+        legs: number;
+      }
+    | undefined;
 
-
-  if (
-    !stage ||
-    stage.legs !== 2
-  ) {
+  if (!stage || stage.legs !== 2) {
     return {
       repaired: false,
       rounds: 0,
@@ -771,9 +582,9 @@ export function ensureFactoryLeagueCalendar(
     };
   }
 
-
   const participants = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         club_id,
         group_id,
@@ -786,9 +597,9 @@ export function ensureFactoryLeagueCalendar(
       ORDER BY
         seed,
         club_id
-    `)
+    `,
+    )
     .all(stage.stageId) as ParticipantRow[];
-
 
   if (participants.length < 2) {
     return {
@@ -798,15 +609,11 @@ export function ensureFactoryLeagueCalendar(
     };
   }
 
-
-  const rounds = roundRobin(
-    participants,
-    stage.legs
-  );
-
+  const rounds = roundRobin(participants, stage.legs);
 
   const currentRounds = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         id,
         round_number AS roundNumber
@@ -816,15 +623,16 @@ export function ensureFactoryLeagueCalendar(
       WHERE stage_id = ?
 
       ORDER BY round_number
-    `)
+    `,
+    )
     .all(stage.stageId) as Array<{
-      id: number;
-      roundNumber: number;
-    }>;
-
+    id: number;
+    roundNumber: number;
+  }>;
 
   const currentFixtures = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         f.id,
         f.status
@@ -835,15 +643,16 @@ export function ensureFactoryLeagueCalendar(
         ON r.id = f.round_id
 
       WHERE r.stage_id = ?
-    `)
+    `,
+    )
     .all(stage.stageId) as Array<{
-      id: number;
-      status: string;
-    }>;
-
+    id: number;
+    status: string;
+  }>;
 
   const roundCounts = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         COUNT(f.id) AS fixtures
 
@@ -855,32 +664,22 @@ export function ensureFactoryLeagueCalendar(
       WHERE r.stage_id = ?
 
       GROUP BY r.id
-    `)
+    `,
+    )
     .all(stage.stageId) as Array<{
-      fixtures: number;
-    }>;
+    fixtures: number;
+  }>;
 
-
-  const expectedFixtures = rounds.reduce(
-    (sum, round) => sum + round.length,
-    0
-  );
-
+  const expectedFixtures = rounds.reduce((sum, round) => sum + round.length, 0);
 
   const isCorrect =
     currentRounds.length === rounds.length &&
-    currentRounds.every(
-      (round, index) =>
-        round.roundNumber === index + 1
-    ) &&
+    currentRounds.every((round, index) => round.roundNumber === index + 1) &&
     currentFixtures.length === expectedFixtures &&
     roundCounts.length === rounds.length &&
     roundCounts.every(
-      row =>
-        row.fixtures ===
-        Math.floor(participants.length / 2)
+      (row) => row.fixtures === Math.floor(participants.length / 2),
     );
-
 
   if (isCorrect) {
     return {
@@ -890,26 +689,16 @@ export function ensureFactoryLeagueCalendar(
     };
   }
 
-
-  if (
-    currentFixtures.some(
-      fixture =>
-        fixture.status !== "SCHEDULED"
-    )
-  ) {
+  if (currentFixtures.some((fixture) => fixture.status !== "SCHEDULED")) {
     throw new Error(
-      "The factory league calendar is incomplete but contains played or non-scheduled fixtures. It was not changed; back up the master database before any manual repair."
+      "The factory league calendar is incomplete but contains played or non-scheduled fixtures. It was not changed; back up the master database before any manual repair.",
     );
   }
 
-
   const create = db.transaction(() => {
-    db
-      .prepare(
-        "DELETE FROM competition_round WHERE stage_id=?"
-      )
-      .run(stage.stageId);
-
+    db.prepare("DELETE FROM competition_round WHERE stage_id=?").run(
+      stage.stageId,
+    );
 
     const insertRound = db.prepare(`
       INSERT INTO competition_round (
@@ -921,7 +710,6 @@ export function ensureFactoryLeagueCalendar(
       )
       VALUES (?, ?, ?, ?, ?)
     `);
-
 
     const insertFixture = db.prepare(`
       INSERT INTO fixture (
@@ -935,68 +723,45 @@ export function ensureFactoryLeagueCalendar(
       VALUES (?, ?, ?, ?, ?, ?)
     `);
 
-
-    const start =
-      stage.startDate
-        ? new Date(
-            `${stage.startDate}T00:00:00Z`
-          )
-        : new Date(
-            "2026-01-10T00:00:00Z"
-          );
-
+    const start = stage.startDate
+      ? new Date(`${stage.startDate}T00:00:00Z`)
+      : new Date("2026-01-10T00:00:00Z");
 
     rounds.forEach((matches, roundIndex) => {
       const roundNumber = roundIndex + 1;
 
       const dateValue = new Date(start);
 
-      dateValue.setUTCDate(
-        dateValue.getUTCDate() +
-        roundIndex * 7
-      );
+      dateValue.setUTCDate(dateValue.getUTCDate() + roundIndex * 7);
 
-      const date = dateValue
-        .toISOString()
-        .slice(0, 10);
-
+      const date = dateValue.toISOString().slice(0, 10);
 
       const roundId = Number(
-        insertRound
-          .run(
-            stage.stageId,
-            roundNumber,
-            `Rodada ${roundNumber}`,
-            date,
-            date
-          )
-          .lastInsertRowid
+        insertRound.run(
+          stage.stageId,
+          roundNumber,
+          `Rodada ${roundNumber}`,
+          date,
+          date,
+        ).lastInsertRowid,
       );
-
 
       matches.forEach((match, matchIndex) => {
         const stadium = db
-          .prepare(
-            "SELECT id FROM stadium WHERE club_id=? ORDER BY id LIMIT 1"
-          )
-          .get(match.home) as {
-            id: number;
-          } | undefined;
+          .prepare("SELECT id FROM stadium WHERE club_id=? ORDER BY id LIMIT 1")
+          .get(match.home) as
+          | {
+              id: number;
+            }
+          | undefined;
 
-
-        const scheduledAt =
-          `${date}T${String(16 + matchIndex * 2)
-            .padStart(2, "0")}:00:00`;
-
+        const scheduledAt = `${date}T${String(16 + matchIndex * 2).padStart(
+          2,
+          "0",
+        )}:00:00`;
 
         const seed =
-          (
-            (stage.year * 100000) +
-            (roundNumber * 100) +
-            matchIndex +
-            1
-          ) >>> 0;
-
+          (stage.year * 100000 + roundNumber * 100 + matchIndex + 1) >>> 0;
 
         insertFixture.run(
           roundId,
@@ -1004,15 +769,13 @@ export function ensureFactoryLeagueCalendar(
           match.away,
           stadium?.id ?? null,
           scheduledAt,
-          seed
+          seed,
         );
       });
     });
   });
 
-
   create();
-
 
   return {
     repaired: true,

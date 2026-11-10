@@ -18,7 +18,10 @@ export class SaveService {
   }
 
   async createCareer(input: CreateCareerRequest) {
-    this.clubCountryValidator.assertClubBelongsToCountry(input.clubId, input.countryId);
+    this.clubCountryValidator.assertClubBelongsToCountry(
+      input.clubId,
+      input.countryId,
+    );
     return this.saveRepository.create(input);
   }
 

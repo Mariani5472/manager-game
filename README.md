@@ -56,7 +56,6 @@ npm run dev -- apply-movements --year 2026 --save-id <save-id>
 
 O exemplo data/packages/example-regional-leagues.json inclui um país fictício, quatro clubes, cidades, estádios, jogadores, duas divisões e regras recíprocas de acesso/rebaixamento. A estrutura JSON está documentada em data/packages/README.md.
 
-
 ## Fase 2 — decisões estratégicas
 
 - **Escalação:** 11 titulares por slots da formação e até sete reservas. A API valida clube, disponibilidade, duplicidade e goleiro. Se ainda não existe uma escalação salva, a engine sugere automaticamente uma usando posição, atributos e condição individual.
@@ -88,8 +87,6 @@ O teste de integração `season integration validates standings, persistence, re
 Mudanças futuras no calendário, simulação, classificação, persistência ou encerramento devem manter esse teste verde. Se uma regra do jogo mudar intencionalmente, atualize o teste junto com a regra e documente o contrato novo; não remova a cobertura só para fazer o CI passar.
 
 O kernel é pseudoaleatório e reproduzível por seed para facilitar comparações entre escalações/táticas. O motor continua sendo uma simulação probabilística compacta, não uma garantia de equilíbrio calibrado; os relatórios Monte Carlo devem orientar ajustes graduais nos parâmetros.
-
-
 
 ## Fase 7 — ciclo de vida do elenco
 
@@ -264,15 +261,12 @@ As regras são aplicadas na ordem definida em `stage_standing_rule`. `HEAD_TO_HE
 
 Substituições dinâmicas durante o jogo e a influência completa de clima e viagem ainda não estão conectadas ao kernel nesta fase. A prioridade é fazer as decisões pré-jogo terem efeito demonstrável mantendo o processamento rápido e orientado a eventos.
 
-
 ## Correções do motor de partidas
 
 - A partida jogada e a análise Monte Carlo usam o mesmo kernel probabilístico.
 - As metas iniciais de calibração são aproximadamente 24 finalizações totais, 8,2 no alvo e 2,62 de xG combinado por partida; os testes validam intervalos em 5.000 simulações para reduzir dependência de uma única amostra.
 - O motor persiste checkpoints por minuto em `match_simulation_state`, o minuto/placar atual em `fixture` e o momentum derivado dos mesmos eventos de gol.
 - Se o processo for interrompido durante uma partida, execute novamente `play <fixture-id> --save-id <save-id>` para retomar do último checkpoint. Partidas concluídas continuam protegidas contra execução duplicada.
-
-
 
 ### Confiabilidade P0 — contratos de persistência
 
@@ -309,11 +303,9 @@ npm run dev -- diagnostics --simulations 5000 --save-id <save-id>
 
 The report groups simulated shots into xG bands and counts goals, saves, and misses in each band. It compares the strongest and weakest available clubs, then reverses their home/away roles to expose any side-assignment effect. This is a diagnostic comparison, not itself a home-advantage mechanic. The match engine applies an explicit +0.004 absolute modifier to the home side's per-minute shot-creation probability; the diagnostic estimates the resulting home/away effect using paired simulations. Finally, it audits up to 100 completed fixtures for agreement between goals and score, 90 momentum rows, and a completed minute-90 checkpoint. Review `persistedMatches.issues` first when investigating an existing save.
 
-
 ### Interpreting match diagnostics
 
 The xG report samples low-, medium-, and high-quality chance profiles, so higher xG bands should be populated in a sufficiently large run. Side-swapped simulations use random streams tied to club identity, making the comparison paired and reproducible. Because the engine includes a +0.004 absolute per-minute shot-creation modifier for the home side, the estimated home-advantage delta should be small and positive on average, but any finite Monte Carlo sample can vary. The report also flags when the available clubs do not have enough rating separation for a meaningful favorite-versus-underdog test. Missing checkpoints on completed matches are warnings (potentially legacy data); malformed or incomplete checkpoints that exist remain errors.
-
 
 ## Validação avançada do motor
 
@@ -346,7 +338,6 @@ Para aplicar os novos perfis a um save existente de 16 clubes, execute explicita
 ```bash
 npm run dev -- recalibrate-squads --save-id <save-id>
 ```
-
 
 ## Fase P0 — desempenho, observabilidade e calibração
 
@@ -397,7 +388,6 @@ Essa separação torna as dependências inspecionáveis, mas não prova que todo
 - Adicionar bases históricas versionadas para gols/xG/finalizações e pré-registrar intervalos de aceitação por competição e período.
 - Validar os cenários com seeds distintas e intervalos de confiança, incluindo favoritos, azarões, goleiros excepcionais, mando e alterações táticas.
 - Só otimizar ou alterar a arquitetura quando as métricas identificarem o gargalo e houver benchmark antes/depois reproduzível.
-
 
 ## Calibração histórica fora da amostra
 

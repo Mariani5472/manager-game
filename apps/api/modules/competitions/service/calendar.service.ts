@@ -5,44 +5,35 @@ import { rebuildStandings } from "../repo/standings.repository.js";
 import { simulateMatch } from "../../matches/service/match-simulation.service.js";
 import type { MatchSummary } from "../../matches/types/match-engine.types.js";
 
-
 export function advanceRound(
   db: SqliteDatabase,
-  roundId: number
+  roundId: number,
 ): MatchSummary[] {
   const round = db
-    .prepare(
-      "SELECT id,stage_id AS stageId FROM competition_round WHERE id=?"
-    )
-    .get(roundId) as {
-      id: number;
-      stageId: number;
-    } | undefined;
-
+    .prepare("SELECT id,stage_id AS stageId FROM competition_round WHERE id=?")
+    .get(roundId) as
+    | {
+        id: number;
+        stageId: number;
+      }
+    | undefined;
 
   if (!round) {
-    throw new Error(
-      `Round ID ${roundId} was not found.`
-    );
+    throw new Error(`Round ID ${roundId} was not found.`);
   }
 
-
-  return advanceRoundById(
-    db,
-    round.id,
-    round.stageId
-  );
+  return advanceRoundById(db, round.id, round.stageId);
 }
-
 
 /** Resolve a round by its sequence within a stage, never by a global database ID. */
 export function advanceStageRound(
   db: SqliteDatabase,
   stageId: number,
-  roundNumber: number
+  roundNumber: number,
 ): MatchSummary[] {
   const round = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         id,
         stage_id AS stageId
@@ -51,19 +42,19 @@ export function advanceStageRound(
 
       WHERE stage_id = ?
         AND round_number = ?
-    `)
-    .get(
-      stageId,
-      roundNumber
-    ) as {
-      id: number;
-      stageId: number;
-    } | undefined;
-
+    `,
+    )
+    .get(stageId, roundNumber) as
+    | {
+        id: number;
+        stageId: number;
+      }
+    | undefined;
 
   if (!round) {
     const available = db
-      .prepare(`
+      .prepare(
+        `
         SELECT
           round_number AS roundNumber,
           name
@@ -73,41 +64,33 @@ export function advanceStageRound(
         WHERE stage_id = ?
 
         ORDER BY round_number
-      `)
+      `,
+      )
       .all(stageId) as Array<{
-        roundNumber: number;
-        name: string;
-      }>;
-
+      roundNumber: number;
+      name: string;
+    }>;
 
     const description = available
-      .map(
-        item => `${item.roundNumber} (${item.name})`
-      )
+      .map((item) => `${item.roundNumber} (${item.name})`)
       .join(", ");
 
-
     throw new Error(
-      `Round number ${roundNumber} was not found in stage ${stageId}. Available rounds: ${description || "none"}.`
+      `Round number ${roundNumber} was not found in stage ${stageId}. Available rounds: ${description || "none"}.`,
     );
   }
 
-
-  return advanceRoundById(
-    db,
-    round.id,
-    round.stageId
-  );
+  return advanceRoundById(db, round.id, round.stageId);
 }
-
 
 export function advanceRoundById(
   db: SqliteDatabase,
   roundId: number,
-  stageId: number
+  stageId: number,
 ): MatchSummary[] {
   const round = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         round_number AS roundNumber,
         name
@@ -116,25 +99,22 @@ export function advanceRoundById(
 
       WHERE id = ?
         AND stage_id = ?
-    `)
-    .get(
-      roundId,
-      stageId
-    ) as {
-      roundNumber: number;
-      name: string;
-    } | undefined;
-
+    `,
+    )
+    .get(roundId, stageId) as
+    | {
+        roundNumber: number;
+        name: string;
+      }
+    | undefined;
 
   if (!round) {
-    throw new Error(
-      `Round ID ${roundId} was not found in stage ${stageId}.`
-    );
+    throw new Error(`Round ID ${roundId} was not found in stage ${stageId}.`);
   }
 
-
   const state = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         COUNT(*) AS total,
 
@@ -148,15 +128,16 @@ export function advanceRoundById(
       FROM fixture
 
       WHERE round_id = ?
-    `)
+    `,
+    )
     .get(roundId) as {
-      total: number;
-      completed: number | null;
-    };
-
+    total: number;
+    completed: number | null;
+  };
 
   const fixtures = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         id
 
@@ -175,128 +156,121 @@ export function advanceRoundById(
         END,
         scheduled_at,
         id
-    `)
+    `,
+    )
     .all(roundId) as Array<{
-      id: number;
-    }>;
-
+    id: number;
+  }>;
 
   if (!fixtures.length) {
-    if (
-      state.total > 0 &&
-      (state.completed ?? 0) === state.total
-    ) {
+    if (state.total > 0 && (state.completed ?? 0) === state.total) {
       // Recover post-match bookkeeping if the process stopped after the final
       // fixture committed but before knockout progression/standings/season status.
       const recoverRound = db.transaction(() => {
-        const pending = db.prepare(
-          "SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status<>'COMPLETED'",
-        ).get(roundId) as { count:number };
+        const pending = db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status<>'COMPLETED'",
+          )
+          .get(roundId) as { count: number };
         if (pending.count > 0) {
-          throw new Error(`Round ${round.roundNumber} cannot recover bookkeeping: ${pending.count} fixture(s) are not completed.`);
+          throw new Error(
+            `Round ${round.roundNumber} cannot recover bookkeeping: ${pending.count} fixture(s) are not completed.`,
+          );
         }
-        progressKnockoutStage(
-          db,
-          stageId,
-          roundId
-        );
+        progressKnockoutStage(db, stageId, roundId);
 
-        rebuildStandings(
-          db,
-          stageId
-        );
+        rebuildStandings(db, stageId);
 
-        finishSeasonIfComplete(
-          db,
-          stageId
-        );
+        finishSeasonIfComplete(db, stageId);
       });
-
 
       recoverRound.immediate();
 
-
       throw new Error(
-        `Round ${round.roundNumber} (${round.name}) is already completed; no matches were simulated.`
+        `Round ${round.roundNumber} (${round.name}) is already completed; no matches were simulated.`,
       );
     }
 
-
     throw new Error(
-      `Round ${round.roundNumber} (${round.name}) has no playable fixtures.`
+      `Round ${round.roundNumber} (${round.name}) has no playable fixtures.`,
     );
   }
-
 
   // Each match owns its per-minute transactions. One malformed fixture must not
   // prevent the remaining matches in the same round from being simulated.
   const results: MatchSummary[] = [];
   const failures: string[] = [];
 
-
   for (const fixture of fixtures) {
     try {
-      const fixtureState = db.prepare("SELECT status FROM fixture WHERE id=?").get(fixture.id) as { status:string } | undefined;
+      const fixtureState = db
+        .prepare("SELECT status FROM fixture WHERE id=?")
+        .get(fixture.id) as { status: string } | undefined;
       if (fixtureState?.status === "IN_PROGRESS") {
-        const checkpoint = db.prepare(
-          "SELECT simulation_minute AS minute FROM match_simulation_state WHERE fixture_id=?",
-        ).get(fixture.id) as { minute:number } | undefined;
-        const eventCount = (db.prepare(
-          "SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=?",
-        ).get(fixture.id) as { count:number }).count;
+        const checkpoint = db
+          .prepare(
+            "SELECT simulation_minute AS minute FROM match_simulation_state WHERE fixture_id=?",
+          )
+          .get(fixture.id) as { minute: number } | undefined;
+        const eventCount = (
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=?",
+            )
+            .get(fixture.id) as { count: number }
+        ).count;
         if (!checkpoint && eventCount === 0) {
-          db.prepare("UPDATE fixture SET status='SCHEDULED',current_minute=0 WHERE id=? AND status='IN_PROGRESS'").run(fixture.id);
-        } else if (!checkpoint || checkpoint.minute < 0 || checkpoint.minute > 90) {
-          throw new Error("Fixture is IN_PROGRESS with an invalid or missing checkpoint; refusing destructive recovery.");
+          db.prepare(
+            "UPDATE fixture SET status='SCHEDULED',current_minute=0 WHERE id=? AND status='IN_PROGRESS'",
+          ).run(fixture.id);
+        } else if (
+          !checkpoint ||
+          checkpoint.minute < 0 ||
+          checkpoint.minute > 90
+        ) {
+          throw new Error(
+            "Fixture is IN_PROGRESS with an invalid or missing checkpoint; refusing destructive recovery.",
+          );
         }
       }
       results.push(simulateMatch(db, fixture.id));
     } catch (error) {
       failures.push(
         `fixture ${fixture.id}: ${
-          error instanceof Error
-            ? error.message
-            : String(error)
-        }`
+          error instanceof Error ? error.message : String(error)
+        }`,
       );
     }
   }
 
-
   if (failures.length) {
-    const pending = db.prepare(
-      "SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status IN ('SCHEDULED','IN_PROGRESS','POSTPONED')",
-    ).get(roundId) as { count:number };
+    const pending = db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status IN ('SCHEDULED','IN_PROGRESS','POSTPONED')",
+      )
+      .get(roundId) as { count: number };
     throw new Error(
-      `Round ${round.roundNumber} simulated ${results.length}/${fixtures.length} matches; ${pending.count} fixture(s) remain pending. Competition standings and knockout progression were not finalized. Failures: ${failures.join(" | ")}`
+      `Round ${round.roundNumber} simulated ${results.length}/${fixtures.length} matches; ${pending.count} fixture(s) remain pending. Competition standings and knockout progression were not finalized. Failures: ${failures.join(" | ")}`,
     );
   }
 
-  const remaining = db.prepare(
-    "SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status<>'COMPLETED'",
-  ).get(roundId) as { count:number };
+  const remaining = db
+    .prepare(
+      "SELECT COUNT(*) AS count FROM fixture WHERE round_id=? AND status<>'COMPLETED'",
+    )
+    .get(roundId) as { count: number };
   if (remaining.count > 0) {
     throw new Error(
-      `Round ${round.roundNumber} cannot be finalized: ${remaining.count} fixture(s) are not completed.`
+      `Round ${round.roundNumber} cannot be finalized: ${remaining.count} fixture(s) are not completed.`,
     );
   }
 
   const finalizeRound = db.transaction(() => {
-    progressKnockoutStage(
-      db,
-      stageId,
-      roundId
-    );
+    progressKnockoutStage(db, stageId, roundId);
 
-    rebuildStandings(
-      db,
-      stageId
-    );
+    rebuildStandings(db, stageId);
 
-    finishSeasonIfComplete(
-      db,
-      stageId
-    );
+    finishSeasonIfComplete(db, stageId);
   });
 
   finalizeRound.immediate();

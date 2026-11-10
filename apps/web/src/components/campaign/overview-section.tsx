@@ -68,7 +68,7 @@ export function OverviewSection({ data }: { data: CampaignOverviewResponse }) {
               <span>Your next match will appear here when the calendar is available.</span>
             </div>
           )}
-        </div>        
+        </div>
       </section>
       <div className={styles.dashboardColumns}>
         <Card>
@@ -122,15 +122,17 @@ export function OverviewSection({ data }: { data: CampaignOverviewResponse }) {
                         </thead>
                         <tbody>
                           {(() => {
-                            const managedIndex = competition.standing.findIndex((row) => row.isManaged);
+                            const managedIndex = competition.standing.findIndex(
+                              (row) => row.isManaged,
+                            );
 
-                            const startIndex = managedIndex >= 0
-                              ? Math.max(0, managedIndex - 3)
-                              : 0;
+                            const startIndex =
+                              managedIndex >= 0 ? Math.max(0, managedIndex - 3) : 0;
 
-                            const endIndex = managedIndex >= 0
-                              ? Math.min(competition.standing.length, managedIndex + 4)
-                              : 6;
+                            const endIndex =
+                              managedIndex >= 0
+                                ? Math.min(competition.standing.length, managedIndex + 4)
+                                : 6;
 
                             return competition.standing.slice(startIndex, endIndex).map((row) => (
                               <tr

@@ -13,10 +13,7 @@ export interface MatchGameState {
 }
 
 export type GameActionType =
-  | "PROGRESSION"
-  | "FINAL_THIRD_ENTRY"
-  | "BOX_ENTRY"
-  | "COUNTER_ATTACK";
+  "PROGRESSION" | "FINAL_THIRD_ENTRY" | "BOX_ENTRY" | "COUNTER_ATTACK";
 
 export interface GameAction {
   minute: number;

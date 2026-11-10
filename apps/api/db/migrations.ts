@@ -68,9 +68,11 @@ const migrations: Migration[] = [
         );
       `);
     },
-  },  {
+  },
+  {
     version: 5,
-    description: "Persist immutable match kickoff and full-time history snapshots",
+    description:
+      "Persist immutable match kickoff and full-time history snapshots",
     up(db) {
       db.exec(`
         CREATE TABLE match_history_snapshot (
@@ -98,16 +100,20 @@ const migrations: Migration[] = [
     version: 6,
     description: "Mark reconstructed legacy match history snapshots",
     up(db) {
-      const columns = db.prepare("PRAGMA table_info(match_history_snapshot)").all() as Array<{name:string}>;
-      if (!columns.some(column => column.name === "is_legacy")) {
-        db.exec("ALTER TABLE match_history_snapshot ADD COLUMN is_legacy INTEGER NOT NULL DEFAULT 0 CHECK (is_legacy IN (0,1))");
+      const columns = db
+        .prepare("PRAGMA table_info(match_history_snapshot)")
+        .all() as Array<{ name: string }>;
+      if (!columns.some((column) => column.name === "is_legacy")) {
+        db.exec(
+          "ALTER TABLE match_history_snapshot ADD COLUMN is_legacy INTEGER NOT NULL DEFAULT 0 CHECK (is_legacy IN (0,1))",
+        );
       }
-
     },
   },
   {
     version: 7,
-    description: "Enforce immutable kickoff snapshots and one-time result finalization",
+    description:
+      "Enforce immutable kickoff snapshots and one-time result finalization",
     up(db) {
       db.exec(`
         CREATE TRIGGER IF NOT EXISTS trg_match_history_kickoff_immutable
@@ -131,20 +137,21 @@ const migrations: Migration[] = [
 export const CURRENT_SCHEMA_VERSION = 7;
 
 export function applyMigrations(db: SqliteDatabase): number {
-  const versionTable = db.prepare(
-    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version'",
-  ).get();
+  const versionTable = db
+    .prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version'",
+    )
+    .get();
 
   if (!versionTable) {
     throw new Error("Cannot migrate a database without schema_version.");
   }
-
-  // Read the version after acquiring SQLite's write lock. This prevents two
-  // processes opening the same legacy save from attempting the same ALTER TABLE.
   const migrate = db.transaction(() => {
-    let currentVersion = (db.prepare(
-      "SELECT MAX(version) AS version FROM schema_version",
-    ).get() as { version: number | null }).version;
+    let currentVersion = (
+      db
+        .prepare("SELECT MAX(version) AS version FROM schema_version")
+        .get() as { version: number | null }
+    ).version;
 
     if (currentVersion === null) {
       throw new Error("Database has no applied schema version.");

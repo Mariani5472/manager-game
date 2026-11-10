@@ -1,8 +1,18 @@
-import { existsSync, mkdirSync, renameSync, rmSync, statSync, readdirSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  readdirSync,
+} from "node:fs";
 import { resolve, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { open, validate } from "../../../db/database.js";
-import { applyMigrations, CURRENT_SCHEMA_VERSION } from "../../../db/migrations.js";
+import {
+  applyMigrations,
+  CURRENT_SCHEMA_VERSION,
+} from "../../../db/migrations.js";
 
 export interface CreateSaveOptions {
   masterPath: string;
@@ -32,7 +42,8 @@ const SAVE_METADATA_TABLE = `
 `;
 
 function safeFileName(value: string): string {
-  const cleaned = value.normalize("NFKD")
+  const cleaned = value
+    .normalize("NFKD")
     .replace(/[\\u0300-\\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -41,13 +52,20 @@ function safeFileName(value: string): string {
 }
 
 function readSchemaVersion(db: ReturnType<typeof open>): number {
-  const row = db.prepare("SELECT MAX(version) AS version FROM schema_version").get() as { version: number | null };
-  if (row.version === null) throw new Error("Database has no applied schema version.");
+  const row = db
+    .prepare("SELECT MAX(version) AS version FROM schema_version")
+    .get() as { version: number | null };
+  if (row.version === null)
+    throw new Error("Database has no applied schema version.");
   if (row.version > CURRENT_SCHEMA_VERSION) {
-    throw new Error(`Database schema version ${row.version} is newer than this game supports (${CURRENT_SCHEMA_VERSION}).`);
+    throw new Error(
+      `Database schema version ${row.version} is newer than this game supports (${CURRENT_SCHEMA_VERSION}).`,
+    );
   }
   if (row.version < CURRENT_SCHEMA_VERSION) {
-    throw new Error(`Database schema version ${row.version} is too old; expected ${CURRENT_SCHEMA_VERSION}.`);
+    throw new Error(
+      `Database schema version ${row.version} is too old; expected ${CURRENT_SCHEMA_VERSION}.`,
+    );
   }
   return row.version;
 }
@@ -65,12 +83,17 @@ export class SaveManager {
     private readonly savesDirectory: string,
   ) {}
 
-  async create(options: Omit<CreateSaveOptions, "masterPath" | "savesDirectory">): Promise<SaveInfo> {
+  async create(
+    options: Omit<CreateSaveOptions, "masterPath" | "savesDirectory">,
+  ): Promise<SaveInfo> {
     const master = resolve(this.masterPath);
     if (!existsSync(master)) {
-      throw new Error(`Master database not found: ${master}. Run "npm run dev -- init-master" first.`);
+      throw new Error(
+        `Master database not found: ${master}. Run "npm run dev -- init-master" first.`,
+      );
     }
-    if (statSync(master).size === 0) throw new Error("Master database is empty.");
+    if (statSync(master).size === 0)
+      throw new Error("Master database is empty.");
 
     const saveName = options.name.trim();
     const managerName = options.managerName.trim();
@@ -85,7 +108,10 @@ export class SaveManager {
     mkdirSync(destinationDirectory, { recursive: true });
     const fileName = `${safeFileName(saveName)}-${saveId.slice(0, 8)}.sqlite`;
     const destination = join(destinationDirectory, fileName);
-    const temporary = join(destinationDirectory, `.${fileName}.${randomUUID()}.tmp.sqlite`);
+    const temporary = join(
+      destinationDirectory,
+      `.${fileName}.${randomUUID()}.tmp.sqlite`,
+    );
 
     let masterDb: ReturnType<typeof open> | undefined;
     let saveDb: ReturnType<typeof open> | undefined;
@@ -95,8 +121,13 @@ export class SaveManager {
       applyMigrations(masterDb);
       validate(masterDb);
       readSchemaVersion(masterDb);
-      const club = masterDb.prepare("SELECT id FROM club WHERE id = ?").get(options.clubId) as { id: number } | undefined;
-      if (!club) throw new Error(`Club ${options.clubId} does not exist in master database.`);
+      const club = masterDb
+        .prepare("SELECT id FROM club WHERE id = ?")
+        .get(options.clubId) as { id: number } | undefined;
+      if (!club)
+        throw new Error(
+          `Club ${options.clubId} does not exist in master database.`,
+        );
 
       // SQLite's online backup API gives a consistent snapshot even when the master
       // database is running in WAL mode or has recently received writes.
@@ -111,19 +142,35 @@ export class SaveManager {
         VALUES (?, ?, ?, ?, ?)
       `);
       const createMetadata = saveDb.transaction(() => {
-        insertMetadata.run(saveId, saveName, managerName, options.clubId, CURRENT_SCHEMA_VERSION);
-        saveDb!.prepare("UPDATE competition_season SET status = 'ACTIVE' WHERE status = 'PLANNED'").run();
+        insertMetadata.run(
+          saveId,
+          saveName,
+          managerName,
+          options.clubId,
+          CURRENT_SCHEMA_VERSION,
+        );
+        saveDb!
+          .prepare(
+            "UPDATE competition_season SET status = 'ACTIVE' WHERE status = 'PLANNED'",
+          )
+          .run();
       });
       createMetadata();
       validate(saveDb);
       readSchemaVersion(saveDb);
-      const metadata = saveDb.prepare(`
+      const metadata = saveDb
+        .prepare(
+          `
         SELECT id, name, manager_name AS managerName, selected_club_id AS clubId,
                created_at AS createdAt, schema_version AS schemaVersion
         FROM game_save_metadata WHERE id = ?
-      `).get(saveId) as Omit<SaveInfo, "filePath"> & { schemaVersion: number };
+      `,
+        )
+        .get(saveId) as Omit<SaveInfo, "filePath"> & { schemaVersion: number };
       if (metadata.schemaVersion !== CURRENT_SCHEMA_VERSION) {
-        throw new Error(`Save schema version ${metadata.schemaVersion} is not supported.`);
+        throw new Error(
+          `Save schema version ${metadata.schemaVersion} is not supported.`,
+        );
       }
 
       // Make the completed database a single portable file before atomic publication.
@@ -155,17 +202,30 @@ export class SaveManager {
       applyMigrations(db);
       validate(db);
       readSchemaVersion(db);
-      if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_save_metadata'").get()) {
+      if (
+        !db
+          .prepare(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_save_metadata'",
+          )
+          .get()
+      ) {
         throw new Error("This database is not a Game Manager campaign save.");
       }
-      const metadata = db.prepare("SELECT selected_club_id AS clubId, schema_version AS schemaVersion FROM game_save_metadata LIMIT 1")
+      const metadata = db
+        .prepare(
+          "SELECT selected_club_id AS clubId, schema_version AS schemaVersion FROM game_save_metadata LIMIT 1",
+        )
         .get() as { clubId: number; schemaVersion: number } | undefined;
       if (!metadata) throw new Error("Campaign save metadata is missing.");
       if (metadata.schemaVersion !== CURRENT_SCHEMA_VERSION) {
-        throw new Error(`Save schema version ${metadata.schemaVersion} is not supported.`);
+        throw new Error(
+          `Save schema version ${metadata.schemaVersion} is not supported.`,
+        );
       }
       if (!db.prepare("SELECT 1 FROM club WHERE id=?").get(metadata.clubId)) {
-        throw new Error(`Selected club ${metadata.clubId} does not exist in this save.`);
+        throw new Error(
+          `Selected club ${metadata.clubId} does not exist in this save.`,
+        );
       }
       return db;
     } catch (error) {
@@ -177,9 +237,11 @@ export class SaveManager {
   openById(saveId: string) {
     const normalizedId = saveId.trim();
     if (!normalizedId) throw new Error("Save id cannot be empty.");
-    const matches = this.list().filter(save => save.id === normalizedId);
-    if (matches.length === 0) throw new Error(`Campaign save "${normalizedId}" was not found.`);
-    if (matches.length > 1) throw new Error(`Multiple saves use id "${normalizedId}".`);
+    const matches = this.list().filter((save) => save.id === normalizedId);
+    if (matches.length === 0)
+      throw new Error(`Campaign save "${normalizedId}" was not found.`);
+    if (matches.length > 1)
+      throw new Error(`Multiple saves use id "${normalizedId}".`);
     return this.open(matches[0]!.filePath);
   }
 
@@ -187,18 +249,29 @@ export class SaveManager {
     const directory = resolve(this.savesDirectory);
     if (!existsSync(directory)) return [];
     return readdirSync(directory)
-      .filter(name => name.endsWith(".sqlite"))
-      .flatMap(name => {
+      .filter((name) => name.endsWith(".sqlite"))
+      .flatMap((name) => {
         const filePath = join(directory, name);
         try {
           const db = open(filePath, true);
           try {
-            if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_save_metadata'").get()) return [];
-            const row = db.prepare(`
+            if (
+              !db
+                .prepare(
+                  "SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_save_metadata'",
+                )
+                .get()
+            )
+              return [];
+            const row = db
+              .prepare(
+                `
               SELECT id, name, manager_name AS managerName, selected_club_id AS clubId,
                      created_at AS createdAt
               FROM game_save_metadata LIMIT 1
-            `).get() as Omit<SaveInfo, "filePath"> | undefined;
+            `,
+              )
+              .get() as Omit<SaveInfo, "filePath"> | undefined;
             return row ? [{ ...row, filePath }] : [];
           } finally {
             db.close();
@@ -207,6 +280,10 @@ export class SaveManager {
           return [];
         }
       })
-      .sort((a,b) => a.createdAt.localeCompare(b.createdAt) || a.name.localeCompare(b.name));
+      .sort(
+        (a, b) =>
+          a.createdAt.localeCompare(b.createdAt) ||
+          a.name.localeCompare(b.name),
+      );
   }
 }

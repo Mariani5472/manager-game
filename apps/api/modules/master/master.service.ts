@@ -11,7 +11,10 @@ export class MasterService {
   getCountryClubs(countryId: number) {
     const result = this.masterRepository.findCountryClubs(countryId);
     if (!result) {
-      throw ApplicationError.notFound(`Country ${countryId} was not found.`, "COUNTRY_NOT_FOUND");
+      throw ApplicationError.notFound(
+        `Country ${countryId} was not found.`,
+        "COUNTRY_NOT_FOUND",
+      );
     }
     return result;
   }

@@ -1,6 +1,5 @@
 export const CURRENT_GAME_VERSION = "0.1.0";
 
-
 export const STANDING_RULES = new Set([
   "POINTS",
   "GOAL_DIFFERENCE",
@@ -10,7 +9,6 @@ export const STANDING_RULES = new Set([
   "FAIR_PLAY",
   "DRAW",
 ]);
-
 
 export const ATTRIBUTES = new Set([
   "pace",

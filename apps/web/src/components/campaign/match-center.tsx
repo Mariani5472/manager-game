@@ -82,8 +82,10 @@ export function MatchCenter({
   });
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
-  const [mentality, setMentality] = useState<Extract<MatchTacticalChangeRequest, { type: 'MENTALITY' }>['mentality']>('BALANCED');
-  const [instructionKey, setInstructionKey] = useState<Extract<MatchTacticalChangeRequest, { type: 'INSTRUCTION' }>['key']>('pressing');
+  const [mentality, setMentality] =
+    useState<Extract<MatchTacticalChangeRequest, { type: 'MENTALITY' }>['mentality']>('BALANCED');
+  const [instructionKey, setInstructionKey] =
+    useState<Extract<MatchTacticalChangeRequest, { type: 'INSTRUCTION' }>['key']>('pressing');
   const [instructionValue, setInstructionValue] = useState(65);
   const [playerOutId, setPlayerOutId] = useState<number | null>(null);
   const [playerInId, setPlayerInId] = useState<number | null>(null);
@@ -128,7 +130,8 @@ export function MatchCenter({
     return () => window.clearInterval(interval);
   }, [playing, center.data, currentMinute, speed, advance.isPending, advanceMatch]);
   const scheduleDecision = useMutation({
-    mutationFn: (input: MatchTacticalChangeRequest) => gameApi.scheduleTacticalChange(saveId, fixtureId, input),
+    mutationFn: (input: MatchTacticalChangeRequest) =>
+      gameApi.scheduleTacticalChange(saveId, fixtureId, input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey });
     },
@@ -148,13 +151,8 @@ export function MatchCenter({
     );
   const data = center.data;
   const latestEvent = [...data.events]
-  .filter((event) => event.minute > 0)
-  .sort(
-    (a, b) =>
-      b.minute - a.minute ||
-      b.addedTime - a.addedTime ||
-      b.id - a.id,
-  )[0];
+    .filter((event) => event.minute > 0)
+    .sort((a, b) => b.minute - a.minute || b.addedTime - a.addedTime || b.id - a.id)[0];
   const home = data.teams[0],
     away = data.teams[1];
   const isFinished = data.fixture.status === 'COMPLETED';
@@ -164,7 +162,11 @@ export function MatchCenter({
   const activePlayers = managedLineup.filter((player) => player.isStarting);
   const benchPlayers = managedLineup.filter((player) => !player.isStarting);
   const nextDecisionMinute = currentMinute + 1;
-  const decisionBusy = advance.isPending || scheduleDecision.isPending || advanceInFlight.current || decisionInFlight.current;
+  const decisionBusy =
+    advance.isPending ||
+    scheduleDecision.isPending ||
+    advanceInFlight.current ||
+    decisionInFlight.current;
 
   const submitDecision = async (input: MatchTacticalChangeRequest) => {
     if (!userCanDecide || decisionBusy || nextDecisionMinute > 90) return;
@@ -173,7 +175,10 @@ export function MatchCenter({
     decisionInFlight.current = true;
     setPlaying(false);
     try {
-      await scheduleDecision.mutateAsync({ ...input, minute: nextDecisionMinute } as MatchTacticalChangeRequest);
+      await scheduleDecision.mutateAsync({
+        ...input,
+        minute: nextDecisionMinute,
+      } as MatchTacticalChangeRequest);
       setPlayerOutId(null);
       setPlayerInId(null);
     } catch {
@@ -183,7 +188,9 @@ export function MatchCenter({
     }
   };
 
-  const playerName = (playerId: number) => data.teams.flatMap((team) => team.lineup).find((player) => player.playerId === playerId)?.name ?? `Player #${playerId}`;
+  const playerName = (playerId: number) =>
+    data.teams.flatMap((team) => team.lineup).find((player) => player.playerId === playerId)
+      ?.name ?? `Player #${playerId}`;
   const stats = [
     ['Shots', data.statistics.home.shots, data.statistics.away.shots],
     ['On target', data.statistics.home.shotsOnTarget, data.statistics.away.shotsOnTarget],
@@ -219,16 +226,32 @@ export function MatchCenter({
       />
       {data.history && (
         <Card>
-          <CardHeader><CardTitle>Historical match record</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Historical match record</CardTitle>
+          </CardHeader>
           <CardContent className={styles.historyTactics}>
-            <p>{data.history.isLegacy ? 'Reconstructed from a legacy checkpoint; kickoff details may be approximate.' : 'Kickoff snapshot preserved · Saved at full-time'} · Engine {data.history.engineVersion} · Seed {data.history.randomSeed}</p>
+            <p>
+              {data.history.isLegacy
+                ? 'Reconstructed from a legacy checkpoint; kickoff details may be approximate.'
+                : 'Kickoff snapshot preserved · Saved at full-time'}{' '}
+              · Engine {data.history.engineVersion} · Seed {data.history.randomSeed}
+            </p>
             <div>
               {[data.history.homeTactics, data.history.awayTactics].map((team) => (
                 <section key={team.clubId}>
                   <strong>{team.clubName}</strong>
-                  <span>{team.tactic.formation_name} · {team.tactic.mentality.replaceAll('_', ' ').toLowerCase()}</span>
-                  <span>Pressing {team.tactic.pressing} · Tempo {team.tactic.tempo} · Defensive line {team.tactic.defensive_line}</span>
-                  <span>Width {team.tactic.width} · Passing {team.tactic.passing_directness} · Counter attack {team.tactic.counter_attack ? 'On' : 'Off'}</span>
+                  <span>
+                    {team.tactic.formation_name} ·{' '}
+                    {team.tactic.mentality.replaceAll('_', ' ').toLowerCase()}
+                  </span>
+                  <span>
+                    Pressing {team.tactic.pressing} · Tempo {team.tactic.tempo} · Defensive line{' '}
+                    {team.tactic.defensive_line}
+                  </span>
+                  <span>
+                    Width {team.tactic.width} · Passing {team.tactic.passing_directness} · Counter
+                    attack {team.tactic.counter_attack ? 'On' : 'Off'}
+                  </span>
                 </section>
               ))}
             </div>
@@ -322,25 +345,38 @@ export function MatchCenter({
       </Card>
       {isFinished && data.playerStats.length > 0 && (
         <Card>
-          <CardHeader><CardTitle>Player performances</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Player performances</CardTitle>
+          </CardHeader>
           <CardContent className={styles.playerMatchStats}>
             {data.teams.map((team) => (
               <section key={team.clubId}>
                 <strong>{team.name}</strong>
                 <div className={styles.playerMatchStatsHeader}>
-                  <span>Player</span><span>MIN</span><span>RATING</span><span>G</span><span>A</span><span>YC</span><span>RC</span>
+                  <span>Player</span>
+                  <span>MIN</span>
+                  <span>RATING</span>
+                  <span>G</span>
+                  <span>A</span>
+                  <span>YC</span>
+                  <span>RC</span>
                 </div>
-                {data.playerStats.filter((player) => player.clubId === team.clubId).map((player) => (
-                  <div className={styles.playerMatchStatsRow} key={player.playerId}>
-                    <span>{playerName(player.playerId)}{player.substitutedOut ? ' · Subbed' : ''}</span>
-                    <span>{player.minutesPlayed}</span>
-                    <span>{player.rating.toFixed(1)}</span>
-                    <span>{player.goals}</span>
-                    <span>{player.assists}</span>
-                    <span>{player.yellowCards}</span>
-                    <span>{player.redCard ? '1' : '—'}</span>
-                  </div>
-                ))}
+                {data.playerStats
+                  .filter((player) => player.clubId === team.clubId)
+                  .map((player) => (
+                    <div className={styles.playerMatchStatsRow} key={player.playerId}>
+                      <span>
+                        {playerName(player.playerId)}
+                        {player.substitutedOut ? ' · Subbed' : ''}
+                      </span>
+                      <span>{player.minutesPlayed}</span>
+                      <span>{player.rating.toFixed(1)}</span>
+                      <span>{player.goals}</span>
+                      <span>{player.assists}</span>
+                      <span>{player.yellowCards}</span>
+                      <span>{player.redCard ? '1' : '—'}</span>
+                    </div>
+                  ))}
               </section>
             ))}
           </CardContent>
@@ -366,8 +402,8 @@ export function MatchCenter({
         </CardHeader>
         <CardContent className={styles.playback}>
           <p className={styles.speedHint}>
-            Changes take effect from minute {nextDecisionMinute}. Pause the playback to make a decision;
-            the current match minute is never modified retroactively.
+            Changes take effect from minute {nextDecisionMinute}. Pause the playback to make a
+            decision; the current match minute is never modified retroactively.
           </p>
           <div className={styles.decisionGrid}>
             <section className={styles.decisionPanel}>
@@ -378,12 +414,20 @@ export function MatchCenter({
                   <button
                     type="button"
                     key={player.playerId}
-                    className={playerOutId === player.playerId ? styles.choiceSelected : styles.choiceButton}
+                    className={
+                      playerOutId === player.playerId ? styles.choiceSelected : styles.choiceButton
+                    }
                     aria-pressed={playerOutId === player.playerId}
                     disabled={!userCanDecide || decisionBusy}
-                    onClick={() => { setPlayerOutId(player.playerId); setPlayerInId(null); }}
+                    onClick={() => {
+                      setPlayerOutId(player.playerId);
+                      setPlayerInId(null);
+                    }}
                   >
-                    <span>{player.name}</span><small>{player.position} · {Math.round(player.energy)}% energy</small>
+                    <span>{player.name}</span>
+                    <small>
+                      {player.position} · {Math.round(player.energy)}% energy
+                    </small>
                   </button>
                 ))}
               </div>
@@ -393,41 +437,72 @@ export function MatchCenter({
                   <button
                     type="button"
                     key={player.playerId}
-                    className={playerInId === player.playerId ? styles.choiceSelected : styles.choiceButton}
+                    className={
+                      playerInId === player.playerId ? styles.choiceSelected : styles.choiceButton
+                    }
                     aria-pressed={playerInId === player.playerId}
                     disabled={!userCanDecide || decisionBusy || playerOutId === null}
                     onClick={() => setPlayerInId(player.playerId)}
                   >
-                    <span>{player.name}</span><small>{player.position} · {Math.round(player.energy)}% energy</small>
+                    <span>{player.name}</span>
+                    <small>
+                      {player.position} · {Math.round(player.energy)}% energy
+                    </small>
                   </button>
                 ))}
               </div>
-              <Button size="sm" disabled={!userCanDecide || decisionBusy || !playerOutId || !playerInId || nextDecisionMinute > 90}
-                onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'SUBSTITUTION', playerOutId: playerOutId!, playerInId: playerInId! })}>
+              <Button
+                size="sm"
+                disabled={
+                  !userCanDecide ||
+                  decisionBusy ||
+                  !playerOutId ||
+                  !playerInId ||
+                  nextDecisionMinute > 90
+                }
+                onClick={() =>
+                  submitDecision({
+                    minute: nextDecisionMinute,
+                    type: 'SUBSTITUTION',
+                    playerOutId: playerOutId!,
+                    playerInId: playerInId!,
+                  })
+                }
+              >
                 Confirm substitution
               </Button>
             </section>
             <section className={styles.decisionPanel}>
               <strong>Team mentality</strong>
               <div className={styles.optionGrid}>
-                {([
-                  ['VERY_DEFENSIVE', 'Very defensive'],
-                  ['DEFENSIVE', 'Defensive'],
-                  ['BALANCED', 'Balanced'],
-                  ['ATTACKING', 'Attacking'],
-                  ['VERY_ATTACKING', 'Very attacking'],
-                ] as const).map(([value, label]) => (
-                  <button type="button" key={value}
+                {(
+                  [
+                    ['VERY_DEFENSIVE', 'Very defensive'],
+                    ['DEFENSIVE', 'Defensive'],
+                    ['BALANCED', 'Balanced'],
+                    ['ATTACKING', 'Attacking'],
+                    ['VERY_ATTACKING', 'Very attacking'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    type="button"
+                    key={value}
                     className={mentality === value ? styles.choiceSelected : styles.choiceButton}
                     aria-pressed={mentality === value}
                     disabled={!userCanDecide || decisionBusy}
-                    onClick={() => setMentality(value)}>
+                    onClick={() => setMentality(value)}
+                  >
                     {label}
                   </button>
                 ))}
               </div>
-              <Button size="sm" disabled={!userCanDecide || decisionBusy || nextDecisionMinute > 90}
-                onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'MENTALITY', mentality })}>
+              <Button
+                size="sm"
+                disabled={!userCanDecide || decisionBusy || nextDecisionMinute > 90}
+                onClick={() =>
+                  submitDecision({ minute: nextDecisionMinute, type: 'MENTALITY', mentality })
+                }
+              >
                 Apply mentality
               </Button>
             </section>
@@ -435,70 +510,139 @@ export function MatchCenter({
               <strong>Tactical instruction</strong>
               <span className={styles.speedHint}>Choose an instruction to tune.</span>
               <div className={styles.optionGrid}>
-                {([
-                  ['pressing', 'Pressing'],
-                  ['tempo', 'Tempo'],
-                  ['defensive_line', 'Defensive line'],
-                  ['width', 'Width'],
-                  ['passing_directness', 'Passing'],
-                  ['counter_attack', 'Counter attack'],
-                ] as const).map(([value, label]) => (
-                  <button type="button" key={value}
-                    className={instructionKey === value ? styles.choiceSelected : styles.choiceButton}
+                {(
+                  [
+                    ['pressing', 'Pressing'],
+                    ['tempo', 'Tempo'],
+                    ['defensive_line', 'Defensive line'],
+                    ['width', 'Width'],
+                    ['passing_directness', 'Passing'],
+                    ['counter_attack', 'Counter attack'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    type="button"
+                    key={value}
+                    className={
+                      instructionKey === value ? styles.choiceSelected : styles.choiceButton
+                    }
                     aria-pressed={instructionKey === value}
                     disabled={!userCanDecide || decisionBusy}
-                    onClick={() => { setInstructionKey(value); if (value === 'counter_attack') setInstructionValue(1); }}>
+                    onClick={() => {
+                      setInstructionKey(value);
+                      if (value === 'counter_attack') setInstructionValue(1);
+                    }}
+                  >
                     {label}
                   </button>
                 ))}
               </div>
               {instructionKey === 'counter_attack' ? (
                 <div className={styles.optionGrid}>
-                  {([['0', 'Off'], ['1', 'On']] as const).map(([value, label]) => (
-                    <button type="button" key={value}
-                      className={instructionValue === Number(value) ? styles.choiceSelected : styles.choiceButton}
+                  {(
+                    [
+                      ['0', 'Off'],
+                      ['1', 'On'],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      type="button"
+                      key={value}
+                      className={
+                        instructionValue === Number(value)
+                          ? styles.choiceSelected
+                          : styles.choiceButton
+                      }
                       aria-pressed={instructionValue === Number(value)}
                       disabled={!userCanDecide || decisionBusy}
-                      onClick={() => setInstructionValue(Number(value))}>{label}</button>
+                      onClick={() => setInstructionValue(Number(value))}
+                    >
+                      {label}
+                    </button>
                   ))}
                 </div>
               ) : (
                 <label className={styles.sliderField}>
-                  <span>{instructionKey.replaceAll('_', ' ')}: <b>{instructionValue}</b></span>
-                  <input aria-label="Instruction intensity" type="range" min="0" max="100" step="5"
+                  <span>
+                    {instructionKey.replaceAll('_', ' ')}: <b>{instructionValue}</b>
+                  </span>
+                  <input
+                    aria-label="Instruction intensity"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
                     value={instructionValue}
                     disabled={!userCanDecide || decisionBusy}
-                    onChange={(event) => setInstructionValue(Number(event.target.value))} />
-                  <span className={styles.sliderScale}><small>Lower</small><small>Higher</small></span>
+                    onChange={(event) => setInstructionValue(Number(event.target.value))}
+                  />
+                  <span className={styles.sliderScale}>
+                    <small>Lower</small>
+                    <small>Higher</small>
+                  </span>
                 </label>
               )}
-              <Button size="sm" disabled={!userCanDecide || decisionBusy || nextDecisionMinute > 90}
-                onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'INSTRUCTION', key: instructionKey, value: instructionValue })}>
+              <Button
+                size="sm"
+                disabled={!userCanDecide || decisionBusy || nextDecisionMinute > 90}
+                onClick={() =>
+                  submitDecision({
+                    minute: nextDecisionMinute,
+                    type: 'INSTRUCTION',
+                    key: instructionKey,
+                    value: instructionValue,
+                  })
+                }
+              >
                 Apply instruction
               </Button>
             </section>
             <section className={styles.decisionPanel}>
               <strong>Formation</strong>
-              <span className={styles.speedHint}>Choose one of the formations supported by your data package.</span>
+              <span className={styles.speedHint}>
+                Choose one of the formations supported by your data package.
+              </span>
               <div className={styles.optionGrid}>
                 {data.formations.map((formation) => (
-                  <button type="button" key={formation.id}
-                    className={formationId === formation.id ? styles.choiceSelected : styles.choiceButton}
+                  <button
+                    type="button"
+                    key={formation.id}
+                    className={
+                      formationId === formation.id ? styles.choiceSelected : styles.choiceButton
+                    }
                     aria-pressed={formationId === formation.id}
                     disabled={!userCanDecide || decisionBusy}
-                    onClick={() => setFormationId(formation.id)}>
+                    onClick={() => setFormationId(formation.id)}
+                  >
                     {formation.name}
                   </button>
                 ))}
               </div>
-              <Button size="sm" disabled={!userCanDecide || decisionBusy || formationId === null || nextDecisionMinute > 90}
-                onClick={() => submitDecision({ minute: nextDecisionMinute, type: 'FORMATION', formationId: formationId! })}>
+              <Button
+                size="sm"
+                disabled={
+                  !userCanDecide || decisionBusy || formationId === null || nextDecisionMinute > 90
+                }
+                onClick={() =>
+                  submitDecision({
+                    minute: nextDecisionMinute,
+                    type: 'FORMATION',
+                    formationId: formationId!,
+                  })
+                }
+              >
                 Change formation
               </Button>
             </section>
           </div>
-          {scheduleDecision.isError && <p className={styles.error}>{scheduleDecision.error.message}</p>}
-          {scheduleDecision.isSuccess && <p className={styles.speedHint}>Decision #{scheduleDecision.data.changeId} scheduled for minute {nextDecisionMinute}.</p>}
+          {scheduleDecision.isError && (
+            <p className={styles.error}>{scheduleDecision.error.message}</p>
+          )}
+          {scheduleDecision.isSuccess && (
+            <p className={styles.speedHint}>
+              Decision #{scheduleDecision.data.changeId} scheduled for minute {nextDecisionMinute}.
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

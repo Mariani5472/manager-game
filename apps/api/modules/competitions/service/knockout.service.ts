@@ -1,7 +1,6 @@
 import { SqliteDatabase } from "../../../db/database.js";
 import { getStage } from "../repo/competition.repository.js";
 
-
 export interface KnockoutFixtureResult {
   fixtureId: number;
   winnerClubId: number;
@@ -9,10 +8,9 @@ export interface KnockoutFixtureResult {
   awayPenalties: number | null;
 }
 
-
 export function resolveKnockoutFixtureWinner(
   db: SqliteDatabase,
-  fixtureId: number
+  fixtureId: number,
 ): KnockoutFixtureResult {
   const fixture = db
     .prepare<
@@ -29,7 +27,8 @@ export function resolveKnockoutFixtureWinner(
         status: string;
         stageKind: string;
       }
-    >(`
+    >(
+      `
       SELECT
         f.id,
         f.home_club_id AS home,
@@ -51,18 +50,16 @@ export function resolveKnockoutFixtureWinner(
         ON st.id = r.stage_id
 
       WHERE f.id = ?
-    `)
+    `,
+    )
     .get(fixtureId);
-
 
   if (!fixture) {
     throw new Error(`Fixture ${fixtureId} was not found.`);
   }
 
   if (fixture.stageKind !== "KNOCKOUT") {
-    throw new Error(
-      `Fixture ${fixtureId} is not part of a knockout stage.`
-    );
+    throw new Error(`Fixture ${fixtureId} is not part of a knockout stage.`);
   }
 
   if (
@@ -71,22 +68,18 @@ export function resolveKnockoutFixtureWinner(
     fixture.awayScore === null
   ) {
     throw new Error(
-      `Knockout fixture ${fixtureId} must be completed before its winner can be resolved.`
+      `Knockout fixture ${fixtureId} must be completed before its winner can be resolved.`,
     );
   }
-
 
   let homePenalties = fixture.homePenalties;
   let awayPenalties = fixture.awayPenalties;
 
   let winnerClubId: number;
 
-
   if (fixture.homeScore !== fixture.awayScore) {
     winnerClubId =
-      fixture.homeScore > fixture.awayScore
-        ? fixture.home
-        : fixture.away;
+      fixture.homeScore > fixture.awayScore ? fixture.home : fixture.away;
   } else {
     if (
       homePenalties === null ||
@@ -97,16 +90,13 @@ export function resolveKnockoutFixtureWinner(
         ((fixture.seed ?? fixture.id) ^ (fixture.id * 2654435761)) >>> 0;
 
       const next = () => {
-        state =
-          (Math.imul(state, 1664525) + 1013904223) >>> 0;
+        state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
 
         return state / 0x100000000;
       };
 
-
       homePenalties = 0;
       awayPenalties = 0;
-
 
       for (let kick = 0; kick < 5; kick++) {
         if (next() < 0.76) {
@@ -118,13 +108,9 @@ export function resolveKnockoutFixtureWinner(
         }
       }
 
-
       let suddenDeath = 0;
 
-      while (
-        homePenalties === awayPenalties &&
-        suddenDeath < 20
-      ) {
+      while (homePenalties === awayPenalties && suddenDeath < 20) {
         const homeScores = next() < 0.76;
         const awayScores = next() < 0.76;
 
@@ -139,30 +125,17 @@ export function resolveKnockoutFixtureWinner(
         suddenDeath++;
       }
 
-
       if (homePenalties === awayPenalties) {
         homePenalties++;
       }
 
-
-      db
-        .prepare(
-          "UPDATE fixture SET home_penalties=?,away_penalties=? WHERE id=?"
-        )
-        .run(
-          homePenalties,
-          awayPenalties,
-          fixture.id
-        );
+      db.prepare(
+        "UPDATE fixture SET home_penalties=?,away_penalties=? WHERE id=?",
+      ).run(homePenalties, awayPenalties, fixture.id);
     }
 
-
-    winnerClubId =
-      homePenalties > awayPenalties
-        ? fixture.home
-        : fixture.away;
+    winnerClubId = homePenalties > awayPenalties ? fixture.home : fixture.away;
   }
-
 
   return {
     fixtureId: fixture.id,
@@ -172,18 +145,16 @@ export function resolveKnockoutFixtureWinner(
   };
 }
 
-
 export function progressKnockoutStage(
   db: SqliteDatabase,
   stageId: number,
-  roundId: number
+  roundId: number,
 ): void {
   const stage = getStage(db, stageId);
 
   if (stage.stage_kind !== "KNOCKOUT") {
     return;
   }
-
 
   const round = db
     .prepare<
@@ -193,7 +164,8 @@ export function progressKnockoutStage(
         roundNumber: number;
         name: string;
       }
-    >(`
+    >(
+      `
       SELECT
         id,
         round_number AS roundNumber,
@@ -203,16 +175,15 @@ export function progressKnockoutStage(
 
       WHERE id = ?
         AND stage_id = ?
-    `)
+    `,
+    )
     .get(roundId, stageId);
-
 
   if (!round) {
     throw new Error(
-      `Round ${roundId} does not belong to knockout stage ${stageId}.`
+      `Round ${roundId} does not belong to knockout stage ${stageId}.`,
     );
   }
-
 
   const roundState = db
     .prepare<
@@ -221,7 +192,8 @@ export function progressKnockoutStage(
         total: number;
         completed: number | null;
       }
-    >(`
+    >(
+      `
       SELECT
         COUNT(*) AS total,
         SUM(
@@ -234,9 +206,9 @@ export function progressKnockoutStage(
       FROM fixture
 
       WHERE round_id = ?
-    `)
+    `,
+    )
     .get(roundId);
-
 
   if (
     roundState?.total === 0 ||
@@ -245,9 +217,9 @@ export function progressKnockoutStage(
     return;
   }
 
-
   const laterRound = db
-    .prepare<[number, number], number>(`
+    .prepare<[number, number], number>(
+      `
       SELECT id
 
       FROM competition_round
@@ -256,13 +228,13 @@ export function progressKnockoutStage(
         AND round_number > ?
 
       LIMIT 1
-    `)
+    `,
+    )
     .get(stageId, round.roundNumber);
 
   if (laterRound) {
     return;
   }
-
 
   const matches = db
     .prepare<
@@ -271,7 +243,8 @@ export function progressKnockoutStage(
         id: number;
         scheduledAt: string | null;
       }
-    >(`
+    >(
+      `
       SELECT
         id,
         scheduled_at AS scheduledAt
@@ -283,29 +256,23 @@ export function progressKnockoutStage(
       ORDER BY
         scheduled_at,
         id
-    `)
+    `,
+    )
     .all(roundId);
 
-
   const winners = matches.map(
-    match =>
-      resolveKnockoutFixtureWinner(db, match.id).winnerClubId
+    (match) => resolveKnockoutFixtureWinner(db, match.id).winnerClubId,
   );
-
 
   if (winners.length === 1) {
     return;
   }
 
-  if (
-    winners.length < 2 ||
-    winners.length % 2 !== 0
-  ) {
+  if (winners.length < 2 || winners.length % 2 !== 0) {
     throw new Error(
-      `Knockout stage ${stageId} produced ${winners.length} winners; an even number is required to create the next round.`
+      `Knockout stage ${stageId} produced ${winners.length} winners; an even number is required to create the next round.`,
     );
   }
-
 
   const nextRoundNumber = round.roundNumber + 1;
 
@@ -318,40 +285,26 @@ export function progressKnockoutStage(
           ? "Quartas de final"
           : `Rodada eliminatória ${nextRoundNumber}`;
 
-
   const scheduledDates = matches
-    .map(match => match.scheduledAt)
-    .filter(
-      (value): value is string =>
-        Boolean(value)
-    );
+    .map((match) => match.scheduledAt)
+    .filter((value): value is string => Boolean(value));
 
   scheduledDates.sort();
 
+  const lastDate = scheduledDates.length
+    ? scheduledDates[scheduledDates.length - 1]
+    : undefined;
 
-  const lastDate =
-    scheduledDates.length
-      ? scheduledDates[scheduledDates.length - 1]
-      : undefined;
+  const baseDate = lastDate ? new Date(lastDate) : new Date();
 
-  const baseDate =
-    lastDate
-      ? new Date(lastDate)
-      : new Date();
+  baseDate.setUTCDate(baseDate.getUTCDate() + 7);
 
-  baseDate.setUTCDate(
-    baseDate.getUTCDate() + 7
-  );
-
-
-  const date = baseDate
-    .toISOString()
-    .slice(0, 10);
-
+  const date = baseDate.toISOString().slice(0, 10);
 
   const createNextRound = db.transaction(() => {
     const nextRoundId = db
-      .prepare(`
+      .prepare(
+        `
         INSERT INTO competition_round (
           stage_id,
           round_number,
@@ -360,16 +313,9 @@ export function progressKnockoutStage(
           end_date
         )
         VALUES (?, ?, ?, ?, ?)
-      `)
-      .run(
-        stageId,
-        nextRoundNumber,
-        roundName,
-        date,
-        date
+      `,
       )
-      .lastInsertRowid;
-
+      .run(stageId, nextRoundNumber, roundName, date, date).lastInsertRowid;
 
     const insertFixture = db.prepare(`
       INSERT INTO fixture (
@@ -383,36 +329,25 @@ export function progressKnockoutStage(
       VALUES (?, ?, ?, ?, ?, ?)
     `);
 
-
     winners.forEach((winner, index) => {
       if (index % 2 !== 0) {
         return;
       }
 
-
       const home = winner;
       const away = winners[index + 1]!;
 
-
       const stadium = db
-        .prepare(
-          "SELECT id FROM stadium WHERE club_id=? ORDER BY id LIMIT 1"
-        )
+        .prepare("SELECT id FROM stadium WHERE club_id=? ORDER BY id LIMIT 1")
         .get(home) as { id: number } | undefined;
 
-
-      const time =
-        `${date}T${String(16 + (index / 2 % 2) * 2)
-          .padStart(2, "0")}:00:00`;
+      const time = `${date}T${String(16 + ((index / 2) % 2) * 2).padStart(
+        2,
+        "0",
+      )}:00:00`;
 
       const seed =
-        (
-          (stage.season_year * 100000) +
-          (nextRoundNumber * 100) +
-          index +
-          1
-        ) >>> 0;
-
+        (stage.season_year * 100000 + nextRoundNumber * 100 + index + 1) >>> 0;
 
       insertFixture.run(
         nextRoundId,
@@ -420,18 +355,14 @@ export function progressKnockoutStage(
         away,
         stadium?.id ?? null,
         time,
-        seed
+        seed,
       );
     });
 
-
-    db
-      .prepare(
-        "UPDATE competition_season SET status='ACTIVE' WHERE id=?"
-      )
-      .run(stage.season_id);
+    db.prepare("UPDATE competition_season SET status='ACTIVE' WHERE id=?").run(
+      stage.season_id,
+    );
   });
-
 
   createNextRound();
 }

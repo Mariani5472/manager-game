@@ -25,17 +25,15 @@ export function open(filePath: string, readonly = false): SqliteDatabase {
   }
 
   return db;
-};
+}
 
 export function tableExists(db: SqliteDatabase, tableName: string): boolean {
   return Boolean(
     db
-      .prepare(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
-      )
+      .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
       .get(tableName),
   );
-};
+}
 
 export function validate(db: SqliteDatabase): void {
   const integrity = db.pragma("integrity_check", {
@@ -54,11 +52,7 @@ export function validate(db: SqliteDatabase): void {
     );
   }
 
-  const requiredTables = [
-    "fixture",
-    "club",
-    "schema_version",
-  ];
+  const requiredTables = ["fixture", "club", "schema_version"];
 
   const missingTables = requiredTables.filter(
     (table) => !tableExists(db, table),

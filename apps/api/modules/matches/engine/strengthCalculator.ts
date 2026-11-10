@@ -1,32 +1,16 @@
-import {
-  COMPATIBLE_POSITIONS,
-} from "./constants.js";
+import { COMPATIBLE_POSITIONS } from "./constants.js";
 import { mean } from "./mathUtils.js";
-import type {
-  Player,
-  Team,
-} from "../types/match-engine.types.js";
+import type { Player, Team } from "../types/match-engine.types.js";
 
-
-export function fit(
-  actual: string,
-  required: string
-): number {
+export function fit(actual: string, required: string): number {
   if (actual === required) {
     return 1;
   }
 
-  return COMPATIBLE_POSITIONS[required]
-    ?.includes(actual)
-    ? 0.82
-    : 0.48;
+  return COMPATIBLE_POSITIONS[required]?.includes(actual) ? 0.82 : 0.48;
 }
 
-
-export function skill(
-  player: Player,
-  role: string
-): number {
+export function skill(player: Player, role: string): number {
   if (role === "GK") {
     return mean([
       player.reflexes,
@@ -37,9 +21,7 @@ export function skill(
     ]);
   }
 
-  if (
-    ["CB", "LB", "RB", "LWB", "RWB"].includes(role)
-  ) {
+  if (["CB", "LB", "RB", "LWB", "RWB"].includes(role)) {
     return mean([
       player.tackling,
       player.marking,
@@ -49,9 +31,7 @@ export function skill(
     ]);
   }
 
-  if (
-    ["DM", "CM", "AM"].includes(role)
-  ) {
+  if (["DM", "CM", "AM"].includes(role)) {
     return mean([
       player.passing,
       player.vision,
@@ -61,9 +41,7 @@ export function skill(
     ]);
   }
 
-  if (
-    ["LW", "RW", "LM", "RM"].includes(role)
-  ) {
+  if (["LW", "RW", "LM", "RM"].includes(role)) {
     return mean([
       player.pace,
       player.dribbling,
@@ -81,49 +59,35 @@ export function skill(
   ]);
 }
 
-
-export function refreshTeamStrength(
-  team: Team
-): void {
-  const starters = team.lineup.filter(
-    player => player.isStarting
-  );
+export function refreshTeamStrength(team: Team): void {
+  const starters = team.lineup.filter((player) => player.isStarting);
 
   team.attacking =
     mean(
       starters.map(
-        player =>
+        (player) =>
           skill(player, player.role) * 0.72 +
           player.positionRating * 0.28 +
           player.energy * 0.18 +
           player.morale * 0.08 +
-          player.sharpness * 0.08
-      )
+          player.sharpness * 0.08,
+      ),
     ) +
-    (
-      mean(
-        starters.map(
-          player => player.positionRating
-        )
-      ) - 50
-    ) * 0.15;
+    (mean(starters.map((player) => player.positionRating)) - 50) * 0.15;
 
   team.defending = mean(
-    starters.map(
-      player =>
-        mean([
-          player.tackling,
-          player.marking,
-          player.positioning,
-          player.concentration,
-          player.strength,
-        ])
-    )
+    starters.map((player) =>
+      mean([
+        player.tackling,
+        player.marking,
+        player.positioning,
+        player.concentration,
+        player.strength,
+      ]),
+    ),
   );
 
-  const keeper = starters.find(
-    player => player.role === "GK"
-  );
+  const keeper = starters.find((player) => player.role === "GK");
 
   team.goalkeeping = keeper
     ? mean([
@@ -134,22 +98,11 @@ export function refreshTeamStrength(
       ])
     : 45;
 
-  team.energy = mean(
-    starters.map(player => player.energy)
-  );
+  team.energy = mean(starters.map((player) => player.energy));
 
-  team.fitness = mean(
-    starters.map(player => player.stamina)
-  );
+  team.fitness = mean(starters.map((player) => player.stamina));
 }
 
-
-export function calculateTeamStrength(
-  team: Team
-): number {
-  return (
-    team.attacking * 0.4 +
-    team.defending * 0.35 +
-    team.goalkeeping * 0.25
-  );
+export function calculateTeamStrength(team: Team): number {
+  return team.attacking * 0.4 + team.defending * 0.35 + team.goalkeeping * 0.25;
 }

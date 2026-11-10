@@ -11,10 +11,5 @@ export function CalendarPage({ saveId }: { saveId: string }) {
   if (query.isLoading) return <PageLoading label="Loading calendar…" />;
   if (query.isError || !query.data)
     return <PageError message={query.error?.message ?? 'Unable to load calendar.'} />;
-  return (
-    <CalendarSection
-      data={query.data}
-      saveId={saveId}
-    />
-  );
+  return <CalendarSection data={query.data} saveId={saveId} />;
 }

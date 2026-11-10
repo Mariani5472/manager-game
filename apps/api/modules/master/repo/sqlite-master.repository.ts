@@ -28,26 +28,33 @@ export class SqliteMasterRepository implements MasterRepository {
   }
 
   listCountries(): CountrySummaryDto[] {
-    return this.withMaster((db) =>
-      db.prepare(`
+    return this.withMaster(
+      (db) =>
+        db
+          .prepare(
+            `
         SELECT n.id, n.name, n.code, COUNT(c.id) AS clubCount
         FROM nation n
         LEFT JOIN club c ON c.nation_id = n.id
         GROUP BY n.id, n.name, n.code
         ORDER BY n.name
-      `).all() as CountrySummaryDto[],
+      `,
+          )
+          .all() as CountrySummaryDto[],
     );
   }
 
   findCountryClubs(countryId: number): CountryClubsResponse | null {
     return this.withMaster((db) => {
-      const country = db.prepare(
-        "SELECT id, name, code FROM nation WHERE id = ?",
-      ).get(countryId) as CountryClubsResponse["country"] | undefined;
+      const country = db
+        .prepare("SELECT id, name, code FROM nation WHERE id = ?")
+        .get(countryId) as CountryClubsResponse["country"] | undefined;
 
       if (!country) return null;
 
-      const clubs = db.prepare(`
+      const clubs = db
+        .prepare(
+          `
         SELECT c.id, c.name, c.short_name AS shortName, c.reputation,
                ci.name AS city,
                (SELECT stadium.name FROM stadium WHERE stadium.club_id = c.id ORDER BY stadium.id LIMIT 1) AS stadium
@@ -55,7 +62,9 @@ export class SqliteMasterRepository implements MasterRepository {
         LEFT JOIN city ci ON ci.id = c.city_id
         WHERE c.nation_id = ?
         ORDER BY c.reputation DESC, c.name
-      `).all(countryId) as ClubSummaryDto[];
+      `,
+        )
+        .all(countryId) as ClubSummaryDto[];
 
       return { country, clubs };
     });
@@ -63,9 +72,9 @@ export class SqliteMasterRepository implements MasterRepository {
 
   findClubCountryId(clubId: number): number | null {
     return this.withMaster((db) => {
-      const row = db.prepare(
-        "SELECT nation_id AS countryId FROM club WHERE id = ?",
-      ).get(clubId) as { countryId: number } | undefined;
+      const row = db
+        .prepare("SELECT nation_id AS countryId FROM club WHERE id = ?")
+        .get(clubId) as { countryId: number } | undefined;
       return row?.countryId ?? null;
     });
   }

@@ -30,19 +30,20 @@ function mean(values: number[]): number {
 
 function standardDeviation(values: number[], average: number): number {
   if (!values.length) return 0;
-  return Math.sqrt(mean(values.map(value => (value - average) ** 2)));
+  return Math.sqrt(mean(values.map((value) => (value - average) ** 2)));
 }
 
 function correlation(left: number[], right: number[]): number {
   if (left.length !== right.length || left.length < 2) return 0;
   const leftMean = mean(left);
   const rightMean = mean(right);
-  const covariance = mean(left.map((value, index) =>
-    (value - leftMean) * (right[index]! - rightMean)
-  ));
+  const covariance = mean(
+    left.map(
+      (value, index) => (value - leftMean) * (right[index]! - rightMean),
+    ),
+  );
   const denominator =
-    standardDeviation(left, leftMean) *
-    standardDeviation(right, rightMean);
+    standardDeviation(left, leftMean) * standardDeviation(right, rightMean);
   return denominator > 0 ? covariance / denominator : 0;
 }
 
@@ -72,10 +73,15 @@ export function runMomentumCalibration(
 
   for (let simulation = 0; simulation < simulations; simulation += 1) {
     const simulationSeed = seed + simulation * 7919;
-    const timeline = simulateMatchTimeline(home, away, simulationSeed, [], { collectMomentumTrace: true });
-    const repeated = simulation === 0
-      ? simulateMatchTimeline(home, away, simulationSeed, [], { collectMomentumTrace: true })
-      : null;
+    const timeline = simulateMatchTimeline(home, away, simulationSeed, [], {
+      collectMomentumTrace: true,
+    });
+    const repeated =
+      simulation === 0
+        ? simulateMatchTimeline(home, away, simulationSeed, [], {
+            collectMomentumTrace: true,
+          })
+        : null;
     if (repeated && JSON.stringify(timeline) !== JSON.stringify(repeated)) {
       deterministic = false;
     }
@@ -103,23 +109,29 @@ export function runMomentumCalibration(
       homeValues.push(minute.homePressure);
       awayValues.push(minute.awayPressure);
       differences.push(difference);
-      structuralDifferences.push(minute.homeBasePressure - minute.awayBasePressure);
+      structuralDifferences.push(
+        minute.homeBasePressure - minute.awayBasePressure,
+      );
       absoluteDifferences.push(Math.abs(difference));
       const previousMinute = timeline.minutes[minute.minute - 2];
       const delta = previousMinute
-        ? (minute.homePressure - minute.awayPressure) -
+        ? minute.homePressure -
+          minute.awayPressure -
           (previousMinute.homePressure - previousMinute.awayPressure)
         : 0;
       momentumDeltas.push(Math.abs(delta));
       momentumSignals.push(difference);
-      const hasShot = minute.events.some(event =>
-        event.eventType === "GOAL" || event.eventType === "SAVE" ||
-        event.eventType === "MISS" || event.eventType === "CHANCE"
+      const hasShot = minute.events.some(
+        (event) =>
+          event.eventType === "GOAL" ||
+          event.eventType === "SAVE" ||
+          event.eventType === "MISS" ||
+          event.eventType === "CHANCE",
       );
       shotSignals.push(hasShot ? 1 : 0);
       eventImpactSignals.push(
         (minute.momentumTrace?.home.eventThreatImpact ?? 0) -
-        (minute.momentumTrace?.away.eventThreatImpact ?? 0),
+          (minute.momentumTrace?.away.eventThreatImpact ?? 0),
       );
     }
     longestRunTotal += longestRun;
@@ -132,13 +144,22 @@ export function runMomentumCalibration(
     simulations,
     minutesObserved: simulations * 90,
     durationMs,
-    simulationsPerSecond: durationMs > 0 ? simulations / (durationMs / 1000) : simulations,
+    simulationsPerSecond:
+      durationMs > 0 ? simulations / (durationMs / 1000) : simulations,
     averageHomeMomentum: mean(homeValues),
     averageAwayMomentum: mean(awayValues),
     averageAbsoluteMomentumDifference: mean(absoluteDifferences),
-    averageAbsoluteStructuralPressureDifference: mean(structuralDifferences.map(Math.abs)),
-    structuralPressureStandardDeviation: standardDeviation(structuralDifferences, averageStructuralDifference),
-    momentumStandardDeviation: standardDeviation(differences, averageDifference),
+    averageAbsoluteStructuralPressureDifference: mean(
+      structuralDifferences.map(Math.abs),
+    ),
+    structuralPressureStandardDeviation: standardDeviation(
+      structuralDifferences,
+      averageStructuralDifference,
+    ),
+    momentumStandardDeviation: standardDeviation(
+      differences,
+      averageDifference,
+    ),
     averageDominanceChangesPerMatch: dominanceChanges / simulations,
     averageLongestDominanceRunMinutes: longestRunTotal / simulations,
     shotMinuteCorrelation: correlation(absoluteDifferences, shotSignals),
@@ -147,7 +168,10 @@ export function runMomentumCalibration(
       momentumSignals.slice(1),
     ),
     averageAbsoluteMomentumDelta: mean(momentumDeltas),
-    eventImpactCorrelation: correlation(momentumDeltas, eventImpactSignals.map(Math.abs)),
+    eventImpactCorrelation: correlation(
+      momentumDeltas,
+      eventImpactSignals.map(Math.abs),
+    ),
     deterministic,
   };
 }

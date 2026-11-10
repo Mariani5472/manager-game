@@ -24,12 +24,17 @@ export function createApp(container: ApiContainer = createContainer()) {
   });
 
   app.use("/api/master", createMasterRoutes(container.masterController));
-  app.use("/api/data-packages", createDataPackageRoutes(container.dataPackageController));
+  app.use(
+    "/api/data-packages",
+    createDataPackageRoutes(container.dataPackageController),
+  );
   app.use("/api/saves", createSaveRoutes(container.saveController));
   app.use("/api/saves", createCampaignRoutes(container.campaignController));
 
   app.use((_request, response) => {
-    response.status(404).json({ error: "Route not found.", code: "ROUTE_NOT_FOUND" });
+    response
+      .status(404)
+      .json({ error: "Route not found.", code: "ROUTE_NOT_FOUND" });
   });
 
   app.use(errorHandler);

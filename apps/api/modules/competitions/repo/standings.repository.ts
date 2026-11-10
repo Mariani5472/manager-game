@@ -1,7 +1,6 @@
 import { SqliteDatabase } from "../../../db/database.js";
 import { getStage } from "./competition.repository.js";
 
-
 export interface StandingRow {
   stageId: number;
   groupId: number;
@@ -18,13 +17,11 @@ export interface StandingRow {
   fairPlayPoints: number;
 }
 
-
 type StandingTieBreak = {
   points: number;
   goalDifference: number;
   goalsFor: number;
 };
-
 
 const standingFields: Record<string, keyof StandingRow> = {
   POINTS: "points",
@@ -35,16 +32,14 @@ const standingFields: Record<string, keyof StandingRow> = {
   DRAW: "draws",
 };
 
-
 export function getStandings(
   db: SqliteDatabase,
   stageId: number,
-  refreshCache = true
+  refreshCache = true,
 ): StandingRow[] {
   if (refreshCache) {
     rebuildStandings(db, stageId);
   }
-
 
   const rules = db
     .prepare<
@@ -53,13 +48,13 @@ export function getStandings(
         rule_key: string;
       }
     >(
-      "SELECT rule_key FROM stage_standing_rule WHERE stage_id=? ORDER BY rule_order"
+      "SELECT rule_key FROM stage_standing_rule WHERE stage_id=? ORDER BY rule_order",
     )
     .all(stageId);
 
-
   const rows = db
-    .prepare<number, StandingRow>(`
+    .prepare<number, StandingRow>(
+      `
       SELECT
         ss.stage_id AS stageId,
         ss.group_id AS groupId,
@@ -81,16 +76,14 @@ export function getStandings(
         ON c.id = ss.club_id
 
       WHERE ss.stage_id = ?
-    `)
+    `,
+    )
     .all(stageId);
-
 
   let groups: StandingRow[][] = [rows];
 
-
   for (const { rule_key } of rules) {
     const refined: StandingRow[][] = [];
-
 
     for (const group of groups) {
       if (group.length < 2) {
@@ -98,26 +91,19 @@ export function getStandings(
         continue;
       }
 
-
       if (rule_key === "HEAD_TO_HEAD") {
-        const ids = group.map(
-          row => row.clubId
-        );
-
+        const ids = group.map((row) => row.clubId);
 
         const stats = new Map<number, StandingTieBreak>(
-          ids.map(
-            id => [
-              id,
-              {
-                points: 0,
-                goalDifference: 0,
-                goalsFor: 0,
-              },
-            ]
-          )
+          ids.map((id) => [
+            id,
+            {
+              points: 0,
+              goalDifference: 0,
+              goalsFor: 0,
+            },
+          ]),
         );
-
 
         const fixtures = db
           .prepare<
@@ -131,7 +117,8 @@ export function getStandings(
               drawPoints: number | null;
               lossPoints: number | null;
             }
-          >(`
+          >(
+            `
             SELECT
               f.home_club_id AS home,
               f.away_club_id AS away,
@@ -157,27 +144,19 @@ export function getStandings(
               AND f.away_club_id IN (
                 ${ids.map(() => "?").join(",")}
               )
-          `)
-          .all(
-            stageId,
-            ...ids,
-            ...ids
-          );
-
+          `,
+          )
+          .all(stageId, ...ids, ...ids);
 
         for (const fixture of fixtures) {
           const home = stats.get(fixture.home)!;
           const away = stats.get(fixture.away)!;
 
-
           home.goalsFor += fixture.homeScore;
-          home.goalDifference +=
-            fixture.homeScore - fixture.awayScore;
+          home.goalDifference += fixture.homeScore - fixture.awayScore;
 
           away.goalsFor += fixture.awayScore;
-          away.goalDifference +=
-            fixture.awayScore - fixture.homeScore;
-
+          away.goalDifference += fixture.awayScore - fixture.homeScore;
 
           if (fixture.homeScore > fixture.awayScore) {
             home.points += fixture.winPoints ?? 3;
@@ -191,11 +170,7 @@ export function getStandings(
           }
         }
 
-
-        const compare = (
-          a: StandingRow,
-          b: StandingRow
-        ) => {
+        const compare = (a: StandingRow, b: StandingRow) => {
           const x = stats.get(a.clubId)!;
           const y = stats.get(b.clubId)!;
 
@@ -206,23 +181,19 @@ export function getStandings(
           );
         };
 
-
         const sorted = [...group].sort(compare);
 
         let tie: StandingRow[] = [];
         let previous: StandingTieBreak | undefined;
-
 
         for (const row of sorted) {
           const value = stats.get(row.clubId)!;
 
           if (
             previous &&
-            (
-              value.points !== previous.points ||
+            (value.points !== previous.points ||
               value.goalDifference !== previous.goalDifference ||
-              value.goalsFor !== previous.goalsFor
-            )
+              value.goalsFor !== previous.goalsFor)
           ) {
             refined.push(tie);
             tie = [];
@@ -232,7 +203,6 @@ export function getStandings(
           previous = value;
         }
 
-
         if (tie.length) {
           refined.push(tie);
         }
@@ -240,42 +210,26 @@ export function getStandings(
         continue;
       }
 
-
       const field = standingFields[rule_key];
-
 
       if (!field) {
         refined.push(group);
         continue;
       }
 
-
-      const direction =
-        rule_key === "FAIR_PLAY"
-          ? 1
-          : -1;
+      const direction = rule_key === "FAIR_PLAY" ? 1 : -1;
 
       const sorted = [...group].sort(
-        (a, b) =>
-          direction *
-          (
-            Number(a[field]) -
-            Number(b[field])
-          )
+        (a, b) => direction * (Number(a[field]) - Number(b[field])),
       );
-
 
       let tie: StandingRow[] = [];
       let previousValue: number | undefined;
 
-
       for (const row of sorted) {
         const value = Number(row[field]);
 
-        if (
-          previousValue !== undefined &&
-          value !== previousValue
-        ) {
+        if (previousValue !== undefined && value !== previousValue) {
           refined.push(tie);
           tie = [];
         }
@@ -284,50 +238,32 @@ export function getStandings(
         previousValue = value;
       }
 
-
       if (tie.length) {
         refined.push(tie);
       }
     }
 
-
     groups = refined;
   }
 
-
-  return groups.flatMap(
-    group =>
-      group.length > 1
-        ? [...group].sort(
-            (a, b) =>
-              a.club.localeCompare(
-                b.club,
-                "pt-BR"
-              ) ||
-              a.clubId - b.clubId
-          )
-        : group
+  return groups.flatMap((group) =>
+    group.length > 1
+      ? [...group].sort(
+          (a, b) =>
+            a.club.localeCompare(b.club, "pt-BR") || a.clubId - b.clubId,
+        )
+      : group,
   );
 }
 
-
-export function rebuildStandings(
-  db: SqliteDatabase,
-  stageId: number
-): void {
+export function rebuildStandings(db: SqliteDatabase, stageId: number): void {
   getStage(db, stageId);
 
-
   const rebuild = db.transaction(() => {
-    db
-      .prepare(
-        "DELETE FROM stage_standing WHERE stage_id=?"
-      )
-      .run(stageId);
+    db.prepare("DELETE FROM stage_standing WHERE stage_id=?").run(stageId);
 
-
-    db
-      .prepare(`
+    db.prepare(
+      `
         INSERT INTO stage_standing (
           stage_id,
           club_id,
@@ -355,9 +291,8 @@ export function rebuildStandings(
           0
         FROM stage_participant
         WHERE stage_id = ?
-      `)
-      .run(stageId);
-
+      `,
+    ).run(stageId);
 
     const fixtures = db
       .prepare<
@@ -371,7 +306,8 @@ export function rebuildStandings(
           drawPoints: number | null;
           lossPoints: number | null;
         }
-      >(`
+      >(
+        `
         SELECT
           f.home_club_id AS home,
           f.away_club_id AS away,
@@ -391,9 +327,9 @@ export function rebuildStandings(
 
         WHERE r.stage_id = ?
           AND f.status = 'COMPLETED'
-      `)
+      `,
+      )
       .all(stageId);
-
 
     const update = db.prepare(`
       UPDATE stage_standing
@@ -409,7 +345,6 @@ export function rebuildStandings(
         AND club_id = ?
     `);
 
-
     for (const f of fixtures) {
       let hp = 0;
       let ap = 0;
@@ -421,7 +356,6 @@ export function rebuildStandings(
       let aw = 0;
       let ad = 0;
       let al = 0;
-
 
       if (f.homeScore > f.awayScore) {
         hp = f.winPoints ?? 3;
@@ -443,34 +377,13 @@ export function rebuildStandings(
         ad = 1;
       }
 
+      update.run(hw, hd, hl, f.homeScore, f.awayScore, hp, stageId, f.home);
 
-      update.run(
-        hw,
-        hd,
-        hl,
-        f.homeScore,
-        f.awayScore,
-        hp,
-        stageId,
-        f.home
-      );
-
-
-      update.run(
-        aw,
-        ad,
-        al,
-        f.awayScore,
-        f.homeScore,
-        ap,
-        stageId,
-        f.away
-      );
+      update.run(aw, ad, al, f.awayScore, f.homeScore, ap, stageId, f.away);
     }
 
-
-    db
-      .prepare(`
+    db.prepare(
+      `
         UPDATE stage_standing
 
         SET fair_play_points = COALESCE(
@@ -504,10 +417,9 @@ export function rebuildStandings(
         )
 
         WHERE stage_id = ?
-      `)
-      .run(stageId);
+      `,
+    ).run(stageId);
   });
-
 
   rebuild();
 }

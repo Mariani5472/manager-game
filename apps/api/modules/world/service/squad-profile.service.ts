@@ -9,9 +9,7 @@ export interface FactoryCalendarRepair {
  * Existing saves remain independent; only a save explicitly passed through this
  * factory initializer is profiled. Re-running initialization is idempotent.
  */
-export function ensureFactorySquadProfiles(
-  db: SqliteDatabase
-): void {
+export function ensureFactorySquadProfiles(db: SqliteDatabase): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS factory_balance_metadata (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -20,23 +18,21 @@ export function ensureFactorySquadProfiles(
     )
   `);
 
-
   const current = db
-    .prepare(
-      "SELECT profile_version FROM factory_balance_metadata WHERE id=1"
-    )
-    .get() as {
-      profile_version: number;
-    } | undefined;
-
+    .prepare("SELECT profile_version FROM factory_balance_metadata WHERE id=1")
+    .get() as
+    | {
+        profile_version: number;
+      }
+    | undefined;
 
   if (current?.profile_version === 1) {
     return;
   }
 
-
   const clubs = db
-    .prepare(`
+    .prepare(
+      `
       SELECT
         id,
         reputation
@@ -46,40 +42,25 @@ export function ensureFactorySquadProfiles(
       ORDER BY
         reputation DESC,
         id
-    `)
+    `,
+    )
     .all() as Array<{
-      id: number;
-      reputation: number;
-    }>;
-
+    id: number;
+    reputation: number;
+  }>;
 
   if (clubs.length !== 16) {
-    throw new Error(
-      "Squad recalibration requires a 16-club factory world."
-    );
+    throw new Error("Squad recalibration requires a 16-club factory world.");
   }
-
 
   const tiers = new Map<number, number>();
 
-
   clubs.forEach((club, index) => {
     // 3 elite, 4 competitive, 5 mid-table, 4 lower-table clubs.
-    const tier =
-      index < 3
-        ? 0
-        : index < 7
-          ? 1
-          : index < 12
-            ? 2
-            : 3;
+    const tier = index < 3 ? 0 : index < 7 ? 1 : index < 12 ? 2 : 3;
 
-    tiers.set(
-      club.id,
-      tier
-    );
+    tiers.set(club.id, tier);
   });
-
 
   const attrs = [
     "pace",
@@ -108,7 +89,6 @@ export function ensureFactorySquadProfiles(
     "handling",
     "aerial_reach",
   ];
-
 
   const selectPlayers = db.prepare(`
     SELECT
@@ -142,23 +122,17 @@ export function ensureFactorySquadProfiles(
       p.person_id
   `);
 
-
   const updateAttrs = db.prepare(
     "UPDATE player_attribute SET " +
-    attrs
-      .map(attribute => attribute + "=?")
-      .join(",") +
-    " WHERE player_id=?"
+      attrs.map((attribute) => attribute + "=?").join(",") +
+      " WHERE player_id=?",
   );
 
   const updatePosition = db.prepare(
-    "UPDATE player_position SET rating=? WHERE player_id=? AND position_code=?"
+    "UPDATE player_position SET rating=? WHERE player_id=? AND position_code=?",
   );
 
-  const updateClub = db.prepare(
-    "UPDATE club SET reputation=? WHERE id=?"
-  );
-
+  const updateClub = db.prepare("UPDATE club SET reputation=? WHERE id=?");
 
   const update = db.transaction(() => {
     for (const club of clubs) {
@@ -166,39 +140,21 @@ export function ensureFactorySquadProfiles(
       const base = [73, 66, 59, 52][tier]!;
       const identity = (club.id * 17) % 3;
 
-
-      const players = selectPlayers.all(
-        club.id
-      ) as Array<{
+      const players = selectPlayers.all(club.id) as Array<{
         id: number;
         goalkeeper: number;
         shirtNumber: number | null;
         position: string | null;
       }>;
 
-
       for (const player of players) {
-        const role =
-          player.position ??
-          (
-            player.goalkeeper
-              ? "GK"
-              : "CM"
-          );
+        const role = player.position ?? (player.goalkeeper ? "GK" : "CM");
 
-        const isBench =
-          (player.shirtNumber ?? 99) > 11;
+        const isBench = (player.shirtNumber ?? 99) > 11;
 
-        const benchPenalty =
-          isBench
-            ? 5 + ((player.id + club.id) % 4)
-            : 0;
+        const benchPenalty = isBench ? 5 + ((player.id + club.id) % 4) : 0;
 
-
-        const roleBonus: Record<
-          string,
-          Partial<Record<string, number>>
-        > = {
+        const roleBonus: Record<string, Partial<Record<string, number>>> = {
           GK: {
             reflexes: 9,
             handling: 8,
@@ -322,16 +278,11 @@ export function ensureFactorySquadProfiles(
           },
         };
 
-
         const bonuses = roleBonus[role] ?? {};
 
         const specialization: Record<string, number> = {};
 
-
-        if (
-          identity === 0 &&
-          ["ST", "LW", "RW", "AM"].includes(role)
-        ) {
+        if (identity === 0 && ["ST", "LW", "RW", "AM"].includes(role)) {
           specialization.finishing = 4;
           specialization.dribbling = 3;
           specialization.vision = 2;
@@ -343,10 +294,7 @@ export function ensureFactorySquadProfiles(
           specialization.marking = 3;
           specialization.concentration = 3;
 
-          specialization.reflexes =
-            role === "GK"
-              ? 4
-              : 0;
+          specialization.reflexes = role === "GK" ? 4 : 0;
         } else if (
           identity === 2 &&
           ["CM", "DM", "AM", "LW", "RW"].includes(role)
@@ -356,14 +304,9 @@ export function ensureFactorySquadProfiles(
           specialization.stamina = 2;
         }
 
-
         const values = attrs.map((attribute, i) => {
           const deterministicNoise =
-            (
-              player.id * 13 +
-              club.id * 7 +
-              i * 5
-            ) % 9 - 4;
+            ((player.id * 13 + club.id * 7 + i * 5) % 9) - 4;
 
           const value =
             base +
@@ -372,75 +315,39 @@ export function ensureFactorySquadProfiles(
             benchPenalty +
             deterministicNoise;
 
-          return Math.max(
-            28,
-            Math.min(
-              94,
-              Math.round(value)
-            )
-          );
+          return Math.max(28, Math.min(94, Math.round(value)));
         });
 
-
-        updateAttrs.run(
-          ...values,
-          player.id
-        );
-
+        updateAttrs.run(...values, player.id);
 
         const positionRating = Math.max(
           35,
           Math.min(
             94,
             base +
-            (
-              role === "GK"
-                ? 4
-                : 0
-            ) +
-            (
-              isBench
-                ? -5
-                : 3
-            ) +
-            ((player.id * 11 + club.id) % 7) -
-            3
-          )
+              (role === "GK" ? 4 : 0) +
+              (isBench ? -5 : 3) +
+              ((player.id * 11 + club.id) % 7) -
+              3,
+          ),
         );
 
-
         if (player.position) {
-          updatePosition.run(
-            positionRating,
-            player.id,
-            player.position
-          );
+          updatePosition.run(positionRating, player.id, player.position);
         }
       }
-
 
       // Reputation communicates expected club stature, but is not used as a match bonus.
       const reputation = Math.max(
         25,
-        Math.min(
-          92,
-          base +
-          15 +
-          ((club.id * 3) % 5) -
-          2
-        )
+        Math.min(92, base + 15 + ((club.id * 3) % 5) - 2),
       );
 
-
-      updateClub.run(
-        reputation,
-        club.id
-      );
+      updateClub.run(reputation, club.id);
     }
 
-
-    db
-      .prepare(`
+    db.prepare(
+      `
         INSERT INTO factory_balance_metadata (
           id,
           profile_version
@@ -451,10 +358,9 @@ export function ensureFactorySquadProfiles(
         DO UPDATE SET
           profile_version = excluded.profile_version,
           applied_at = CURRENT_TIMESTAMP
-      `)
-      .run();
+      `,
+    ).run();
   });
-
 
   update();
 }

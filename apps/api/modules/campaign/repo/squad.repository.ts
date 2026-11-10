@@ -1,7 +1,6 @@
 import { SqliteDatabase } from "../../../db/database.js";
 import type { SquadStatus } from "../../../../shared/src/index.js";
 
-
 export interface PlayerSummary {
   id: number;
   name: string;
@@ -12,7 +11,6 @@ export interface PlayerSummary {
   morale: number;
   sharpness: number;
 }
-
 
 interface PlayerSummaryRow {
   id: number;
@@ -25,7 +23,6 @@ interface PlayerSummaryRow {
   sharpness: number;
 }
 
-
 function parseSquadStatus(value: string): SquadStatus {
   switch (value) {
     case "FIRST_TEAM":
@@ -37,13 +34,10 @@ function parseSquadStatus(value: string): SquadStatus {
   }
 }
 
-
-export function listSquad(
-  db: SqliteDatabase,
-  clubId: number
-): PlayerSummary[] {
+export function listSquad(db: SqliteDatabase, clubId: number): PlayerSummary[] {
   const rows = db
-    .prepare<number, PlayerSummaryRow>(`
+    .prepare<number, PlayerSummaryRow>(
+      `
       SELECT
         p.id AS id,
         p.full_name AS name,
@@ -81,19 +75,16 @@ export function listSquad(
         END,
         sm.shirt_number,
         p.full_name
-    `)
+    `,
+    )
     .all(clubId);
 
-
-  return rows.map(
-    ({ positionsJson, squadStatus, ...row }) => ({
-      ...row,
-      squadStatus: parseSquadStatus(squadStatus),
-      positions: JSON.parse(positionsJson) as string[],
-    })
-  );
+  return rows.map(({ positionsJson, squadStatus, ...row }) => ({
+    ...row,
+    squadStatus: parseSquadStatus(squadStatus),
+    positions: JSON.parse(positionsJson) as string[],
+  }));
 }
-
 
 export interface TacticSummary {
   formation: string;
@@ -106,19 +97,14 @@ export interface TacticSummary {
   counterAttack: boolean;
 }
 
+type TacticSummaryRow = Omit<TacticSummary, "counterAttack"> & {
+  counterAttack: number;
+};
 
-type TacticSummaryRow =
-  Omit<TacticSummary, "counterAttack"> & {
-    counterAttack: number;
-  };
-
-
-export function getTactics(
-  db: SqliteDatabase,
-  clubId: number
-): TacticSummary {
+export function getTactics(db: SqliteDatabase, clubId: number): TacticSummary {
   const row = db
-    .prepare<number, TacticSummaryRow>(`
+    .prepare<number, TacticSummaryRow>(
+      `
       SELECT
         f.name AS formation,
         tt.mentality,
@@ -135,16 +121,13 @@ export function getTactics(
         ON f.id = tt.formation_id
 
       WHERE tt.club_id = ?
-    `)
+    `,
+    )
     .get(clubId);
 
-
   if (!row) {
-    throw new Error(
-      `Tactics for club ${clubId} were not found.`
-    );
+    throw new Error(`Tactics for club ${clubId} were not found.`);
   }
-
 
   return {
     ...row,

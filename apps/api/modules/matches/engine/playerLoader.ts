@@ -13,12 +13,10 @@ interface PlayerPositionRow {
   rating: number;
 }
 
-export function loadTactic(
-  db: SqliteDatabase,
-  clubId: number
-): Tactic {
+export function loadTactic(db: SqliteDatabase, clubId: number): Tactic {
   const tactic = db
-    .prepare<[number], Tactic>(`
+    .prepare<[number], Tactic>(
+      `
       SELECT
         formation_id,
         mentality,
@@ -30,13 +28,12 @@ export function loadTactic(
         counter_attack
       FROM team_tactic
       WHERE club_id = ?
-    `)
+    `,
+    )
     .get(clubId);
 
   if (!tactic) {
-    throw new Error(
-      `Tactics for club ${clubId} were not found.`
-    );
+    throw new Error(`Tactics for club ${clubId} were not found.`);
   }
 
   return tactic;
@@ -45,18 +42,22 @@ export function loadTactic(
 export function loadPlayers(
   db: SqliteDatabase,
   clubId: number,
-  fixtureId: number
+  fixtureId: number,
 ): Player[] {
   const date = db
-    .prepare<[number], FixtureDateRow>(`
+    .prepare<[number], FixtureDateRow>(
+      `
       SELECT
         substr(scheduled_at, 1, 10) AS date
       FROM fixture
       WHERE id = ?
-    `)
+    `,
+    )
     .get(fixtureId);
 
-  const available=db.prepare(`SELECT p.person_id AS id,pe.full_name AS name,p.goalkeeper,
+  const available = db
+    .prepare(
+      `SELECT p.person_id AS id,pe.full_name AS name,p.goalkeeper,
     COALESCE(pc.energy,100) energy,COALESCE(pc.morale,50) morale,COALESCE(pc.sharpness,50) sharpness,
     pa.pace,pa.stamina,pa.strength,pa.positioning,pa.decisions,pa.composure,pa.teamwork,pa.work_rate,
     pa.passing,pa.vision,pa.crossing,pa.dribbling,pa.finishing,pa.long_shots,pa.heading,pa.tackling,
@@ -65,9 +66,13 @@ export function loadPlayers(
     JOIN player_attribute pa ON pa.player_id=p.person_id LEFT JOIN player_condition pc ON pc.player_id=p.person_id
     WHERE sm.club_id=? AND COALESCE(pc.suspension_matches,0)=0
       AND (pc.injured_until IS NULL OR ? IS NULL OR date(pc.injured_until)<date(?))
-    ORDER BY p.person_id`).all(clubId,date?.date??null,date?.date??null) as Player[];
-   if(available.length>=11) return available;
-   const fallback=db.prepare(`SELECT p.person_id AS id,pe.full_name AS name,p.goalkeeper,
+    ORDER BY p.person_id`,
+    )
+    .all(clubId, date?.date ?? null, date?.date ?? null) as Player[];
+  if (available.length >= 11) return available;
+  const fallback = db
+    .prepare(
+      `SELECT p.person_id AS id,pe.full_name AS name,p.goalkeeper,
     COALESCE(pc.energy,100) energy,COALESCE(pc.morale,50) morale,COALESCE(pc.sharpness,50) sharpness,
     pa.pace,pa.stamina,pa.strength,pa.positioning,pa.decisions,pa.composure,pa.teamwork,pa.work_rate,
     pa.passing,pa.vision,pa.crossing,pa.dribbling,pa.finishing,pa.long_shots,pa.heading,pa.tackling,
@@ -76,18 +81,29 @@ export function loadPlayers(
     FROM squad_membership sm JOIN player p ON p.person_id=sm.player_id JOIN person pe ON pe.id=p.person_id
     JOIN player_attribute pa ON pa.player_id=p.person_id LEFT JOIN player_condition pc ON pc.player_id=p.person_id
     WHERE sm.club_id=? AND COALESCE(pc.suspension_matches,0)=0 ORDER BY p.person_id
-   `).all(date?.date??null,date?.date??null,clubId) as Array<Player&{injuryFallback:number}>;
-   return fallback.map(({injuryFallback,...player})=>injuryFallback
-    ? {...player,energy:Math.min(player.energy,40),sharpness:Math.min(player.sharpness,25)}
-    : player);
+   `,
+    )
+    .all(date?.date ?? null, date?.date ?? null, clubId) as Array<
+    Player & { injuryFallback: number }
+  >;
+  return fallback.map(({ injuryFallback, ...player }) =>
+    injuryFallback
+      ? {
+          ...player,
+          energy: Math.min(player.energy, 40),
+          sharpness: Math.min(player.sharpness, 25),
+        }
+      : player,
+  );
 }
 
 export function loadPositions(
   db: SqliteDatabase,
-  clubId: number
+  clubId: number,
 ): PlayerPositions {
   const rows = db
-    .prepare<[number], PlayerPositionRow>(`
+    .prepare<[number], PlayerPositionRow>(
+      `
       SELECT
         pp.player_id,
         pp.position_code,
@@ -96,7 +112,8 @@ export function loadPositions(
       JOIN squad_membership sm
         ON sm.player_id = pp.player_id
       WHERE sm.club_id = ?
-    `)
+    `,
+    )
     .all(clubId);
 
   const output: PlayerPositions = new Map();
@@ -106,21 +123,16 @@ export function loadPositions(
       output.set(row.player_id, new Map());
     }
 
-    output
-      .get(row.player_id)!
-      .set(row.position_code, row.rating);
+    output.get(row.player_id)!.set(row.position_code, row.rating);
   }
 
   return output;
 }
 
-export function bestPosition(
-  id: number,
-  positions: PlayerPositions
-): string {
-  return [
-    ...(positions.get(id)?.entries() ?? []),
-  ].sort(
-    (a, b) => b[1] - a[1]
-  )[0]?.[0] ?? "CM";
+export function bestPosition(id: number, positions: PlayerPositions): string {
+  return (
+    [...(positions.get(id)?.entries() ?? [])].sort(
+      (a, b) => b[1] - a[1],
+    )[0]?.[0] ?? "CM"
+  );
 }

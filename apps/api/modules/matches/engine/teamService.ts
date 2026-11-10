@@ -1,9 +1,5 @@
-import type {
-  SqliteDatabase,
-} from "../../../db/database.js";
-import {
-  resolveMatchContext,
-} from "../service/match-context.service.js";
+import type { SqliteDatabase } from "../../../db/database.js";
+import { resolveMatchContext } from "../service/match-context.service.js";
 import { selectLineup } from "./lineupService.js";
 import {
   bestPosition,
@@ -11,47 +7,31 @@ import {
   loadPositions,
   loadTactic,
 } from "./playerLoader.js";
-import {
-  fit,
-  skill,
-} from "./strengthCalculator.js";
+import { fit, skill } from "./strengthCalculator.js";
 import { mean } from "./mathUtils.js";
-import type {
-  Team,
-} from "../types/match-engine.types.js";
-
+import type { Team } from "../types/match-engine.types.js";
 
 export function loadTeam(
   db: SqliteDatabase,
   fixtureId: number,
   clubId: number,
-  persistLineup = true
+  persistLineup = true,
 ): Team {
   const club = db
-    .prepare(
-      "SELECT reputation FROM club WHERE id=?"
-    )
-    .get(clubId) as {
-      reputation: number;
-    } | undefined;
+    .prepare("SELECT reputation FROM club WHERE id=?")
+    .get(clubId) as
+    | {
+        reputation: number;
+      }
+    | undefined;
 
   if (!club) {
-    throw new Error(
-      `Club ${clubId} not found.`
-    );
+    throw new Error(`Club ${clubId} not found.`);
   }
 
+  const tactic = loadTactic(db, clubId);
 
-  const tactic = loadTactic(
-    db,
-    clubId
-  );
-
-  const players = loadPlayers(
-    db,
-    clubId,
-    fixtureId
-  );
+  const players = loadPlayers(db, clubId, fixtureId);
 
   const lineup = selectLineup(
     db,
@@ -59,66 +39,47 @@ export function loadTeam(
     clubId,
     players,
     tactic,
-    persistLineup
+    persistLineup,
   );
 
-  const starters = lineup.filter(
-    player => player.isStarting
-  );
+  const starters = lineup.filter((player) => player.isStarting);
 
-  const positions = loadPositions(
-    db,
-    clubId
-  );
-
+  const positions = loadPositions(db, clubId);
 
   const positionRating = mean(
     starters.map(
-      player =>
+      (player) =>
         player.positionRating *
-        fit(
-          bestPosition(
-            player.id,
-            positions
-          ),
-          player.role
-        )
-    )
+        fit(bestPosition(player.id, positions), player.role),
+    ),
   );
-
 
   const attacking = mean(
     starters.map(
-      player =>
+      (player) =>
         skill(player, player.role) * 0.72 +
         player.positionRating * 0.28 +
         player.energy * 0.18 +
         player.morale * 0.08 +
-        player.sharpness * 0.08
-    )
+        player.sharpness * 0.08,
+    ),
   );
-
 
   const defending = mean(
-    starters.map(
-      player =>
-        mean([
-          player.tackling,
-          player.marking,
-          player.positioning,
-          player.concentration,
-          player.strength,
-        ])
-    )
+    starters.map((player) =>
+      mean([
+        player.tackling,
+        player.marking,
+        player.positioning,
+        player.concentration,
+        player.strength,
+      ]),
+    ),
   );
-
 
   const keeper = starters.find(
-    player =>
-      player.isStarting &&
-      player.role === "GK"
+    (player) => player.isStarting && player.role === "GK",
   );
-
 
   return {
     clubId,
@@ -126,9 +87,7 @@ export function loadTeam(
     tactic,
     lineup,
 
-    attacking:
-      attacking +
-      (positionRating - 50) * 0.15,
+    attacking: attacking + (positionRating - 50) * 0.15,
 
     defending,
 
@@ -141,22 +100,10 @@ export function loadTeam(
         ])
       : 45,
 
-    energy: mean(
-      starters.map(
-        player => player.energy
-      )
-    ),
+    energy: mean(starters.map((player) => player.energy)),
 
-    fitness: mean(
-      starters.map(
-        player => player.stamina
-      )
-    ),
+    fitness: mean(starters.map((player) => player.stamina)),
 
-    context: resolveMatchContext(
-      db,
-      fixtureId,
-      clubId
-    ),
+    context: resolveMatchContext(db, fixtureId, clubId),
   };
 }

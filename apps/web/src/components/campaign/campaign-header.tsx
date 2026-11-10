@@ -41,11 +41,14 @@ export function CampaignHeader({
           <span>{competition ?? 'No active competition'}</span>
         </div>
         <div className={styles.headerActions}>
-          {nextFixture && onNextMatch && ['SCHEDULED', 'IN_PROGRESS'].includes(nextFixture.status) && (
-            <Button size="sm" onClick={onNextMatch}>
-              <Play size={14} /> {nextFixture.status === 'IN_PROGRESS' ? 'Continuar partida' : 'Próxima partida'}
-            </Button>
-          )}
+          {nextFixture &&
+            onNextMatch &&
+            ['SCHEDULED', 'IN_PROGRESS'].includes(nextFixture.status) && (
+              <Button size="sm" onClick={onNextMatch}>
+                <Play size={14} />{' '}
+                {nextFixture.status === 'IN_PROGRESS' ? 'Continuar partida' : 'Próxima partida'}
+              </Button>
+            )}
           <span className={styles.saveStatus}>
             <ShieldCheck size={14} />
             Career loaded

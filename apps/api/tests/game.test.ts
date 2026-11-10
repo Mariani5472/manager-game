@@ -7,17 +7,35 @@ import { spawnSync } from "node:child_process";
 import { open, validate } from "../db/database.js";
 import { recoverSquadBeforeMatch } from "../modules/matches/service/match-context.service.js";
 import { SaveManager } from "../modules/saves/repo/save-manager.js";
-import { previewLineup, saveLineup } from "../modules/campaign/repo/lineup.repository.js";
+import {
+  previewLineup,
+  saveLineup,
+} from "../modules/campaign/repo/lineup.repository.js";
 import { simulateMatch } from "../modules/matches/service/match-simulation.service.js";
 import { auditGameIntegrity } from "../modules/world/service/integrity-audit.service.js";
-import { applyRosterSeason, createTransferOffer, respondToTransferOffer } from "../modules/roster/service/roster-lifecycle.service.js";
 import {
-  advanceNextFixture, advanceRound, advanceStageRound, ensureFactoryLeagueCalendar,
-  resolveKnockoutFixtureWinner, getManagedClub, getSeasonStatus, getStandings,
-  listFixtures, listSquad, getTactics, prepareNextLeagueSeason,
+  applyRosterSeason,
+  createTransferOffer,
+  respondToTransferOffer,
+} from "../modules/roster/service/roster-lifecycle.service.js";
+import {
+  advanceNextFixture,
+  advanceRound,
+  advanceStageRound,
+  ensureFactoryLeagueCalendar,
+  resolveKnockoutFixtureWinner,
+  getManagedClub,
+  getSeasonStatus,
+  getStandings,
+  listFixtures,
+  listSquad,
+  getTactics,
+  prepareNextLeagueSeason,
 } from "../modules/gameplay/gameplay.facade.js";
 
-const schemaPath = resolve("apps/api/modules/world/schema/game_manager_mvp.sql");
+const schemaPath = resolve(
+  "apps/api/modules/world/schema/game_manager_mvp.sql",
+);
 
 function tempRoot(): string {
   return mkdtempSync(join(tmpdir(), "manager-game-issues-"));
@@ -38,7 +56,11 @@ function createMaster(root: string): string {
 async function createSave(root: string, name = "Test Campaign", clubId = 1) {
   const masterPath = createMaster(root);
   const manager = new SaveManager(masterPath, join(root, "saves"));
-  const save = await manager.create({ name, managerName: "Test Manager", clubId });
+  const save = await manager.create({
+    name,
+    managerName: "Test Manager",
+    clubId,
+  });
   return { masterPath, manager, save };
 }
 
@@ -50,7 +72,13 @@ test("complete schema executes and passes SQLite integrity and foreign-key check
     try {
       assert.equal(db.pragma("integrity_check", { simple: true }), "ok");
       assert.deepEqual(db.pragma("foreign_key_check"), []);
-      assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='trg_match_lineup_validate_update'").get());
+      assert.ok(
+        db
+          .prepare(
+            "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='trg_match_lineup_validate_update'",
+          )
+          .get(),
+      );
     } finally {
       db.close();
     }
@@ -65,9 +93,13 @@ test("integrity audit is read-only and reports a clean campaign without complete
   try {
     const { manager, save } = await createSave(root, "Audit Campaign", 1);
     db = manager.open(save.filePath);
-    const before = db.prepare("SELECT COUNT(*) AS count FROM fixture WHERE status='COMPLETED'").get() as {count:number};
+    const before = db
+      .prepare("SELECT COUNT(*) AS count FROM fixture WHERE status='COMPLETED'")
+      .get() as { count: number };
     const report = auditGameIntegrity(db);
-    const after = db.prepare("SELECT COUNT(*) AS count FROM fixture WHERE status='COMPLETED'").get() as {count:number};
+    const after = db
+      .prepare("SELECT COUNT(*) AS count FROM fixture WHERE status='COMPLETED'")
+      .get() as { count: number };
     assert.equal(report.completedFixtures, 0);
     assert.equal(report.ok, true);
     assert.deepEqual(report.findings, []);
@@ -85,23 +117,76 @@ test("init-master repair restores six factory league rounds without touching the
     const masterPath = createMaster(root);
     const db = open(masterPath);
     try {
-      db.prepare("DELETE FROM competition_round WHERE stage_id=1 AND round_number>2").run();
-      assert.equal((db.prepare("SELECT COUNT(*) AS count FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=1").get() as {count:number}).count,4);
-      assert.deepEqual(ensureFactoryLeagueCalendar(db),{repaired:true,rounds:6,fixtures:12});
-      assert.equal((db.prepare("SELECT COUNT(*) AS count FROM competition_round WHERE stage_id=1").get() as {count:number}).count,6);
-      assert.equal((db.prepare("SELECT COUNT(*) AS count FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=1").get() as {count:number}).count,12);
-      assert.equal((db.prepare("SELECT COUNT(*) AS count FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=2").get() as {count:number}).count,2);
-      const clubGames=db.prepare(`
+      db.prepare(
+        "DELETE FROM competition_round WHERE stage_id=1 AND round_number>2",
+      ).run();
+      assert.equal(
+        (
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=1",
+            )
+            .get() as { count: number }
+        ).count,
+        4,
+      );
+      assert.deepEqual(ensureFactoryLeagueCalendar(db), {
+        repaired: true,
+        rounds: 6,
+        fixtures: 12,
+      });
+      assert.equal(
+        (
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM competition_round WHERE stage_id=1",
+            )
+            .get() as { count: number }
+        ).count,
+        6,
+      );
+      assert.equal(
+        (
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=1",
+            )
+            .get() as { count: number }
+        ).count,
+        12,
+      );
+      assert.equal(
+        (
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=2",
+            )
+            .get() as { count: number }
+        ).count,
+        2,
+      );
+      const clubGames = db
+        .prepare(
+          `
         SELECT club_id AS clubId,COUNT(*) AS played FROM (
           SELECT home_club_id AS club_id FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=1
           UNION ALL
           SELECT away_club_id AS club_id FROM fixture f JOIN competition_round r ON r.id=f.round_id WHERE r.stage_id=1
         ) GROUP BY club_id ORDER BY club_id
-      `).all() as Array<{clubId:number;played:number}>;
-      assert.deepEqual(clubGames.map(row=>row.played),[6,6,6,6]);
-      assert.equal(ensureFactoryLeagueCalendar(db).repaired,false);
-    } finally { db.close(); }
-  } finally { rmSync(root,{recursive:true,force:true}); }
+      `,
+        )
+        .all() as Array<{ clubId: number; played: number }>;
+      assert.deepEqual(
+        clubGames.map((row) => row.played),
+        [6, 6, 6, 6],
+      );
+      assert.equal(ensureFactoryLeagueCalendar(db).repaired, false);
+    } finally {
+      db.close();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("match processing resumes after an injected minute write failure without duplicate events or momentum", async () => {
@@ -117,38 +202,134 @@ test("match processing resumes after an injected minute write failure without du
       BEGIN SELECT RAISE(ABORT, 'injected interruption'); END;
     `);
     assert.throws(() => advanceNextFixture(db!, 1), /injected interruption/);
-    const interrupted = db.prepare("SELECT status,current_minute,random_seed AS seed FROM fixture WHERE id=1")
-      .get() as {status:string;current_minute:number;seed:number|null};
+    const interrupted = db
+      .prepare(
+        "SELECT status,current_minute,random_seed AS seed FROM fixture WHERE id=1",
+      )
+      .get() as { status: string; current_minute: number; seed: number | null };
     assert.equal(interrupted.status, "IN_PROGRESS");
     assert.equal(interrupted.current_minute, 44);
     assert.ok(interrupted.seed !== null);
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number}).n, 44);
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS n FROM match_momentum WHERE fixture_id=1",
+          )
+          .get() as { n: number }
+      ).n,
+      44,
+    );
 
     db.exec("DROP TRIGGER test_injected_minute_failure");
     const summary = advanceNextFixture(db, 1);
     assert.equal(summary.minutes, 90);
-    assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number}).n, 90);
-    assert.equal((db.prepare("SELECT COUNT(DISTINCT minute) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number}).n, 90);
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_event WHERE fixture_id=1 AND event_type='KICK_OFF'").get() as {n:number}).n, 1);
-    const history = db.prepare("SELECT home_lineup_json AS homeLineup,away_lineup_json AS awayLineup,tactics_json AS tactics,result_json AS result,engine_version AS engineVersion,random_seed AS seed,completed_at AS completedAt FROM match_history_snapshot WHERE fixture_id=1").get() as {homeLineup:string;awayLineup:string;tactics:string;result:string|null;engineVersion:string;seed:number;completedAt:string|null};
+    assert.equal(
+      (
+        db.prepare("SELECT status FROM fixture WHERE id=1").get() as {
+          status: string;
+        }
+      ).status,
+      "COMPLETED",
+    );
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS n FROM match_momentum WHERE fixture_id=1",
+          )
+          .get() as { n: number }
+      ).n,
+      90,
+    );
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(DISTINCT minute) AS n FROM match_momentum WHERE fixture_id=1",
+          )
+          .get() as { n: number }
+      ).n,
+      90,
+    );
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS n FROM match_event WHERE fixture_id=1 AND event_type='KICK_OFF'",
+          )
+          .get() as { n: number }
+      ).n,
+      1,
+    );
+    const history = db
+      .prepare(
+        "SELECT home_lineup_json AS homeLineup,away_lineup_json AS awayLineup,tactics_json AS tactics,result_json AS result,engine_version AS engineVersion,random_seed AS seed,completed_at AS completedAt FROM match_history_snapshot WHERE fixture_id=1",
+      )
+      .get() as {
+      homeLineup: string;
+      awayLineup: string;
+      tactics: string;
+      result: string | null;
+      engineVersion: string;
+      seed: number;
+      completedAt: string | null;
+    };
     assert.equal(history.engineVersion, "1.0.0");
     assert.equal(history.seed, interrupted.seed);
     assert.ok(history.completedAt);
-    assert.equal(JSON.parse(history.homeLineup).filter((player:{isStarting:boolean}) => player.isStarting).length, 11);
-    assert.equal(JSON.parse(history.awayLineup).filter((player:{isStarting:boolean}) => player.isStarting).length, 11);
+    assert.equal(
+      JSON.parse(history.homeLineup).filter(
+        (player: { isStarting: boolean }) => player.isStarting,
+      ).length,
+      11,
+    );
+    assert.equal(
+      JSON.parse(history.awayLineup).filter(
+        (player: { isStarting: boolean }) => player.isStarting,
+      ).length,
+      11,
+    );
     assert.ok(JSON.parse(history.tactics).home.tactic.formation_id > 0);
-    const result = JSON.parse(history.result!) as {eventCount:number;momentumCount:number;home:{shots:number};away:{shots:number}};
+    const result = JSON.parse(history.result!) as {
+      eventCount: number;
+      momentumCount: number;
+      home: { shots: number };
+      away: { shots: number };
+    };
     assert.equal(result.momentumCount, 90);
-    assert.equal(result.eventCount, (db.prepare("SELECT COUNT(*) AS n FROM match_event WHERE fixture_id=1").get() as {n:number}).n);
+    assert.equal(
+      result.eventCount,
+      (
+        db
+          .prepare("SELECT COUNT(*) AS n FROM match_event WHERE fixture_id=1")
+          .get() as { n: number }
+      ).n,
+    );
     assert.ok(result.home.shots >= 0 && result.away.shots >= 0);
-    const checkpoint = db.prepare("SELECT state_json FROM match_simulation_state WHERE fixture_id=1").get() as {state_json:string};
-    const state = JSON.parse(checkpoint.state_json) as {engineVersion:string;seed:number;completed:boolean;minute:number};
+    const checkpoint = db
+      .prepare(
+        "SELECT state_json FROM match_simulation_state WHERE fixture_id=1",
+      )
+      .get() as { state_json: string };
+    const state = JSON.parse(checkpoint.state_json) as {
+      engineVersion: string;
+      seed: number;
+      completed: boolean;
+      minute: number;
+    };
     assert.equal(state.engineVersion, "1.0.0");
     assert.equal(state.seed, interrupted.seed);
     assert.equal(state.completed, true);
     assert.equal(state.minute, 90);
-    assert.equal((db.prepare("SELECT random_seed AS seed FROM fixture WHERE id=1").get() as {seed:number}).seed, interrupted.seed);
+    assert.equal(
+      (
+        db
+          .prepare("SELECT random_seed AS seed FROM fixture WHERE id=1")
+          .get() as { seed: number }
+      ).seed,
+      interrupted.seed,
+    );
   } finally {
     if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });
@@ -162,21 +343,45 @@ test("identical fixture seeds and inputs reproduce event, xG and momentum output
   try {
     const masterPath = createMaster(root);
     const manager = new SaveManager(masterPath, join(root, "saves"));
-    const a = await manager.create({ name: "Replay A", managerName: "Alex", clubId: 1 });
-    const b = await manager.create({ name: "Replay B", managerName: "Bea", clubId: 1 });
+    const a = await manager.create({
+      name: "Replay A",
+      managerName: "Alex",
+      clubId: 1,
+    });
+    const b = await manager.create({
+      name: "Replay B",
+      managerName: "Bea",
+      clubId: 1,
+    });
     first = manager.open(a.filePath);
     second = manager.open(b.filePath);
-    const seedA = (first.prepare("SELECT random_seed AS seed FROM fixture WHERE id=1").get() as {seed:number|null}).seed;
-    const seedB = (second.prepare("SELECT random_seed AS seed FROM fixture WHERE id=1").get() as {seed:number|null}).seed;
+    const seedA = (
+      first
+        .prepare("SELECT random_seed AS seed FROM fixture WHERE id=1")
+        .get() as { seed: number | null }
+    ).seed;
+    const seedB = (
+      second
+        .prepare("SELECT random_seed AS seed FROM fixture WHERE id=1")
+        .get() as { seed: number | null }
+    ).seed;
     assert.equal(seedA, seedB);
     advanceNextFixture(first, 1);
     advanceNextFixture(second, 1);
-    const events = (db: ReturnType<typeof open>) => db.prepare(`
+    const events = (db: ReturnType<typeof open>) =>
+      db
+        .prepare(
+          `
       SELECT minute,club_id AS clubId,player_id AS playerId,secondary_player_id AS secondaryPlayerId,
         event_type AS type,ROUND(COALESCE(xg,0),8) AS xg,description
       FROM match_event WHERE fixture_id=1 ORDER BY minute,id
-    `).all();
-    const momentum = (db: ReturnType<typeof open>) => db.prepare(`
+    `,
+        )
+        .all();
+    const momentum = (db: ReturnType<typeof open>) =>
+      db
+        .prepare(
+          `
       SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,
         home_score AS homeScore,away_score AS awayScore,
         home_territorial_control AS homeTerritorialControl,
@@ -186,11 +391,29 @@ test("identical fixture seeds and inputs reproduce event, xG and momentum output
         home_physical_condition AS homePhysicalCondition,
         away_physical_condition AS awayPhysicalCondition
       FROM match_momentum WHERE fixture_id=1 ORDER BY minute
-    `).all();
+    `,
+        )
+        .all();
     assert.deepEqual(events(first), events(second));
     assert.deepEqual(momentum(first), momentum(second));
-    const stateA = JSON.parse((first.prepare("SELECT state_json FROM match_simulation_state WHERE fixture_id=1").get() as {state_json:string}).state_json) as {engineVersion:string;seed:number;config:unknown};
-    const stateB = JSON.parse((second.prepare("SELECT state_json FROM match_simulation_state WHERE fixture_id=1").get() as {state_json:string}).state_json) as {engineVersion:string;seed:number;config:unknown};
+    const stateA = JSON.parse(
+      (
+        first
+          .prepare(
+            "SELECT state_json FROM match_simulation_state WHERE fixture_id=1",
+          )
+          .get() as { state_json: string }
+      ).state_json,
+    ) as { engineVersion: string; seed: number; config: unknown };
+    const stateB = JSON.parse(
+      (
+        second
+          .prepare(
+            "SELECT state_json FROM match_simulation_state WHERE fixture_id=1",
+          )
+          .get() as { state_json: string }
+      ).state_json,
+    ) as { engineVersion: string; seed: number; config: unknown };
     assert.equal(stateA.engineVersion, stateB.engineVersion);
     assert.equal(stateA.seed, stateB.seed);
     assert.deepEqual(stateA.config, stateB.config);
@@ -210,19 +433,64 @@ test("online backup captures master WAL state and a played save does not mutate 
     const masterPath = createMaster(root);
     masterDb = open(masterPath);
     // Keep the master connection open in WAL mode while saves are created.
-    masterDb.prepare("UPDATE player_condition SET energy=37 WHERE player_id=1").run();
+    masterDb
+      .prepare("UPDATE player_condition SET energy=37 WHERE player_id=1")
+      .run();
     const manager = new SaveManager(masterPath, join(root, "saves"));
-    const a = await manager.create({ name: "Campaign A", managerName: "Alex", clubId: 1 });
-    const b = await manager.create({ name: "Campaign B", managerName: "Bea", clubId: 2 });
+    const a = await manager.create({
+      name: "Campaign A",
+      managerName: "Alex",
+      clubId: 1,
+    });
+    const b = await manager.create({
+      name: "Campaign B",
+      managerName: "Bea",
+      clubId: 2,
+    });
     saveA = manager.open(a.filePath);
     saveB = manager.open(b.filePath);
 
-    assert.equal((saveA.prepare("SELECT energy FROM player_condition WHERE player_id=1").get() as {energy:number}).energy, 37);
+    assert.equal(
+      (
+        saveA
+          .prepare("SELECT energy FROM player_condition WHERE player_id=1")
+          .get() as { energy: number }
+      ).energy,
+      37,
+    );
     advanceNextFixture(saveA, 1);
-    assert.equal((saveA.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
-    assert.equal((saveB.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "SCHEDULED");
-    assert.equal((masterDb.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "SCHEDULED");
-    assert.equal((masterDb.prepare("SELECT energy FROM player_condition WHERE player_id=1").get() as {energy:number}).energy, 37);
+    assert.equal(
+      (
+        saveA.prepare("SELECT status FROM fixture WHERE id=1").get() as {
+          status: string;
+        }
+      ).status,
+      "COMPLETED",
+    );
+    assert.equal(
+      (
+        saveB.prepare("SELECT status FROM fixture WHERE id=1").get() as {
+          status: string;
+        }
+      ).status,
+      "SCHEDULED",
+    );
+    assert.equal(
+      (
+        masterDb.prepare("SELECT status FROM fixture WHERE id=1").get() as {
+          status: string;
+        }
+      ).status,
+      "SCHEDULED",
+    );
+    assert.equal(
+      (
+        masterDb
+          .prepare("SELECT energy FROM player_condition WHERE player_id=1")
+          .get() as { energy: number }
+      ).energy,
+      37,
+    );
   } finally {
     if (saveA?.open) saveA.close();
     if (saveB?.open) saveB.close();
@@ -238,22 +506,54 @@ test("failed roster processing rolls back next-season creation and can be retrie
     const { manager, save } = await createSave(root, "Season Rollback", 1);
     db = manager.open(save.filePath);
     applyRosterSeason(db, 2026);
-    db.prepare("UPDATE competition_season SET status='COMPLETED' WHERE id=1").run();
+    db.prepare(
+      "UPDATE competition_season SET status='COMPLETED' WHERE id=1",
+    ).run();
     db.exec(`
       CREATE TRIGGER test_reject_roster_season
       BEFORE INSERT ON roster_season_run
       WHEN NEW.season_year = 2027
       BEGIN SELECT RAISE(ABORT, 'injected season failure'); END;
     `);
-    assert.throws(() => prepareNextLeagueSeason(db!, 1), /injected season failure/);
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM competition_season WHERE competition_id=1 AND season_year=2027").get() as {n:number}).n, 0);
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM roster_season_run WHERE season_year=2027").get() as {n:number}).n, 0);
+    assert.throws(
+      () => prepareNextLeagueSeason(db!, 1),
+      /injected season failure/,
+    );
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS n FROM competition_season WHERE competition_id=1 AND season_year=2027",
+          )
+          .get() as { n: number }
+      ).n,
+      0,
+    );
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS n FROM roster_season_run WHERE season_year=2027",
+          )
+          .get() as { n: number }
+      ).n,
+      0,
+    );
 
     db.exec("DROP TRIGGER test_reject_roster_season");
     const next = prepareNextLeagueSeason(db, 1);
     assert.equal(next.year, 2027);
     assert.equal(next.fixtures, 12);
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM roster_season_run WHERE season_year=2027").get() as {n:number}).n, 1);
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS n FROM roster_season_run WHERE season_year=2027",
+          )
+          .get() as { n: number }
+      ).n,
+      1,
+    );
   } finally {
     if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });
@@ -286,21 +586,60 @@ test("failed transfer acceptance rolls back money, contract links and negotiatio
     const { manager, save } = await createSave(root, "Transfer Rollback", 1);
     db = manager.open(save.filePath);
     const offerId = createTransferOffer(db, 1, 2, 1000, 250, 2);
-    const beforeBuyer = db.prepare("SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=2")
-      .get() as {balance:number;budget:number};
-    const beforeSeller = db.prepare("SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=1")
-      .get() as {balance:number;budget:number};
+    const beforeBuyer = db
+      .prepare(
+        "SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=2",
+      )
+      .get() as { balance: number; budget: number };
+    const beforeSeller = db
+      .prepare(
+        "SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=1",
+      )
+      .get() as { balance: number; budget: number };
     db.exec(`
       CREATE TRIGGER test_reject_transfer_membership
       BEFORE INSERT ON squad_membership
       WHEN NEW.player_id = 1 AND NEW.club_id = 2
       BEGIN SELECT RAISE(ABORT, 'injected transfer failure'); END;
     `);
-    assert.throws(() => respondToTransferOffer(db!, offerId, "ACCEPT"), /injected transfer failure/);
-    assert.deepEqual(db.prepare("SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=2").get(), beforeBuyer);
-    assert.deepEqual(db.prepare("SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=1").get(), beforeSeller);
-    assert.equal((db.prepare("SELECT club_id AS clubId FROM squad_membership WHERE player_id=1").get() as {clubId:number}).clubId, 1);
-    assert.equal((db.prepare("SELECT status FROM transfer_negotiation WHERE id=?").get(offerId) as {status:string}).status, "OPEN");
+    assert.throws(
+      () => respondToTransferOffer(db!, offerId, "ACCEPT"),
+      /injected transfer failure/,
+    );
+    assert.deepEqual(
+      db
+        .prepare(
+          "SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=2",
+        )
+        .get(),
+      beforeBuyer,
+    );
+    assert.deepEqual(
+      db
+        .prepare(
+          "SELECT balance,transfer_budget AS budget FROM club_finance WHERE club_id=1",
+        )
+        .get(),
+      beforeSeller,
+    );
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT club_id AS clubId FROM squad_membership WHERE player_id=1",
+          )
+          .get() as { clubId: number }
+      ).clubId,
+      1,
+    );
+    assert.equal(
+      (
+        db
+          .prepare("SELECT status FROM transfer_negotiation WHERE id=?")
+          .get(offerId) as { status: string }
+      ).status,
+      "OPEN",
+    );
   } finally {
     if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });
@@ -311,13 +650,27 @@ test("saves can be discovered and reopened by stable id", async () => {
   const root = tempRoot();
   try {
     const { manager, save } = await createSave(root, "Minha carreira");
-    const listed = manager.list().find(item => item.id === save.id);
+    const listed = manager.list().find((item) => item.id === save.id);
     assert.ok(listed);
     assert.equal(listed.name, "Minha carreira");
     const reopened = manager.openById(save.id);
     try {
-      assert.equal((reopened.prepare("SELECT id FROM game_save_metadata").get() as {id:string}).id, save.id);
-      assert.equal((reopened.prepare("SELECT selected_club_id AS id FROM game_save_metadata").get() as {id:number}).id, 1);
+      assert.equal(
+        (
+          reopened.prepare("SELECT id FROM game_save_metadata").get() as {
+            id: string;
+          }
+        ).id,
+        save.id,
+      );
+      assert.equal(
+        (
+          reopened
+            .prepare("SELECT selected_club_id AS id FROM game_save_metadata")
+            .get() as { id: number }
+        ).id,
+        1,
+      );
     } finally {
       reopened.close();
     }
@@ -331,9 +684,22 @@ test("save creation rejects invalid ids and blank names without leaving partial 
   try {
     const master = createMaster(root);
     const manager = new SaveManager(master, join(root, "saves"));
-    await assert.rejects(manager.create({name:"Valid name",managerName:"Manager",clubId:999}), /does not exist/);
-    await assert.rejects(manager.create({name:"   ",managerName:"Manager",clubId:1}), /cannot be empty/);
-    await assert.rejects(manager.create({name:"Valid",managerName:" ",clubId:1}), /cannot be empty/);
+    await assert.rejects(
+      manager.create({
+        name: "Valid name",
+        managerName: "Manager",
+        clubId: 999,
+      }),
+      /does not exist/,
+    );
+    await assert.rejects(
+      manager.create({ name: "   ", managerName: "Manager", clubId: 1 }),
+      /cannot be empty/,
+    );
+    await assert.rejects(
+      manager.create({ name: "Valid", managerName: " ", clubId: 1 }),
+      /cannot be empty/,
+    );
     assert.equal(manager.list().length, 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -345,7 +711,10 @@ test("opening a master database as a save is rejected clearly", async () => {
   try {
     const master = createMaster(root);
     const manager = new SaveManager(master, join(root, "saves"));
-    assert.throws(() => manager.open(master), /not a Game Manager campaign save/);
+    assert.throws(
+      () => manager.open(master),
+      /not a Game Manager campaign save/,
+    );
     assert.throws(() => manager.openById(" "), /cannot be empty/);
     assert.throws(() => manager.openById("unknown"), /was not found/);
   } finally {
@@ -362,7 +731,7 @@ test("application services expose the controlled club, squad and tactics", async
       assert.equal(getManagedClub(db).id, 1);
       assert.equal(listSquad(db, 1).length, 18);
       assert.equal(getTactics(db, 1).formation, "4-3-3");
-      assert.ok(getSeasonStatus(db).some(item => item.stageId === 1));
+      assert.ok(getSeasonStatus(db).some((item) => item.stageId === 1));
     } finally {
       db.close();
     }
@@ -380,9 +749,15 @@ test("advancing a round plays managed and AI fixtures and rebuilds standings", a
       const results = advanceRound(db, 1);
       assert.equal(results.length, 2);
       const table = getStandings(db, 1);
-      assert.equal(table.reduce((sum,row) => sum + row.played, 0), 4);
-      assert.deepEqual(table.map(row => row.clubId).sort((a,b) => a-b), [1,2,3,4]);
-      assert.ok(table.every(row => row.played === 1));
+      assert.equal(
+        table.reduce((sum, row) => sum + row.played, 0),
+        4,
+      );
+      assert.deepEqual(
+        table.map((row) => row.clubId).sort((a, b) => a - b),
+        [1, 2, 3, 4],
+      );
+      assert.ok(table.every((row) => row.played === 1));
     } finally {
       db.close();
     }
@@ -401,18 +776,41 @@ test("round numbers are scoped to a stage and knockout winners generate a final"
       // round numbers keep "round 1" unambiguous for the player.
       assert.equal(advanceStageRound(db, 1, 1).length, 2);
       assert.throws(
-        () => advanceStageRound(db,1,1),
+        () => advanceStageRound(db, 1, 1),
         /Round 1 \(Turno 1\) is already completed; no matches were simulated\./,
       );
-      assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
-      assert.equal((db.prepare("SELECT status FROM fixture WHERE id=5").get() as {status:string}).status, "SCHEDULED");
+      assert.equal(
+        (
+          db.prepare("SELECT status FROM fixture WHERE id=1").get() as {
+            status: string;
+          }
+        ).status,
+        "COMPLETED",
+      );
+      assert.equal(
+        (
+          db.prepare("SELECT status FROM fixture WHERE id=5").get() as {
+            status: string;
+          }
+        ).status,
+        "SCHEDULED",
+      );
 
       assert.equal(advanceStageRound(db, 2, 1).length, 2);
-      const final = db.prepare(`
+      const final = db
+        .prepare(
+          `
         SELECT r.id, r.round_number AS roundNumber, r.name, COUNT(f.id) AS fixtures
         FROM competition_round r JOIN fixture f ON f.round_id=r.id
         WHERE r.stage_id=2 GROUP BY r.id ORDER BY r.round_number DESC LIMIT 1
-      `).get() as {id:number;roundNumber:number;name:string;fixtures:number};
+      `,
+        )
+        .get() as {
+        id: number;
+        roundNumber: number;
+        name: string;
+        fixtures: number;
+      };
       assert.equal(final.roundNumber, 2);
       assert.equal(final.name, "Final");
       assert.equal(final.fixtures, 1);
@@ -436,29 +834,50 @@ test("a tied knockout final persists a deterministic winner and cannot complete 
     const { manager, save } = await createSave(root);
     const db = manager.open(save.filePath);
     try {
-      advanceStageRound(db,2,1);
-      const final = db.prepare(`
+      advanceStageRound(db, 2, 1);
+      const final = db
+        .prepare(
+          `
         SELECT f.id FROM fixture f JOIN competition_round r ON r.id=f.round_id
         WHERE r.stage_id=2 AND r.name='Final'
-      `).get() as {id:number};
-      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=0,away_score=0,home_penalties=NULL,away_penalties=NULL WHERE id=?").run(final.id);
-      assert.equal(getSeasonStatus(db,2)[0]?.stageStatus,"IN_PROGRESS");
-      const result = resolveKnockoutFixtureWinner(db,final.id);
+      `,
+        )
+        .get() as { id: number };
+      db.prepare(
+        "UPDATE fixture SET status='COMPLETED',home_score=0,away_score=0,home_penalties=NULL,away_penalties=NULL WHERE id=?",
+      ).run(final.id);
+      assert.equal(getSeasonStatus(db, 2)[0]?.stageStatus, "IN_PROGRESS");
+      const result = resolveKnockoutFixtureWinner(db, final.id);
       assert.ok(result.winnerClubId > 0);
       assert.ok(result.homePenalties !== null && result.awayPenalties !== null);
-      assert.notEqual(result.homePenalties,result.awayPenalties);
+      assert.notEqual(result.homePenalties, result.awayPenalties);
       assert.deepEqual(
-        db.prepare("SELECT home_penalties AS homePenalties,away_penalties AS awayPenalties FROM fixture WHERE id=?").get(final.id),
-        {homePenalties:result.homePenalties,awayPenalties:result.awayPenalties},
+        db
+          .prepare(
+            "SELECT home_penalties AS homePenalties,away_penalties AS awayPenalties FROM fixture WHERE id=?",
+          )
+          .get(final.id),
+        {
+          homePenalties: result.homePenalties,
+          awayPenalties: result.awayPenalties,
+        },
       );
-      assert.equal(getSeasonStatus(db,2)[0]?.stageStatus,"COMPLETED");
-      const listedFinal=listFixtures(db).find(fixture=>fixture.id===final.id)!;
-      assert.match(listedFinal.score ?? "",/Pênaltis \d+ - \d+/);
-      const winnerName = db.prepare("SELECT name FROM club WHERE id=?").get(result.winnerClubId) as {name:string}|undefined;
-      assert.equal(listedFinal.winnerClub,winnerName?.name);
-      assert.deepEqual(resolveKnockoutFixtureWinner(db,final.id),result);
-    } finally { db.close(); }
-  } finally { rmSync(root,{recursive:true,force:true}); }
+      assert.equal(getSeasonStatus(db, 2)[0]?.stageStatus, "COMPLETED");
+      const listedFinal = listFixtures(db).find(
+        (fixture) => fixture.id === final.id,
+      )!;
+      assert.match(listedFinal.score ?? "", /Pênaltis \d+ - \d+/);
+      const winnerName = db
+        .prepare("SELECT name FROM club WHERE id=?")
+        .get(result.winnerClubId) as { name: string } | undefined;
+      assert.equal(listedFinal.winnerClub, winnerName?.name);
+      assert.deepEqual(resolveKnockoutFixtureWinner(db, final.id), result);
+    } finally {
+      db.close();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("a completed fixture cannot be played again and its result/events remain unchanged", async () => {
@@ -468,15 +887,49 @@ test("a completed fixture cannot be played again and its result/events remain un
     const db = manager.open(save.filePath);
     try {
       const result = advanceNextFixture(db, 1);
-      const eventsBefore = (db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=1").get() as {count:number}).count;
-      const momentumBefore = (db.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count;
+      const eventsBefore = (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=1",
+          )
+          .get() as { count: number }
+      ).count;
+      const momentumBefore = (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1",
+          )
+          .get() as { count: number }
+      ).count;
       assert.throws(() => advanceNextFixture(db, 1), /Scheduled fixture/);
       assert.deepEqual(
-        db.prepare("SELECT home_score AS homeScore, away_score AS awayScore FROM fixture WHERE id=1").get(),
+        db
+          .prepare(
+            "SELECT home_score AS homeScore, away_score AS awayScore FROM fixture WHERE id=1",
+          )
+          .get(),
         { homeScore: result.homeScore, awayScore: result.awayScore },
       );
-      assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=1").get() as {count:number}).count, eventsBefore);
-      assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, momentumBefore);
+      assert.equal(
+        (
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=1",
+            )
+            .get() as { count: number }
+        ).count,
+        eventsBefore,
+      );
+      assert.equal(
+        (
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1",
+            )
+            .get() as { count: number }
+        ).count,
+        momentumBefore,
+      );
     } finally {
       db.close();
     }
@@ -491,14 +944,53 @@ test("failed match persistence rolls back score, events and player condition", a
     const { manager, save } = await createSave(root);
     const db = manager.open(save.filePath);
     try {
-      const energyBefore = (db.prepare("SELECT energy FROM player_condition WHERE player_id=1").get() as {energy:number}).energy;
+      const energyBefore = (
+        db
+          .prepare("SELECT energy FROM player_condition WHERE player_id=1")
+          .get() as { energy: number }
+      ).energy;
       db.exec(`CREATE TRIGGER test_reject_match_event BEFORE INSERT ON match_event
         BEGIN SELECT RAISE(ABORT, 'forced match write failure'); END;`);
-      assert.throws(() => advanceNextFixture(db, 1), /forced match write failure/);
-      assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "SCHEDULED");
-      assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=1").get() as {count:number}).count, 0);
-      assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 0);
-      assert.equal((db.prepare("SELECT energy FROM player_condition WHERE player_id=1").get() as {energy:number}).energy, energyBefore);
+      assert.throws(
+        () => advanceNextFixture(db, 1),
+        /forced match write failure/,
+      );
+      assert.equal(
+        (
+          db.prepare("SELECT status FROM fixture WHERE id=1").get() as {
+            status: string;
+          }
+        ).status,
+        "SCHEDULED",
+      );
+      assert.equal(
+        (
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=1",
+            )
+            .get() as { count: number }
+        ).count,
+        0,
+      );
+      assert.equal(
+        (
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1",
+            )
+            .get() as { count: number }
+        ).count,
+        0,
+      );
+      assert.equal(
+        (
+          db
+            .prepare("SELECT energy FROM player_condition WHERE player_id=1")
+            .get() as { energy: number }
+        ).energy,
+        energyBefore,
+      );
     } finally {
       db.close();
     }
@@ -513,22 +1005,43 @@ test("a full league season completes, survives reopening, and creates next seaso
     const { manager, save } = await createSave(root);
     let db = manager.open(save.filePath);
     try {
-      assert.equal(listFixtures(db).filter(f => f.competition === "Liga Nacional de Teste").length, 12);
-      const rounds = db.prepare("SELECT id FROM competition_round WHERE stage_id=1 ORDER BY round_number").all() as Array<{id:number}>;
+      assert.equal(
+        listFixtures(db).filter(
+          (f) => f.competition === "Liga Nacional de Teste",
+        ).length,
+        12,
+      );
+      const rounds = db
+        .prepare(
+          "SELECT id FROM competition_round WHERE stage_id=1 ORDER BY round_number",
+        )
+        .all() as Array<{ id: number }>;
       assert.equal(rounds.length, 6);
       for (const round of rounds) advanceRound(db, round.id);
       assert.equal(getSeasonStatus(db, 1)[0]?.seasonStatus, "COMPLETED");
       assert.equal(getSeasonStatus(db, 1)[0]?.stageStatus, "COMPLETED");
       const standings = getStandings(db, 1);
-      assert.ok(standings.every(row => row.played === 6));
-      assert.equal(standings.reduce((sum,row) => sum + row.played, 0), 24);
+      assert.ok(standings.every((row) => row.played === 6));
+      assert.equal(
+        standings.reduce((sum, row) => sum + row.played, 0),
+        24,
+      );
       db.close();
       db = manager.open(save.filePath);
       assert.equal(getSeasonStatus(db, 1)[0]?.seasonStatus, "COMPLETED");
       const first = prepareNextLeagueSeason(db, 1);
       assert.equal(first.fixtures, 12);
       assert.deepEqual(prepareNextLeagueSeason(db, 1), first);
-      assert.equal((db.prepare("SELECT COUNT(*) AS count FROM competition_season WHERE competition_id=1").get() as {count:number}).count, 2);
+      assert.equal(
+        (
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM competition_season WHERE competition_id=1",
+            )
+            .get() as { count: number }
+        ).count,
+        2,
+      );
     } finally {
       if (db.open) db.close();
     }
@@ -544,23 +1057,45 @@ test("head-to-head mini-table resolves a tie before overall goal difference", as
     const db = manager.open(save.filePath);
     try {
       db.prepare("DELETE FROM stage_standing_rule WHERE stage_id=1").run();
-      db.prepare("INSERT INTO stage_standing_rule(stage_id,rule_order,rule_key) VALUES (1,1,'POINTS'),(1,2,'HEAD_TO_HEAD'),(1,3,'GOAL_DIFFERENCE')").run();
+      db.prepare(
+        "INSERT INTO stage_standing_rule(stage_id,rule_order,rule_key) VALUES (1,1,'POINTS'),(1,2,'HEAD_TO_HEAD'),(1,3,'GOAL_DIFFERENCE')",
+      ).run();
       // Club 1 beats club 2; club 1 then loses to club 3, while club 2 beats club 4.
       // Clubs 1 and 2 finish on identical overall points, goal difference and goals for.
-      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=1").run();
-      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=8").run();
-      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=0,away_score=1 WHERE id=7").run();
-      const table = getStandings(db,1);
-      const first = table.findIndex(row=>row.clubId===1);
-      const second = table.findIndex(row=>row.clubId===2);
-      const a = table.find(row=>row.clubId===1)!;
-      const b = table.find(row=>row.clubId===2)!;
-      assert.equal(a.points,b.points);
-      assert.equal(a.goalDifference,b.goalDifference);
-      assert.equal(a.goalsFor,b.goalsFor);
-      assert.ok(first<second,JSON.stringify(table.map(row=>({clubId:row.clubId,points:row.points,gd:row.goalDifference,gf:row.goalsFor}))));
-    } finally { db.close(); }
-  } finally { rmSync(root,{recursive:true,force:true}); }
+      db.prepare(
+        "UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=1",
+      ).run();
+      db.prepare(
+        "UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=8",
+      ).run();
+      db.prepare(
+        "UPDATE fixture SET status='COMPLETED',home_score=0,away_score=1 WHERE id=7",
+      ).run();
+      const table = getStandings(db, 1);
+      const first = table.findIndex((row) => row.clubId === 1);
+      const second = table.findIndex((row) => row.clubId === 2);
+      const a = table.find((row) => row.clubId === 1)!;
+      const b = table.find((row) => row.clubId === 2)!;
+      assert.equal(a.points, b.points);
+      assert.equal(a.goalDifference, b.goalDifference);
+      assert.equal(a.goalsFor, b.goalsFor);
+      assert.ok(
+        first < second,
+        JSON.stringify(
+          table.map((row) => ({
+            clubId: row.clubId,
+            points: row.points,
+            gd: row.goalDifference,
+            gf: row.goalsFor,
+          })),
+        ),
+      );
+    } finally {
+      db.close();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("fair-play tie-break counts card penalties and ranks fewer penalties first", async () => {
@@ -570,20 +1105,37 @@ test("fair-play tie-break counts card penalties and ranks fewer penalties first"
     const db = manager.open(save.filePath);
     try {
       db.prepare("DELETE FROM stage_standing_rule WHERE stage_id=1").run();
-      db.prepare("INSERT INTO stage_standing_rule(stage_id,rule_order,rule_key) VALUES (1,1,'POINTS'),(1,2,'FAIR_PLAY')").run();
-      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=1").run();
-      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=8").run();
-      db.prepare("UPDATE fixture SET status='COMPLETED',home_score=0,away_score=1 WHERE id=7").run();
-      db.prepare("INSERT INTO match_event(fixture_id,minute,event_type,club_id,description) VALUES (1,35,'YELLOW_CARD',2,'Cartão amarelo de teste'),(1,70,'RED_CARD',2,'Cartão vermelho de teste')").run();
-      const table = getStandings(db,1);
-      const a = table.find(row=>row.clubId===1)!;
-      const b = table.find(row=>row.clubId===2)!;
-      assert.equal(a.points,b.points);
-      assert.equal(a.fairPlayPoints,0);
-      assert.equal(b.fairPlayPoints,4);
-      assert.ok(table.findIndex(row=>row.clubId===1)<table.findIndex(row=>row.clubId===2));
-    } finally { db.close(); }
-  } finally { rmSync(root,{recursive:true,force:true}); }
+      db.prepare(
+        "INSERT INTO stage_standing_rule(stage_id,rule_order,rule_key) VALUES (1,1,'POINTS'),(1,2,'FAIR_PLAY')",
+      ).run();
+      db.prepare(
+        "UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=1",
+      ).run();
+      db.prepare(
+        "UPDATE fixture SET status='COMPLETED',home_score=1,away_score=0 WHERE id=8",
+      ).run();
+      db.prepare(
+        "UPDATE fixture SET status='COMPLETED',home_score=0,away_score=1 WHERE id=7",
+      ).run();
+      db.prepare(
+        "INSERT INTO match_event(fixture_id,minute,event_type,club_id,description) VALUES (1,35,'YELLOW_CARD',2,'Cartão amarelo de teste'),(1,70,'RED_CARD',2,'Cartão vermelho de teste')",
+      ).run();
+      const table = getStandings(db, 1);
+      const a = table.find((row) => row.clubId === 1)!;
+      const b = table.find((row) => row.clubId === 2)!;
+      assert.equal(a.points, b.points);
+      assert.equal(a.fairPlayPoints, 0);
+      assert.equal(b.fairPlayPoints, 4);
+      assert.ok(
+        table.findIndex((row) => row.clubId === 1) <
+          table.findIndex((row) => row.clubId === 2),
+      );
+    } finally {
+      db.close();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("season integration validates standings, persistence, replay safety and cup completion", async () => {
@@ -596,105 +1148,222 @@ test("season integration validates standings, persistence, replay safety and cup
       for (let round = 1; round <= 6; round++) {
         assert.equal(advanceStageRound(db, 1, round).length, 2);
       }
-      const matches = db.prepare(`
+      const matches = db
+        .prepare(
+          `
         SELECT f.home_club_id AS home, f.away_club_id AS away,
           f.home_score AS homeScore, f.away_score AS awayScore
         FROM fixture f JOIN competition_round r ON r.id=f.round_id
         WHERE r.stage_id=1 AND f.status='COMPLETED'
-      `).all() as Array<{home:number;away:number;homeScore:number;awayScore:number}>;
+      `,
+        )
+        .all() as Array<{
+        home: number;
+        away: number;
+        homeScore: number;
+        awayScore: number;
+      }>;
       assert.equal(matches.length, 12);
-      const format = db.prepare("SELECT win_points AS winPoints,draw_points AS drawPoints,loss_points AS lossPoints FROM stage_format WHERE stage_id=1")
-        .get() as {winPoints:number;drawPoints:number;lossPoints:number};
-      const expected = new Map<number, {
-        clubId:number;played:number;wins:number;draws:number;losses:number;
-        goalsFor:number;goalsAgainst:number;goalDifference:number;points:number;fairPlayPoints:number;
-      }>();
-      for (const row of db.prepare("SELECT club_id AS clubId FROM stage_participant WHERE stage_id=1").all() as Array<{clubId:number}>) {
-        expected.set(row.clubId,{clubId:row.clubId,played:0,wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,goalDifference:0,points:0,fairPlayPoints:0});
+      const format = db
+        .prepare(
+          "SELECT win_points AS winPoints,draw_points AS drawPoints,loss_points AS lossPoints FROM stage_format WHERE stage_id=1",
+        )
+        .get() as { winPoints: number; drawPoints: number; lossPoints: number };
+      const expected = new Map<
+        number,
+        {
+          clubId: number;
+          played: number;
+          wins: number;
+          draws: number;
+          losses: number;
+          goalsFor: number;
+          goalsAgainst: number;
+          goalDifference: number;
+          points: number;
+          fairPlayPoints: number;
+        }
+      >();
+      for (const row of db
+        .prepare(
+          "SELECT club_id AS clubId FROM stage_participant WHERE stage_id=1",
+        )
+        .all() as Array<{ clubId: number }>) {
+        expected.set(row.clubId, {
+          clubId: row.clubId,
+          played: 0,
+          wins: 0,
+          draws: 0,
+          losses: 0,
+          goalsFor: 0,
+          goalsAgainst: 0,
+          goalDifference: 0,
+          points: 0,
+          fairPlayPoints: 0,
+        });
       }
       for (const match of matches) {
         const home = expected.get(match.home)!;
         const away = expected.get(match.away)!;
-        home.played++; away.played++;
-        home.goalsFor += match.homeScore; home.goalsAgainst += match.awayScore;
-        away.goalsFor += match.awayScore; away.goalsAgainst += match.homeScore;
+        home.played++;
+        away.played++;
+        home.goalsFor += match.homeScore;
+        home.goalsAgainst += match.awayScore;
+        away.goalsFor += match.awayScore;
+        away.goalsAgainst += match.homeScore;
         if (match.homeScore > match.awayScore) {
-          home.wins++; away.losses++; home.points += format.winPoints; away.points += format.lossPoints;
+          home.wins++;
+          away.losses++;
+          home.points += format.winPoints;
+          away.points += format.lossPoints;
         } else if (match.homeScore < match.awayScore) {
-          away.wins++; home.losses++; away.points += format.winPoints; home.points += format.lossPoints;
+          away.wins++;
+          home.losses++;
+          away.points += format.winPoints;
+          home.points += format.lossPoints;
         } else {
-          home.draws++; away.draws++; home.points += format.drawPoints; away.points += format.drawPoints;
+          home.draws++;
+          away.draws++;
+          home.points += format.drawPoints;
+          away.points += format.drawPoints;
         }
       }
       for (const row of expected.values()) {
         row.goalDifference = row.goalsFor - row.goalsAgainst;
-        row.fairPlayPoints = (db.prepare(`
+        row.fairPlayPoints = (
+          db
+            .prepare(
+              `
           SELECT COALESCE(SUM(CASE event_type WHEN 'YELLOW_CARD' THEN 1 WHEN 'RED_CARD' THEN 3 ELSE 0 END),0) AS points
           FROM match_event e JOIN fixture f ON f.id=e.fixture_id
           JOIN competition_round r ON r.id=f.round_id
           WHERE r.stage_id=1 AND f.status='COMPLETED' AND e.club_id=?
             AND e.event_type IN ('YELLOW_CARD','RED_CARD')
-        `).get(row.clubId) as {points:number}).points;
+        `,
+            )
+            .get(row.clubId) as { points: number }
+        ).points;
       }
-      const normalize = (rows: Array<{
-        clubId:number;played:number;wins:number;draws:number;losses:number;
-        goalsFor:number;goalsAgainst:number;goalDifference:number;points:number;fairPlayPoints:number;
-      }>) => rows.map(row => ({
-        clubId:row.clubId,played:row.played,wins:row.wins,draws:row.draws,losses:row.losses,
-        goalsFor:row.goalsFor,goalsAgainst:row.goalsAgainst,goalDifference:row.goalDifference,
-        points:row.points,fairPlayPoints:row.fairPlayPoints,
-      })).sort((a,b)=>a.clubId-b.clubId);
-      const standingsBefore = getStandings(db,1);
-      assert.deepEqual(normalize(standingsBefore),normalize([...expected.values()]));
-      assert.ok(standingsBefore.every(row=>row.played===6));
-      assert.equal(standingsBefore.reduce((sum,row)=>sum+row.played,0),24);
-      assert.equal(getSeasonStatus(db,1)[0]?.stageStatus,"COMPLETED");
-      assert.equal(getSeasonStatus(db,1)[0]?.seasonStatus,"COMPLETED");
+      const normalize = (
+        rows: Array<{
+          clubId: number;
+          played: number;
+          wins: number;
+          draws: number;
+          losses: number;
+          goalsFor: number;
+          goalsAgainst: number;
+          goalDifference: number;
+          points: number;
+          fairPlayPoints: number;
+        }>,
+      ) =>
+        rows
+          .map((row) => ({
+            clubId: row.clubId,
+            played: row.played,
+            wins: row.wins,
+            draws: row.draws,
+            losses: row.losses,
+            goalsFor: row.goalsFor,
+            goalsAgainst: row.goalsAgainst,
+            goalDifference: row.goalDifference,
+            points: row.points,
+            fairPlayPoints: row.fairPlayPoints,
+          }))
+          .sort((a, b) => a.clubId - b.clubId);
+      const standingsBefore = getStandings(db, 1);
+      assert.deepEqual(
+        normalize(standingsBefore),
+        normalize([...expected.values()]),
+      );
+      assert.ok(standingsBefore.every((row) => row.played === 6));
+      assert.equal(
+        standingsBefore.reduce((sum, row) => sum + row.played, 0),
+        24,
+      );
+      assert.equal(getSeasonStatus(db, 1)[0]?.stageStatus, "COMPLETED");
+      assert.equal(getSeasonStatus(db, 1)[0]?.seasonStatus, "COMPLETED");
 
       // A completed round must not create duplicate match events, momentum, or results.
-      const countsBefore = db.prepare(`
+      const countsBefore = db
+        .prepare(
+          `
         SELECT (SELECT COUNT(*) FROM match_event) AS events,
           (SELECT COUNT(*) FROM match_momentum) AS momentum
-      `).get() as {events:number;momentum:number};
-      const scoresBefore = db.prepare(`
+      `,
+        )
+        .get() as { events: number; momentum: number };
+      const scoresBefore = db
+        .prepare(
+          `
         SELECT f.id,f.home_score AS homeScore,f.away_score AS awayScore
         FROM fixture f JOIN competition_round r ON r.id=f.round_id
         WHERE r.stage_id=1 ORDER BY f.id
-      `).all();
-      assert.throws(()=>advanceStageRound(db,1,1),/already completed; no matches were simulated/);
-      assert.deepEqual(db.prepare(`
+      `,
+        )
+        .all();
+      assert.throws(
+        () => advanceStageRound(db, 1, 1),
+        /already completed; no matches were simulated/,
+      );
+      assert.deepEqual(
+        db
+          .prepare(
+            `
         SELECT (SELECT COUNT(*) FROM match_event) AS events,
           (SELECT COUNT(*) FROM match_momentum) AS momentum
-      `).get(),countsBefore);
-      assert.deepEqual(db.prepare(`
+      `,
+          )
+          .get(),
+        countsBefore,
+      );
+      assert.deepEqual(
+        db
+          .prepare(
+            `
         SELECT f.id,f.home_score AS homeScore,f.away_score AS awayScore
         FROM fixture f JOIN competition_round r ON r.id=f.round_id
         WHERE r.stage_id=1 ORDER BY f.id
-      `).all(),scoresBefore);
+      `,
+          )
+          .all(),
+        scoresBefore,
+      );
 
       // Finish the cup: the final must be generated from semifinal winners and close the season.
-      assert.equal(advanceStageRound(db,2,1).length,2);
-      assert.equal(getSeasonStatus(db,2)[0]?.stageStatus,"IN_PROGRESS");
-      assert.equal(advanceStageRound(db,2,2).length,1);
-      assert.equal(getSeasonStatus(db,2)[0]?.stageStatus,"COMPLETED");
-      assert.equal(getSeasonStatus(db,2)[0]?.seasonStatus,"COMPLETED");
+      assert.equal(advanceStageRound(db, 2, 1).length, 2);
+      assert.equal(getSeasonStatus(db, 2)[0]?.stageStatus, "IN_PROGRESS");
+      assert.equal(advanceStageRound(db, 2, 2).length, 1);
+      assert.equal(getSeasonStatus(db, 2)[0]?.stageStatus, "COMPLETED");
+      assert.equal(getSeasonStatus(db, 2)[0]?.seasonStatus, "COMPLETED");
 
       db.close();
       db = manager.open(save.filePath);
-      assert.deepEqual(normalize(getStandings(db,1)),normalize(standingsBefore));
-      assert.equal(getSeasonStatus(db,1)[0]?.seasonStatus,"COMPLETED");
-      assert.equal(getSeasonStatus(db,2)[0]?.seasonStatus,"COMPLETED");
-      const final = listFixtures(db).find(fixture=>fixture.competition==="Copa Nacional de Teste" && fixture.round==="Final");
+      assert.deepEqual(
+        normalize(getStandings(db, 1)),
+        normalize(standingsBefore),
+      );
+      assert.equal(getSeasonStatus(db, 1)[0]?.seasonStatus, "COMPLETED");
+      assert.equal(getSeasonStatus(db, 2)[0]?.seasonStatus, "COMPLETED");
+      const final = listFixtures(db).find(
+        (fixture) =>
+          fixture.competition === "Copa Nacional de Teste" &&
+          fixture.round === "Final",
+      );
       assert.ok(final);
-      assert.equal(final.status,"COMPLETED");
+      assert.equal(final.status, "COMPLETED");
       assert.ok(final.winnerClub);
-      assert.equal((db.pragma("integrity_check",{simple:true}) as string),"ok");
-      assert.deepEqual(db.pragma("foreign_key_check"),[]);
+      assert.equal(
+        db.pragma("integrity_check", { simple: true }) as string,
+        "ok",
+      );
+      assert.deepEqual(db.pragma("foreign_key_check"), []);
     } finally {
       if (db.open) db.close();
     }
   } finally {
-    rmSync(root,{recursive:true,force:true});
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
@@ -702,20 +1371,39 @@ test("CLI smoke test initializes a clean world, creates a save, lists it, and op
   const root = tempRoot();
   const master = join(root, "world", "master.sqlite");
   const saves = join(root, "world", "saves");
-  const env = { ...process.env, GM_MASTER_DB: master, GM_SAVE_DIR: saves, GMF_SCHEMA_SQL: schemaPath };
+  const env = {
+    ...process.env,
+    GM_MASTER_DB: master,
+    GM_SAVE_DIR: saves,
+    GMF_SCHEMA_SQL: schemaPath,
+  };
   const cliPath = resolve("dist/api/legacy-cli.js");
-  const run = (...args: string[]) => spawnSync(process.execPath, [cliPath, ...args], {
-    encoding: "utf8", env, cwd: process.cwd(),
-  });
+  const run = (...args: string[]) =>
+    spawnSync(process.execPath, [cliPath, ...args], {
+      encoding: "utf8",
+      env,
+      cwd: process.cwd(),
+    });
   try {
     let result = run("init-master");
     assert.equal(result.status, 0, result.stderr);
     result = run("clubs");
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Aurora Futebol Clube/);
-    result = run("new-save", "--name", "CLI career", "--manager", "CLI manager", "--club", "1");
+    result = run(
+      "new-save",
+      "--name",
+      "CLI career",
+      "--manager",
+      "CLI manager",
+      "--club",
+      "1",
+    );
     assert.equal(result.status, 0, result.stderr);
-    const created = JSON.parse(result.stdout) as {id:string; filePath:string};
+    const created = JSON.parse(result.stdout) as {
+      id: string;
+      filePath: string;
+    };
     assert.ok(created.id);
     result = run("saves");
     assert.equal(result.status, 0, result.stderr);
@@ -723,7 +1411,13 @@ test("CLI smoke test initializes a clean world, creates a save, lists it, and op
     result = run("fixtures", "--save-id", created.id);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Liga Nacional de Teste/);
-    result = run("fixtures", "--save-id", created.id, "--save", created.filePath);
+    result = run(
+      "fixtures",
+      "--save-id",
+      created.id,
+      "--save",
+      created.filePath,
+    );
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /Use either --save-id or --save/);
     result = run("init-master");
@@ -734,7 +1428,6 @@ test("CLI smoke test initializes a clean world, creates a save, lists it, and op
   }
 });
 
-
 test("match persistence stores player-level event stats and finalizes the calendar fixture", async () => {
   const root = tempRoot();
   let db: ReturnType<typeof open> | undefined;
@@ -742,12 +1435,22 @@ test("match persistence stores player-level event stats and finalizes the calend
     const { manager, save } = await createSave(root, "Match Persistence", 1);
     db = manager.open(save.filePath);
     const summary = advanceNextFixture(db, 1);
-    const remainingInRound = (db.prepare(
-      "SELECT COUNT(*) AS count FROM fixture WHERE round_id=(SELECT round_id FROM fixture WHERE id=1) AND status<>'COMPLETED'",
-    ).get() as {count:number}).count;
-    assert.equal(remainingInRound, 1, "single-fixture playback must leave the other match pending");
+    const remainingInRound = (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM fixture WHERE round_id=(SELECT round_id FROM fixture WHERE id=1) AND status<>'COMPLETED'",
+        )
+        .get() as { count: number }
+    ).count;
+    assert.equal(
+      remainingInRound,
+      1,
+      "single-fixture playback must leave the other match pending",
+    );
 
-    const playerTotals = db.prepare(`
+    const playerTotals = db
+      .prepare(
+        `
       SELECT
         COALESCE(SUM(goals),0) AS goals,
         COALESCE(SUM(assists),0) AS assists,
@@ -756,9 +1459,19 @@ test("match persistence stores player-level event stats and finalizes the calend
         COALESCE(SUM(substituted_out),0) AS substitutions
       FROM match_player_state
       WHERE fixture_id=?
-    `).get(1) as {goals:number;assists:number;yellowCards:number;redCards:number;substitutions:number};
+    `,
+      )
+      .get(1) as {
+      goals: number;
+      assists: number;
+      yellowCards: number;
+      redCards: number;
+      substitutions: number;
+    };
 
-    const eventTotals = db.prepare(`
+    const eventTotals = db
+      .prepare(
+        `
       SELECT
         SUM(CASE WHEN event_type='GOAL' THEN 1 ELSE 0 END) AS goals,
         SUM(CASE WHEN event_type='YELLOW_CARD' THEN 1 ELSE 0 END) AS yellowCards,
@@ -766,7 +1479,14 @@ test("match persistence stores player-level event stats and finalizes the calend
         SUM(CASE WHEN event_type='SUBSTITUTION' THEN 1 ELSE 0 END) AS substitutions
       FROM match_event
       WHERE fixture_id=?
-    `).get(1) as {goals:number;yellowCards:number;redCards:number;substitutions:number};
+    `,
+      )
+      .get(1) as {
+      goals: number;
+      yellowCards: number;
+      redCards: number;
+      substitutions: number;
+    };
 
     assert.equal(playerTotals.goals, eventTotals.goals);
     assert.equal(playerTotals.yellowCards, eventTotals.yellowCards);
@@ -775,15 +1495,30 @@ test("match persistence stores player-level event stats and finalizes the calend
     assert.equal(playerTotals.goals, summary.homeScore + summary.awayScore);
     assert.ok(playerTotals.assists >= 0);
 
-    const fixture = db.prepare("SELECT status,completed_at AS completedAt FROM fixture WHERE id=1")
-      .get() as {status:string;completedAt:string|null};
+    const fixture = db
+      .prepare(
+        "SELECT status,completed_at AS completedAt FROM fixture WHERE id=1",
+      )
+      .get() as { status: string; completedAt: string | null };
     assert.equal(fixture.status, "COMPLETED");
     assert.ok(fixture.completedAt);
 
-    const standings = db.prepare("SELECT SUM(played) AS played FROM stage_standing WHERE stage_id=1")
-      .get() as {played:number};
+    const standings = db
+      .prepare(
+        "SELECT SUM(played) AS played FROM stage_standing WHERE stage_id=1",
+      )
+      .get() as { played: number };
     assert.equal(standings.played, 2);
-    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_lineup WHERE fixture_id=1").get() as {count:number}).count, 36);
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM match_lineup WHERE fixture_id=1",
+          )
+          .get() as { count: number }
+      ).count,
+      36,
+    );
   } finally {
     if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });
@@ -799,19 +1534,35 @@ test("pre-match energy recovery is applied only once even when preparation is re
     db.prepare("UPDATE player_condition SET energy=40 WHERE player_id=1").run();
 
     recoverSquadBeforeMatch(db, 1, 1, 2);
-    const afterFirst = (db.prepare("SELECT energy FROM player_condition WHERE player_id=1").get() as {energy:number}).energy;
+    const afterFirst = (
+      db
+        .prepare("SELECT energy FROM player_condition WHERE player_id=1")
+        .get() as { energy: number }
+    ).energy;
     recoverSquadBeforeMatch(db, 1, 1, 2);
-    const afterSecond = (db.prepare("SELECT energy FROM player_condition WHERE player_id=1").get() as {energy:number}).energy;
+    const afterSecond = (
+      db
+        .prepare("SELECT energy FROM player_condition WHERE player_id=1")
+        .get() as { energy: number }
+    ).energy;
 
     assert.equal(afterFirst, 96);
     assert.equal(afterSecond, afterFirst);
-    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_preparation WHERE fixture_id=1").get() as {count:number}).count, 1);
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM match_preparation WHERE fixture_id=1",
+          )
+          .get() as { count: number }
+      ).count,
+      1,
+    );
   } finally {
     if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });
   }
 });
-
 
 test("incremental match playback resumes deterministically and finalizes only at minute 90", async () => {
   const root = tempRoot();
@@ -820,27 +1571,86 @@ test("incremental match playback resumes deterministically and finalizes only at
   try {
     const masterPath = createMaster(root);
     const manager = new SaveManager(masterPath, join(root, "saves"));
-    const first = await manager.create({ name: "Incremental Match", managerName: "Test", clubId: 1 });
-    const second = await manager.create({ name: "Full Match", managerName: "Test", clubId: 1 });
+    const first = await manager.create({
+      name: "Incremental Match",
+      managerName: "Test",
+      clubId: 1,
+    });
+    const second = await manager.create({
+      name: "Full Match",
+      managerName: "Test",
+      clubId: 1,
+    });
     incremental = manager.open(first.filePath);
     complete = manager.open(second.filePath);
 
     const firstChunk = simulateMatch(incremental, 1, 30);
     assert.equal(firstChunk.minutes, 30);
-    assert.equal((incremental.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "IN_PROGRESS");
-    assert.equal((incremental.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 30);
-    assert.equal((incremental.prepare("SELECT COUNT(*) AS count FROM match_player_state WHERE fixture_id=1").get() as {count:number}).count, 0);
-    assert.equal((incremental.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=1 AND event_type='FULL_TIME'").get() as {count:number}).count, 0);
+    assert.equal(
+      (
+        incremental.prepare("SELECT status FROM fixture WHERE id=1").get() as {
+          status: string;
+        }
+      ).status,
+      "IN_PROGRESS",
+    );
+    assert.equal(
+      (
+        incremental
+          .prepare(
+            "SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1",
+          )
+          .get() as { count: number }
+      ).count,
+      30,
+    );
+    assert.equal(
+      (
+        incremental
+          .prepare(
+            "SELECT COUNT(*) AS count FROM match_player_state WHERE fixture_id=1",
+          )
+          .get() as { count: number }
+      ).count,
+      0,
+    );
+    assert.equal(
+      (
+        incremental
+          .prepare(
+            "SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=1 AND event_type='FULL_TIME'",
+          )
+          .get() as { count: number }
+      ).count,
+      0,
+    );
 
     const secondChunk = simulateMatch(incremental, 1, 60);
     assert.equal(secondChunk.minutes, 60);
-    assert.equal((incremental.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 60);
+    assert.equal(
+      (
+        incremental
+          .prepare(
+            "SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1",
+          )
+          .get() as { count: number }
+      ).count,
+      60,
+    );
 
     const incrementalResult = simulateMatch(incremental, 1, 90);
     const completeResult = simulateMatch(complete, 1, 90);
     assert.deepEqual(incrementalResult, completeResult);
-    const events = (db: ReturnType<typeof open>) => db.prepare("SELECT minute,club_id AS clubId,player_id AS playerId,secondary_player_id AS secondaryPlayerId,event_type AS type,xg,description FROM match_event WHERE fixture_id=1 ORDER BY minute,id").all();
-    const momentum = (db: ReturnType<typeof open>) => db.prepare(`
+    const events = (db: ReturnType<typeof open>) =>
+      db
+        .prepare(
+          "SELECT minute,club_id AS clubId,player_id AS playerId,secondary_player_id AS secondaryPlayerId,event_type AS type,xg,description FROM match_event WHERE fixture_id=1 ORDER BY minute,id",
+        )
+        .all();
+    const momentum = (db: ReturnType<typeof open>) =>
+      db
+        .prepare(
+          `
       SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,
         home_score AS homeScore,away_score AS awayScore,
         home_territorial_control AS homeTerritorialControl,
@@ -850,18 +1660,35 @@ test("incremental match playback resumes deterministically and finalizes only at
         home_physical_condition AS homePhysicalCondition,
         away_physical_condition AS awayPhysicalCondition
       FROM match_momentum WHERE fixture_id=1 ORDER BY minute
-    `).all();
+    `,
+        )
+        .all();
     assert.deepEqual(events(incremental), events(complete));
     assert.deepEqual(momentum(incremental), momentum(complete));
-    assert.equal((incremental.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
-    assert.equal((incremental.prepare("SELECT COUNT(*) AS count FROM match_player_state WHERE fixture_id=1").get() as {count:number}).count, 36);
+    assert.equal(
+      (
+        incremental.prepare("SELECT status FROM fixture WHERE id=1").get() as {
+          status: string;
+        }
+      ).status,
+      "COMPLETED",
+    );
+    assert.equal(
+      (
+        incremental
+          .prepare(
+            "SELECT COUNT(*) AS count FROM match_player_state WHERE fixture_id=1",
+          )
+          .get() as { count: number }
+      ).count,
+      36,
+    );
   } finally {
     if (incremental?.open) incremental.close();
     if (complete?.open) complete.close();
     rmSync(root, { recursive: true, force: true });
   }
 });
-
 
 test("match playback advances in resumable minute batches and locks the lineup after kickoff", async () => {
   const root = tempRoot();
@@ -870,27 +1697,97 @@ test("match playback advances in resumable minute batches and locks the lineup a
     const { manager, save } = await createSave(root, "Match Playback", 1);
     db = manager.open(save.filePath);
     const preview = previewLineup(db, 1, 1);
-    saveLineup(db, 1, 1, preview.starters.map(player => player.playerId), preview.bench.map(player => player.playerId));
+    saveLineup(
+      db,
+      1,
+      1,
+      preview.starters.map((player) => player.playerId),
+      preview.bench.map((player) => player.playerId),
+    );
 
     const firstBatch = simulateMatch(db, 1, 15);
     assert.equal(firstBatch.minutes, 15);
-    assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "IN_PROGRESS");
-    assert.equal((db.prepare("SELECT current_minute AS minute FROM fixture WHERE id=1").get() as {minute:number}).minute, 15);
-    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 15);
+    assert.equal(
+      (
+        db.prepare("SELECT status FROM fixture WHERE id=1").get() as {
+          status: string;
+        }
+      ).status,
+      "IN_PROGRESS",
+    );
+    assert.equal(
+      (
+        db
+          .prepare("SELECT current_minute AS minute FROM fixture WHERE id=1")
+          .get() as { minute: number }
+      ).minute,
+      15,
+    );
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=1",
+          )
+          .get() as { count: number }
+      ).count,
+      15,
+    );
     assert.throws(
-      () => saveLineup(db!, 1, 1, preview.starters.map(player => player.playerId), preview.bench.map(player => player.playerId)),
+      () =>
+        saveLineup(
+          db!,
+          1,
+          1,
+          preview.starters.map((player) => player.playerId),
+          preview.bench.map((player) => player.playerId),
+        ),
       /only be changed before kickoff/,
     );
 
     const resumedBatch = simulateMatch(db, 1, 30);
     assert.equal(resumedBatch.minutes, 30);
-    assert.equal((db.prepare("SELECT COUNT(DISTINCT minute) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 30);
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(DISTINCT minute) AS count FROM match_momentum WHERE fixture_id=1",
+          )
+          .get() as { count: number }
+      ).count,
+      30,
+    );
 
     const finished = simulateMatch(db, 1, 90);
     assert.equal(finished.minutes, 90);
-    assert.equal((db.prepare("SELECT status FROM fixture WHERE id=1").get() as {status:string}).status, "COMPLETED");
-    assert.equal((db.prepare("SELECT COUNT(DISTINCT minute) AS count FROM match_momentum WHERE fixture_id=1").get() as {count:number}).count, 90);
-    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=1 AND event_type='FULL_TIME'").get() as {count:number}).count, 1);
+    assert.equal(
+      (
+        db.prepare("SELECT status FROM fixture WHERE id=1").get() as {
+          status: string;
+        }
+      ).status,
+      "COMPLETED",
+    );
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(DISTINCT minute) AS count FROM match_momentum WHERE fixture_id=1",
+          )
+          .get() as { count: number }
+      ).count,
+      90,
+    );
+    assert.equal(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=1 AND event_type='FULL_TIME'",
+          )
+          .get() as { count: number }
+      ).count,
+      1,
+    );
   } finally {
     if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });

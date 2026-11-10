@@ -6,7 +6,9 @@ import type { SaveRepository } from "../modules/saves/save.repository.js";
 import { SaveService } from "../modules/saves/save.service.js";
 import { ApplicationError } from "../shared/application-error.js";
 
-function createMasterRepository(countryId: number | null = 10): MasterRepository {
+function createMasterRepository(
+  countryId: number | null = 10,
+): MasterRepository {
   return {
     listCountries: () => [],
     findCountryClubs: () => null,

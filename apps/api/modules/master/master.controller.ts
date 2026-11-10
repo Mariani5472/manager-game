@@ -10,6 +10,10 @@ export class MasterController {
   };
 
   getCountryClubs: RequestHandler = (request, response) => {
-    response.json(this.masterService.getCountryClubs(countryIdSchema.parse(request.params.countryId)));
+    response.json(
+      this.masterService.getCountryClubs(
+        countryIdSchema.parse(request.params.countryId),
+      ),
+    );
   };
 }
