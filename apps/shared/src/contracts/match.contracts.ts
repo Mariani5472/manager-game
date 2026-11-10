@@ -181,7 +181,7 @@ export interface MatchFixtureDto {
 export interface MatchHistoryTacticSnapshotDto {
   clubId: number;
   clubName: string;
-  tactic: { formation_id:number; mentality:string; pressing:number; tempo:number; defensive_line:number; width:number; passing_directness:number; counter_attack:number };
+  tactic: { formation_id:number; formation_name:string; mentality:string; pressing:number; tempo:number; defensive_line:number; width:number; passing_directness:number; counter_attack:number };
   context: Record<string, unknown> | null;
 }
 
