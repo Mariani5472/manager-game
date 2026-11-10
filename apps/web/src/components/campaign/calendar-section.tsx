@@ -1,4 +1,5 @@
 'use client';
+import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import type { CampaignCalendarResponse } from '@shared/index';
 import { CalendarDays } from 'lucide-react';
@@ -16,9 +17,12 @@ import styles from './campaign-sections.module.css';
 import { Button } from '@/components/ui/button';
 export function CalendarSection({
   data,
+  saveId,
 }: {
   data: CampaignCalendarResponse;
+  saveId: string;
 }) {
+  const router = useRouter();
   const [filter, setFilter] = useState<FixtureFilter>('all');
   const fixtures = useMemo(
     () => getVisibleFixtures(data.fixtures, filter),
@@ -64,7 +68,14 @@ export function CalendarSection({
           {fixtures.length ? (
             <div className={styles.fixtureList}>
               {fixtures.map((item) => (
-                <div className={styles.fixtureRow} key={item.id}>
+                <button
+                  type="button"
+                  className={styles.fixtureRow}
+                  key={item.id}
+                  disabled={item.status !== 'COMPLETED'}
+                  onClick={() => router.push(`/game/${saveId}/match/${item.id}/center`)}
+                  aria-label={`Open match history: ${item.homeClub} versus ${item.awayClub}`}
+                >
                   <div className={styles.fixtureDate}>
                     <strong>{formatDate(item.scheduledAt)}</strong>
                     <span>{item.round}</span>
@@ -77,7 +88,7 @@ export function CalendarSection({
                   <Badge variant={getFixtureStatusVariant(item.status)}>
                     {item.status.replaceAll('_', ' ')}
                   </Badge>
-                </div>
+                </button>
               ))}
             </div>
           ) : (
