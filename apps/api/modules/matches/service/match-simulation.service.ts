@@ -147,9 +147,11 @@ export function simulateMatch(
             }));
             const clubNames = db.prepare("SELECT id,name FROM club WHERE id IN (?,?)").all(home.clubId,away.clubId) as Array<{id:number;name:string}>;
             const clubNameById = new Map(clubNames.map(club => [club.id,club.name]));
+            const formationNames = db.prepare("SELECT id,name FROM formation WHERE id IN (?,?)").all(home.tactic.formation_id,away.tactic.formation_id) as Array<{id:number;name:string}>;
+            const formationNameById = new Map(formationNames.map(formation => [formation.id,formation.name]));
             const tacticsSnapshot = {
-                home: { clubId: home.clubId, clubName: clubNameById.get(home.clubId) ?? String(home.clubId), tactic: home.tactic, context: home.context ?? null },
-                away: { clubId: away.clubId, clubName: clubNameById.get(away.clubId) ?? String(away.clubId), tactic: away.tactic, context: away.context ?? null },
+                home: { clubId: home.clubId, clubName: clubNameById.get(home.clubId) ?? String(home.clubId), tactic: { ...home.tactic, formation_name: formationNameById.get(home.tactic.formation_id) ?? String(home.tactic.formation_id) }, context: home.context ?? null },
+                away: { clubId: away.clubId, clubName: clubNameById.get(away.clubId) ?? String(away.clubId), tactic: { ...away.tactic, formation_name: formationNameById.get(away.tactic.formation_id) ?? String(away.tactic.formation_id) }, context: away.context ?? null },
                 scheduledChanges: simulationConfig.tacticalChanges,
             };
             db.prepare(`INSERT INTO match_history_snapshot(
@@ -175,9 +177,11 @@ export function simulateMatch(
         }));
         const clubNames = db.prepare("SELECT id,name FROM club WHERE id IN (?,?)").all(home.clubId,away.clubId) as Array<{id:number;name:string}>;
         const clubNameById = new Map(clubNames.map(club => [club.id,club.name]));
+        const formationNames = db.prepare("SELECT id,name FROM formation WHERE id IN (?,?)").all(home.tactic.formation_id,away.tactic.formation_id) as Array<{id:number;name:string}>;
+        const formationNameById = new Map(formationNames.map(formation => [formation.id,formation.name]));
         const tacticsSnapshot = {
-            home:{clubId:home.clubId,clubName:clubNameById.get(home.clubId) ?? String(home.clubId),tactic:home.tactic,context:home.context ?? null},
-            away:{clubId:away.clubId,clubName:clubNameById.get(away.clubId) ?? String(away.clubId),tactic:away.tactic,context:away.context ?? null},
+            home:{clubId:home.clubId,clubName:clubNameById.get(home.clubId) ?? String(home.clubId),tactic:{...home.tactic,formation_name:formationNameById.get(home.tactic.formation_id) ?? String(home.tactic.formation_id)},context:home.context ?? null},
+            away:{clubId:away.clubId,clubName:clubNameById.get(away.clubId) ?? String(away.clubId),tactic:{...away.tactic,formation_name:formationNameById.get(away.tactic.formation_id) ?? String(away.tactic.formation_id)},context:away.context ?? null},
             scheduledChanges:simulationConfig.tacticalChanges,
         };
         db.prepare("INSERT INTO match_history_snapshot(fixture_id,home_lineup_json,away_lineup_json,tactics_json,engine_version,random_seed,is_legacy) VALUES(?,?,?,?,?,?,1)").run(
