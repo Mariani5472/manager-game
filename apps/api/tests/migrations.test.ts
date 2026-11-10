@@ -27,7 +27,7 @@ test("schema v1 migrates atomically to the current version and backfills complet
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='match_momentum_debug'").get());
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='match_history_snapshot'").get());
     const historyColumns = db.prepare("PRAGMA table_info(match_history_snapshot)").all() as Array<{ name:string }>;
-    for (const column of ["home_lineup_json","away_lineup_json","tactics_json","result_json","engine_version","random_seed","completed_at"]) assert.ok(historyColumns.some(item => item.name === column), column);
+    for (const column of ["home_lineup_json","away_lineup_json","tactics_json","result_json","engine_version","random_seed","is_legacy","completed_at"]) assert.ok(historyColumns.some(item => item.name === column), column);
     const momentumColumns = db.prepare("PRAGMA table_info(match_momentum)").all() as Array<{ name: string }>;
     for (const column of [
       "home_territorial_control", "away_territorial_control",
