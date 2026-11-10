@@ -220,7 +220,7 @@ export function MatchCenter({
         <Card>
           <CardHeader><CardTitle>Historical match record</CardTitle></CardHeader>
           <CardContent className={styles.historyTactics}>
-            <p>Saved at full-time · Engine {data.history.engineVersion} · Seed {data.history.randomSeed}</p>
+            <p>{data.history.isLegacy ? 'Reconstructed from a legacy checkpoint; kickoff details may be approximate.' : 'Kickoff snapshot preserved · Saved at full-time'} · Engine {data.history.engineVersion} · Seed {data.history.randomSeed}</p>
             <div>
               {[data.history.homeTactics, data.history.awayTactics].map((team) => (
                 <section key={team.clubId}>
