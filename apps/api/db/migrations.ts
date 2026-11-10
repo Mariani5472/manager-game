@@ -102,6 +102,13 @@ const migrations: Migration[] = [
       if (!columns.some(column => column.name === "is_legacy")) {
         db.exec("ALTER TABLE match_history_snapshot ADD COLUMN is_legacy INTEGER NOT NULL DEFAULT 0 CHECK (is_legacy IN (0,1))");
       }
+
+    },
+  },
+  {
+    version: 7,
+    description: "Enforce immutable kickoff snapshots and one-time result finalization",
+    up(db) {
       db.exec(`
         CREATE TRIGGER IF NOT EXISTS trg_match_history_kickoff_immutable
         BEFORE UPDATE OF home_lineup_json,away_lineup_json,tactics_json,engine_version,random_seed
@@ -121,7 +128,7 @@ const migrations: Migration[] = [
   },
 ];
 
-export const CURRENT_SCHEMA_VERSION = 6;
+export const CURRENT_SCHEMA_VERSION = 7;
 
 export function applyMigrations(db: SqliteDatabase): number {
   const versionTable = db.prepare(
