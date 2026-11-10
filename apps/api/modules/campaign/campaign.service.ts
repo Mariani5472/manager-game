@@ -24,6 +24,7 @@ export class CampaignService {
   matchPreparation(id: string, fixtureId: number) { return this.execute(() => this.repository.matchPreparation(id, fixtureId)); }
   saveMatchLineup(id: string, fixtureId: number, input: SaveMatchLineupRequest) { return this.execute(() => this.repository.saveMatchLineup(id, fixtureId, input)); }
   matchCenter(id: string, fixtureId: number) { return this.execute(() => this.repository.matchCenter(id, fixtureId)); }
+  matchHistory(id: string, fixtureId: number) { return this.execute(() => this.repository.matchHistory(id, fixtureId)); }
   advanceMatch(id: string, fixtureId: number, throughMinute: number) { return this.execute(() => this.repository.advanceMatch(id, fixtureId, throughMinute)); }
   scheduleTacticalChange(id: string, fixtureId: number, input: MatchTacticalChangeRequest) { return this.execute(() => this.repository.scheduleTacticalChange(id, fixtureId, input)); }
 }
