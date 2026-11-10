@@ -12,6 +12,7 @@ export class CampaignController {
   matchPreparation: RequestHandler = (request, response) => response.json(this.service.matchPreparation(saveIdSchema.parse(request.params.saveId), fixtureIdSchema.parse(request.params.fixtureId)));
   saveMatchLineup: RequestHandler = (request, response) => response.json(this.service.saveMatchLineup(saveIdSchema.parse(request.params.saveId), fixtureIdSchema.parse(request.params.fixtureId), saveMatchLineupSchema.parse(request.body)));
   matchCenter: RequestHandler = (request, response) => response.json(this.service.matchCenter(saveIdSchema.parse(request.params.saveId), fixtureIdSchema.parse(request.params.fixtureId)));
+  matchHistory: RequestHandler = (request, response) => response.json(this.service.matchHistory(saveIdSchema.parse(request.params.saveId), fixtureIdSchema.parse(request.params.fixtureId)));
   advanceMatch: RequestHandler = (request, response) => response.json(this.service.advanceMatch(saveIdSchema.parse(request.params.saveId), fixtureIdSchema.parse(request.params.fixtureId), advanceMatchSchema.parse(request.body).throughMinute));
   scheduleTacticalChange: RequestHandler = (request, response) => response.status(201).json(this.service.scheduleTacticalChange(saveIdSchema.parse(request.params.saveId), fixtureIdSchema.parse(request.params.fixtureId), tacticalChangeSchema.parse(request.body)));
 }
