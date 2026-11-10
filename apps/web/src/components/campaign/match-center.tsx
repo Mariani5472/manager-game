@@ -74,7 +74,10 @@ export function MatchCenter({
   const queryKey = ['match-center', saveId, fixtureId];
   const center = useQuery({
     queryKey,
-    queryFn: () => gameApi.matchCenter(saveId, fixtureId),
+    queryFn: async () => {
+      const match = await gameApi.matchCenter(saveId, fixtureId);
+      return match.fixture.status === 'COMPLETED' ? gameApi.matchHistory(saveId, fixtureId) : match;
+    },
     refetchInterval: false,
   });
   const [playing, setPlaying] = useState(false);
@@ -91,9 +94,14 @@ export function MatchCenter({
   const decisionInFlight = useRef(false);
   const advance = useMutation({
     mutationFn: (minute: number) => gameApi.advanceMatch(saveId, fixtureId, minute),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      if (data.fixture.status === 'COMPLETED') {
+        setPlaying(false);
+        const history = await gameApi.matchHistory(saveId, fixtureId);
+        queryClient.setQueryData(queryKey, history);
+        return;
+      }
       queryClient.setQueryData(queryKey, data);
-      if (data.fixture.status === 'COMPLETED') setPlaying(false);
     },
     onSettled: () => {
       advanceInFlight.current = false;
@@ -208,6 +216,25 @@ export function MatchCenter({
         isPlaying={playing}
         currentMinute={currentMinute}
       />
+      {data.history && (
+        <Card>
+          <CardHeader><CardTitle>Historical match record</CardTitle></CardHeader>
+          <CardContent className={styles.historyTactics}>
+            <p>Saved at full-time · Engine {data.history.engineVersion} · Seed {data.history.randomSeed}</p>
+            <div>
+              {[data.history.homeTactics, data.history.awayTactics].map((team) => (
+                <section key={team.clubId}>
+                  <strong>{team.clubName}</strong>
+                  <span>Formation ID {team.tactic.formation_id} · {team.tactic.mentality.replaceAll('_', ' ').toLowerCase()}</span>
+                  <span>Pressing {team.tactic.pressing} · Tempo {team.tactic.tempo} · Defensive line {team.tactic.defensive_line}</span>
+                  <span>Width {team.tactic.width} · Passing {team.tactic.passing_directness} · Counter attack {team.tactic.counter_attack ? 'On' : 'Off'}</span>
+                </section>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className={styles.controlHeader}>
           <CardTitle>
