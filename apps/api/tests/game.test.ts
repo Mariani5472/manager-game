@@ -131,6 +131,17 @@ test("match processing resumes after an injected minute write failure without du
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number}).n, 90);
     assert.equal((db.prepare("SELECT COUNT(DISTINCT minute) AS n FROM match_momentum WHERE fixture_id=1").get() as {n:number}).n, 90);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM match_event WHERE fixture_id=1 AND event_type='KICK_OFF'").get() as {n:number}).n, 1);
+    const history = db.prepare("SELECT home_lineup_json AS homeLineup,away_lineup_json AS awayLineup,tactics_json AS tactics,result_json AS result,engine_version AS engineVersion,random_seed AS seed,completed_at AS completedAt FROM match_history_snapshot WHERE fixture_id=1").get() as {homeLineup:string;awayLineup:string;tactics:string;result:string|null;engineVersion:string;seed:number;completedAt:string|null};
+    assert.equal(history.engineVersion, "1.0.0");
+    assert.equal(history.seed, interrupted.seed);
+    assert.ok(history.completedAt);
+    assert.equal(JSON.parse(history.homeLineup).filter((player:{isStarting:boolean}) => player.isStarting).length, 11);
+    assert.equal(JSON.parse(history.awayLineup).filter((player:{isStarting:boolean}) => player.isStarting).length, 11);
+    assert.ok(JSON.parse(history.tactics).home.tactic.formation_id > 0);
+    const result = JSON.parse(history.result!) as {eventCount:number;momentumCount:number;home:{shots:number};away:{shots:number}};
+    assert.equal(result.momentumCount, 90);
+    assert.equal(result.eventCount, (db.prepare("SELECT COUNT(*) AS n FROM match_event WHERE fixture_id=1").get() as {n:number}).n);
+    assert.ok(result.home.shots >= 0 && result.away.shots >= 0);
     const checkpoint = db.prepare("SELECT state_json FROM match_simulation_state WHERE fixture_id=1").get() as {state_json:string};
     const state = JSON.parse(checkpoint.state_json) as {engineVersion:string;seed:number;completed:boolean;minute:number};
     assert.equal(state.engineVersion, "1.0.0");
