@@ -56,6 +56,31 @@ const migrations: Migration[] = [
     },
   },
   {
+    version: 5,
+    description: "Persist immutable match kickoff and full-time history snapshots",
+    up(db) {
+      db.exec(`
+        CREATE TABLE match_history_snapshot (
+          fixture_id INTEGER PRIMARY KEY REFERENCES fixture(id) ON DELETE CASCADE,
+          home_lineup_json TEXT NOT NULL CHECK (json_valid(home_lineup_json)),
+          away_lineup_json TEXT NOT NULL CHECK (json_valid(away_lineup_json)),
+          tactics_json TEXT NOT NULL CHECK (json_valid(tactics_json)),
+          result_json TEXT CHECK (result_json IS NULL OR json_valid(result_json)),
+          engine_version TEXT NOT NULL,
+          random_seed INTEGER NOT NULL,
+          completed_at TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CHECK ((result_json IS NULL AND completed_at IS NULL) OR
+                 (result_json IS NOT NULL AND completed_at IS NOT NULL))
+        );
+
+        CREATE INDEX idx_match_history_completed
+          ON match_history_snapshot(completed_at, fixture_id)
+          WHERE result_json IS NOT NULL;
+      `);
+    },
+  },
+  {
     version: 4,
     description: "Persist opt-in per-minute momentum diagnostics",
     up(db) {
@@ -71,7 +96,7 @@ const migrations: Migration[] = [
   },
 ];
 
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 export function applyMigrations(db: SqliteDatabase): number {
   const versionTable = db.prepare(
