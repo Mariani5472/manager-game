@@ -167,7 +167,10 @@ export class SqliteCampaignRepository implements CampaignRepository {
    if(!row || !row.resultJson || !row.completedAt) throw new Error("This completed match predates historical snapshots and cannot be reconstructed accurately.");
    const tactics=JSON.parse(row.tacticsJson) as {home:MatchHistorySnapshotData["homeTactics"];away:MatchHistorySnapshotData["awayTactics"]};
    const result=JSON.parse(row.resultJson) as {home:MatchCenterResponse["statistics"]["home"];away:MatchCenterResponse["statistics"]["away"];eventCount:number;momentumCount:number;homeScore:number;awayScore:number};
-   if(result.momentumCount!==90 || result.eventCount<2) throw new Error("Match history is incomplete and cannot be displayed.");
+   const persistedEventCount=(db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=?").get(fixtureId) as {count:number}).count;
+   const persistedMomentumCount=(db.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=?").get(fixtureId) as {count:number}).count;
+   const hasFullTime=Boolean(db.prepare("SELECT 1 FROM match_event WHERE fixture_id=? AND event_type='FULL_TIME'").get(fixtureId));
+   if(result.momentumCount!==90 || persistedMomentumCount!==result.momentumCount || persistedEventCount!==result.eventCount || !hasFullTime) throw new Error("Match history is incomplete and cannot be displayed.");
    return this.matchCenterFromDb(db,fixtureId,{
     homeLineup:JSON.parse(row.homeLineupJson) as MatchLineupPlayerDto[],
     awayLineup:JSON.parse(row.awayLineupJson) as MatchLineupPlayerDto[],
