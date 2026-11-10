@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, Trophy } from 'lucide-react';
 import { campaignNavigation } from './campaign-navigation';
+import type { CampaignSectionId } from './campaign-navigation';
 import styles from './campaign-layout.module.css';
 export function CampaignSidebar({
   activeSection,
