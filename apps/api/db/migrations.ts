@@ -81,7 +81,6 @@ const migrations: Migration[] = [
           result_json TEXT CHECK (result_json IS NULL OR json_valid(result_json)),
           engine_version TEXT NOT NULL,
           random_seed INTEGER NOT NULL,
-          is_legacy INTEGER NOT NULL DEFAULT 0 CHECK (is_legacy IN (0,1)),
           completed_at TEXT,
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
           CHECK ((result_json IS NULL AND completed_at IS NULL) OR
@@ -95,9 +94,16 @@ const migrations: Migration[] = [
     },
   },
 
+  {
+    version: 6,
+    description: "Mark reconstructed legacy match history snapshots",
+    up(db) {
+      db.exec(`ALTER TABLE match_history_snapshot ADD COLUMN is_legacy INTEGER NOT NULL DEFAULT 0 CHECK (is_legacy IN (0,1));`);
+    },
+  },
 ];
 
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 export function applyMigrations(db: SqliteDatabase): number {
   const versionTable = db.prepare(
