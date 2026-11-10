@@ -3,6 +3,7 @@ import type {
   CampaignOverviewResponse,
   CampaignSquadResponse,
   CampaignTeamResponse,
+  CampaignCompetitionDetailResponse,
   MatchCenterResponse,
   MatchPreparationResponse,
   MatchTacticalChangeRequest,
@@ -12,6 +13,7 @@ import type {
 export interface CampaignRepository {
   overview(saveId: string): CampaignOverviewResponse;
   calendar(saveId: string): CampaignCalendarResponse;
+  competition(saveId: string, stageId: number): CampaignCompetitionDetailResponse;
   squad(saveId: string): CampaignSquadResponse;
   team(saveId: string): CampaignTeamResponse;
   matchPreparation(saveId: string, fixtureId: number): MatchPreparationResponse;

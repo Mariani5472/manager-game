@@ -23,6 +23,9 @@ export class CampaignService {
   overview(id: string) {
     return this.execute(() => this.repository.overview(id));
   }
+  competition(id: string, stageId: number) {
+    return this.execute(() => this.repository.competition(id, stageId));
+  }
   calendar(id: string) {
     return this.execute(() => this.repository.calendar(id));
   }

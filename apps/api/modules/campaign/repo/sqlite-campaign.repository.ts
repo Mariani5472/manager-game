@@ -424,6 +424,51 @@ export class SqliteCampaignRepository implements CampaignRepository {
       return this.matchCenterFromDb(db, fixtureId);
     });
   }
+
+  competition(id: string, stageId: number): CampaignCompetitionDetailResponse {
+    return this.withSave(id, (db) => {
+      const stage = getSeasonStatus(db, stageId)[0];
+      if (!stage) throw new Error(`Competition stage ${stageId} was not found.`);
+      const standings = stage.stageKind === "LEAGUE" ? getStandings(db, stageId) : [];
+      const rounds = db.prepare(`
+        SELECT r.id AS roundId, r.round_number AS roundNumber, r.name,
+          COUNT(f.id) AS fixtureCount,
+          SUM(CASE WHEN f.status='COMPLETED' THEN 1 ELSE 0 END) AS completedCount
+        FROM competition_round r
+        LEFT JOIN fixture f ON f.round_id=r.id
+        WHERE r.stage_id=?
+        GROUP BY r.id ORDER BY r.round_number
+      `).all(stageId) as Array<{roundId:number;roundNumber:number;name:string;fixtureCount:number;completedCount:number|null}>;
+      const fixtures = db.prepare(`
+        SELECT f.id, r.round_number AS roundNumber, r.name AS roundName,
+          f.scheduled_at AS scheduledAt, f.status,
+          f.home_score AS homeScore, f.away_score AS awayScore,
+          home.name AS homeClub, away.name AS awayClub
+        FROM fixture f JOIN competition_round r ON r.id=f.round_id
+        JOIN club home ON home.id=f.home_club_id JOIN club away ON away.id=f.away_club_id
+        WHERE r.stage_id=? ORDER BY r.round_number, f.scheduled_at, f.id
+      `).all(stageId) as Array<{id:number;roundNumber:number;roundName:string;scheduledAt:string|null;status:CampaignCompetitionFixtureDto["status"];homeScore:number|null;awayScore:number|null;homeClub:string;awayClub:string}>;
+      const scorers = db.prepare(`
+        SELECT e.player_id AS playerId, p.full_name AS player,
+          e.club_id AS clubId, c.name AS club, COUNT(*) AS goals
+        FROM match_event e JOIN fixture f ON f.id=e.fixture_id
+        JOIN competition_round r ON r.id=f.round_id
+        JOIN person p ON p.id=e.player_id JOIN club c ON c.id=e.club_id
+        WHERE r.stage_id=? AND f.status='COMPLETED'
+          AND e.event_type IN ('GOAL','PENALTY_GOAL')
+          AND e.player_id IS NOT NULL AND e.club_id IS NOT NULL
+        GROUP BY e.player_id,e.club_id
+        ORDER BY goals DESC, player COLLATE NOCASE, playerId LIMIT 50
+      `).all(stageId) as Array<{playerId:number;player:string;clubId:number;club:string;goals:number}>;
+      return {
+        stage: {stageId:stage.stageId,competition:stage.competition,stage:stage.stage,seasonYear:stage.seasonYear,stageKind:stage.stageKind,stageStatus:stage.stageStatus},
+        standings: standings.map((row,index)=>({position:index+1,clubId:row.clubId,club:row.club,played:row.played,wins:row.wins,draws:row.draws,losses:row.losses,goalsFor:row.goalsFor,goalsAgainst:row.goalsAgainst,goalDifference:row.goalDifference,points:row.points})),
+        rounds: rounds.map(round=>({...round,completedCount:round.completedCount??0,fixtures:fixtures.filter(f=>f.roundNumber===round.roundNumber).map(f=>({id:f.id,round:f.roundName,scheduledAt:f.scheduledAt,status:f.status,homeClub:f.homeClub,awayClub:f.awayClub,score:f.status==="COMPLETED"?`${f.homeScore ?? 0}–${f.awayScore ?? 0}`:null}))})),
+        topScorers: scorers,
+      };
+    });
+  }
+
   matchHistory(id: string, fixtureId: number): MatchCenterResponse {
     return this.withSave(id, (db) => {
       const fixture = this.fixture(db, fixtureId);

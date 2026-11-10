@@ -17,7 +17,9 @@ export function CampaignShell({ saveId, children }: { saveId: string; children: 
   const activeSection =
     segment === 'calendar' || segment === 'match'
       ? 'calendar'
-      : segment === 'squad'
+      : segment === 'competitions'
+        ? 'competitions'
+        : segment === 'squad'
         ? 'squad'
         : segment === 'team'
           ? 'team'

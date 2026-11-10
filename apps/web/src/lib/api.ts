@@ -10,6 +10,7 @@ import type {
   CampaignCalendarResponse,
   CampaignSquadResponse,
   CampaignTeamResponse,
+  CampaignCompetitionDetailResponse,
   MatchCenterResponse,
   MatchPreparationResponse,
   MatchTacticalChangeRequest,
@@ -46,6 +47,8 @@ export const gameApi = {
     request<OpenSaveResponse>(`/api/saves/${saveId}/open`, { method: 'POST' }),
   campaignOverview: (id: string) =>
     request<CampaignOverviewResponse>(`/api/saves/${id}/campaign/overview`),
+  competition: (id: string, stageId: number) =>
+    request<CampaignCompetitionDetailResponse>(`/api/saves/${id}/competitions/${stageId}`),
   campaignCalendar: (id: string) =>
     request<CampaignCalendarResponse>(`/api/saves/${id}/campaign/calendar`),
   campaignSquad: (id: string) => request<CampaignSquadResponse>(`/api/saves/${id}/campaign/squad`),

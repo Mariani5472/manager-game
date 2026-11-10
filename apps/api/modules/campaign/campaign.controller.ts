@@ -15,6 +15,8 @@ export class CampaignController {
     response.json(
       this.service.overview(saveIdSchema.parse(request.params.saveId)),
     );
+  competition: RequestHandler = (request, response) =>
+    response.json(this.service.competition(saveIdSchema.parse(request.params.saveId), fixtureIdSchema.parse(request.params.stageId)));
   calendar: RequestHandler = (request, response) =>
     response.json(
       this.service.calendar(saveIdSchema.parse(request.params.saveId)),
