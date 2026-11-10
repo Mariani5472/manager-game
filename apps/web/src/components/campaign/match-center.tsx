@@ -183,6 +183,7 @@ export function MatchCenter({
     }
   };
 
+  const playerName = (playerId: number) => data.teams.flatMap((team) => team.lineup).find((player) => player.playerId === playerId)?.name ?? `Player #${playerId}`;
   const stats = [
     ['Shots', data.statistics.home.shots, data.statistics.away.shots],
     ['On target', data.statistics.home.shotsOnTarget, data.statistics.away.shotsOnTarget],
@@ -319,6 +320,32 @@ export function MatchCenter({
           ))}
         </CardContent>
       </Card>
+      {isFinished && data.playerStats.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>Player performances</CardTitle></CardHeader>
+          <CardContent className={styles.playerMatchStats}>
+            {data.teams.map((team) => (
+              <section key={team.clubId}>
+                <strong>{team.name}</strong>
+                <div className={styles.playerMatchStatsHeader}>
+                  <span>Player</span><span>MIN</span><span>RATING</span><span>G</span><span>A</span><span>YC</span><span>RC</span>
+                </div>
+                {data.playerStats.filter((player) => player.clubId === team.clubId).map((player) => (
+                  <div className={styles.playerMatchStatsRow} key={player.playerId}>
+                    <span>{playerName(player.playerId)}{player.substitutedOut ? ' · Subbed' : ''}</span>
+                    <span>{player.minutesPlayed}</span>
+                    <span>{player.rating.toFixed(1)}</span>
+                    <span>{player.goals}</span>
+                    <span>{player.assists}</span>
+                    <span>{player.yellowCards}</span>
+                    <span>{player.redCard ? '1' : '—'}</span>
+                  </div>
+                ))}
+              </section>
+            ))}
+          </CardContent>
+        </Card>
+      )}
       <div className={styles.centerGrid}>
         <LineupList
           title={`Home XI · ${home.name}`}
