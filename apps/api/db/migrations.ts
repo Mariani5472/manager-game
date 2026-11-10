@@ -102,6 +102,21 @@ const migrations: Migration[] = [
       if (!columns.some(column => column.name === "is_legacy")) {
         db.exec("ALTER TABLE match_history_snapshot ADD COLUMN is_legacy INTEGER NOT NULL DEFAULT 0 CHECK (is_legacy IN (0,1))");
       }
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_match_history_kickoff_immutable
+        BEFORE UPDATE OF home_lineup_json,away_lineup_json,tactics_json,engine_version,random_seed
+        ON match_history_snapshot
+        BEGIN
+          SELECT RAISE(ABORT, 'Match kickoff snapshot is immutable');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_match_history_result_once
+        BEFORE UPDATE OF result_json,completed_at ON match_history_snapshot
+        WHEN OLD.result_json IS NOT NULL OR NEW.result_json IS NULL OR NEW.completed_at IS NULL
+        BEGIN
+          SELECT RAISE(ABORT, 'Match history can only be finalized once');
+        END;
+      `);
     },
   },
 ];
