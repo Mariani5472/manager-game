@@ -74,7 +74,10 @@ export function MatchCenter({
   const queryKey = ['match-center', saveId, fixtureId];
   const center = useQuery({
     queryKey,
-    queryFn: () => gameApi.matchCenter(saveId, fixtureId),
+    queryFn: async () => {
+      const match = await gameApi.matchCenter(saveId, fixtureId);
+      return match.fixture.status === 'COMPLETED' ? gameApi.matchHistory(saveId, fixtureId) : match;
+    },
     refetchInterval: false,
   });
   const [playing, setPlaying] = useState(false);
@@ -91,9 +94,14 @@ export function MatchCenter({
   const decisionInFlight = useRef(false);
   const advance = useMutation({
     mutationFn: (minute: number) => gameApi.advanceMatch(saveId, fixtureId, minute),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      if (data.fixture.status === 'COMPLETED') {
+        setPlaying(false);
+        const history = await gameApi.matchHistory(saveId, fixtureId);
+        queryClient.setQueryData(queryKey, history);
+        return;
+      }
       queryClient.setQueryData(queryKey, data);
-      if (data.fixture.status === 'COMPLETED') setPlaying(false);
     },
     onSettled: () => {
       advanceInFlight.current = false;
@@ -175,6 +183,7 @@ export function MatchCenter({
     }
   };
 
+  const playerName = (playerId: number) => data.teams.flatMap((team) => team.lineup).find((player) => player.playerId === playerId)?.name ?? `Player #${playerId}`;
   const stats = [
     ['Shots', data.statistics.home.shots, data.statistics.away.shots],
     ['On target', data.statistics.home.shotsOnTarget, data.statistics.away.shotsOnTarget],
@@ -208,6 +217,25 @@ export function MatchCenter({
         isPlaying={playing}
         currentMinute={currentMinute}
       />
+      {data.history && (
+        <Card>
+          <CardHeader><CardTitle>Historical match record</CardTitle></CardHeader>
+          <CardContent className={styles.historyTactics}>
+            <p>{data.history.isLegacy ? 'Reconstructed from a legacy checkpoint; kickoff details may be approximate.' : 'Kickoff snapshot preserved · Saved at full-time'} · Engine {data.history.engineVersion} · Seed {data.history.randomSeed}</p>
+            <div>
+              {[data.history.homeTactics, data.history.awayTactics].map((team) => (
+                <section key={team.clubId}>
+                  <strong>{team.clubName}</strong>
+                  <span>{team.tactic.formation_name} · {team.tactic.mentality.replaceAll('_', ' ').toLowerCase()}</span>
+                  <span>Pressing {team.tactic.pressing} · Tempo {team.tactic.tempo} · Defensive line {team.tactic.defensive_line}</span>
+                  <span>Width {team.tactic.width} · Passing {team.tactic.passing_directness} · Counter attack {team.tactic.counter_attack ? 'On' : 'Off'}</span>
+                </section>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className={styles.controlHeader}>
           <CardTitle>
@@ -292,6 +320,32 @@ export function MatchCenter({
           ))}
         </CardContent>
       </Card>
+      {isFinished && data.playerStats.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>Player performances</CardTitle></CardHeader>
+          <CardContent className={styles.playerMatchStats}>
+            {data.teams.map((team) => (
+              <section key={team.clubId}>
+                <strong>{team.name}</strong>
+                <div className={styles.playerMatchStatsHeader}>
+                  <span>Player</span><span>MIN</span><span>RATING</span><span>G</span><span>A</span><span>YC</span><span>RC</span>
+                </div>
+                {data.playerStats.filter((player) => player.clubId === team.clubId).map((player) => (
+                  <div className={styles.playerMatchStatsRow} key={player.playerId}>
+                    <span>{playerName(player.playerId)}{player.substitutedOut ? ' · Subbed' : ''}</span>
+                    <span>{player.minutesPlayed}</span>
+                    <span>{player.rating.toFixed(1)}</span>
+                    <span>{player.goals}</span>
+                    <span>{player.assists}</span>
+                    <span>{player.yellowCards}</span>
+                    <span>{player.redCard ? '1' : '—'}</span>
+                  </div>
+                ))}
+              </section>
+            ))}
+          </CardContent>
+        </Card>
+      )}
       <div className={styles.centerGrid}>
         <LineupList
           title={`Home XI · ${home.name}`}

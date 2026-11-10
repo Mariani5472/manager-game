@@ -59,6 +59,8 @@ export const gameApi = {
     }),
   matchCenter: (id: string, fixtureId: number) =>
     request<MatchCenterResponse>(`/api/saves/${id}/matches/${fixtureId}/center`),
+  matchHistory: (id: string, fixtureId: number) =>
+    request<MatchCenterResponse>(`/api/saves/${id}/matches/${fixtureId}/history`),
   advanceMatch: (id: string, fixtureId: number, throughMinute: number) =>
     request<MatchCenterResponse>(`/api/saves/${id}/matches/${fixtureId}/advance`, {
       method: 'POST',

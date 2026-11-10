@@ -25,6 +25,15 @@ test("schema v1 migrates atomically to the current version and backfills complet
 
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='match_preparation'").get());
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='match_momentum_debug'").get());
+    assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='match_history_snapshot'").get());
+    assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='trg_match_history_kickoff_immutable'").get());
+    assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='trg_match_history_result_once'").get());
+    db.prepare("INSERT INTO match_history_snapshot(fixture_id,home_lineup_json,away_lineup_json,tactics_json,engine_version,random_seed) VALUES(1,'[]','[]','{}','1.0.0',123)").run();
+    assert.throws(() => db.prepare("UPDATE match_history_snapshot SET home_lineup_json='[]' WHERE fixture_id=1").run(), /immutable/);
+    db.prepare("UPDATE match_history_snapshot SET result_json='{}',completed_at=CURRENT_TIMESTAMP WHERE fixture_id=1").run();
+    assert.throws(() => db.prepare("UPDATE match_history_snapshot SET result_json='{}',completed_at=CURRENT_TIMESTAMP WHERE fixture_id=1").run(), /finalized once/);
+    const historyColumns = db.prepare("PRAGMA table_info(match_history_snapshot)").all() as Array<{ name:string }>;
+    for (const column of ["home_lineup_json","away_lineup_json","tactics_json","result_json","engine_version","random_seed","is_legacy","completed_at"]) assert.ok(historyColumns.some(item => item.name === column), column);
     const momentumColumns = db.prepare("PRAGMA table_info(match_momentum)").all() as Array<{ name: string }>;
     for (const column of [
       "home_territorial_control", "away_territorial_control",

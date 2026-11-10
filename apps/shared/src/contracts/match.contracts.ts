@@ -178,6 +178,33 @@ export interface MatchFixtureDto {
   score: MatchScoreDto;
 }
 
+export interface MatchHistoryTacticSnapshotDto {
+  clubId: number;
+  clubName: string;
+  tactic: { formation_id:number; formation_name:string; mentality:string; pressing:number; tempo:number; defensive_line:number; width:number; passing_directness:number; counter_attack:number };
+  context: Record<string, unknown> | null;
+}
+
+export interface MatchHistorySnapshotDto {
+  engineVersion: string;
+  randomSeed: number;
+  completedAt: string;
+  isLegacy: boolean;
+  homeTactics: MatchHistoryTacticSnapshotDto;
+  awayTactics: MatchHistoryTacticSnapshotDto;
+}
+export interface MatchPlayerMatchStatsDto {
+  playerId: number;
+  clubId: number;
+  energy: number;
+  rating: number;
+  minutesPlayed: number;
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCard: boolean;
+  substitutedOut: boolean;
+}
 export interface MatchCenterResponse {
   fixture: MatchFixtureDto;
   managedClubId: ClubId;
@@ -185,8 +212,10 @@ export interface MatchCenterResponse {
   playbackStatus: MatchPlaybackStatus;
   teams: [MatchTeamDto, MatchTeamDto];
   statistics: MatchStatisticsDto;
+  playerStats: MatchPlayerMatchStatsDto[];
   events: MatchEventDto[];
   momentum: MatchMomentumPointDto[];
+  history?: MatchHistorySnapshotDto;
 }
 
 export interface PrepareMatchRequest {

@@ -1010,3 +1010,23 @@
     grid-template-columns: 1fr;
   }
 }
+
+.historyTactics { display:grid; gap:10px; color:var(--color-text-secondary); font-size:10px; }
+.historyTactics p { margin:0; color:var(--color-text-muted); }
+.historyTactics > div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.historyTactics section { display:grid; gap:5px; padding:10px; border:1px solid var(--color-border); border-radius:6px; }
+.historyTactics section strong { color:var(--color-text-primary); font-size:11px; }
+@media (max-width:560px) { .historyTactics > div { grid-template-columns:1fr; } }
+
+.playerMatchStats { display:grid; gap:14px; }
+.playerMatchStats section { display:grid; gap:6px; min-width:0; }
+.playerMatchStats section > strong { color:var(--color-text-primary); font-size:11px; }
+.playerMatchStatsHeader,
+.playerMatchStatsRow { display:grid; grid-template-columns:minmax(0,1fr) repeat(6,38px); gap:6px; align-items:center; }
+.playerMatchStatsHeader { padding-bottom:5px; border-bottom:1px solid var(--color-border); color:var(--color-text-muted); font-size:8px; font-weight:800; text-align:center; }
+.playerMatchStatsHeader span:first-child { text-align:left; }
+.playerMatchStatsRow { padding:5px 0; border-bottom:1px solid var(--color-border); color:var(--color-text-secondary); font-size:9px; font-variant-numeric:tabular-nums; text-align:center; }
+.playerMatchStatsRow span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; }
+@media (max-width:560px) {
+  .playerMatchStatsHeader,.playerMatchStatsRow { grid-template-columns:minmax(0,1fr) repeat(6,25px); gap:3px; font-size:8px; }
+}

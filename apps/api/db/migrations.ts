@@ -68,10 +68,67 @@ const migrations: Migration[] = [
         );
       `);
     },
+  },  {
+    version: 5,
+    description: "Persist immutable match kickoff and full-time history snapshots",
+    up(db) {
+      db.exec(`
+        CREATE TABLE match_history_snapshot (
+          fixture_id INTEGER PRIMARY KEY REFERENCES fixture(id) ON DELETE CASCADE,
+          home_lineup_json TEXT NOT NULL CHECK (json_valid(home_lineup_json)),
+          away_lineup_json TEXT NOT NULL CHECK (json_valid(away_lineup_json)),
+          tactics_json TEXT NOT NULL CHECK (json_valid(tactics_json)),
+          result_json TEXT CHECK (result_json IS NULL OR json_valid(result_json)),
+          engine_version TEXT NOT NULL,
+          random_seed INTEGER NOT NULL,
+          completed_at TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CHECK ((result_json IS NULL AND completed_at IS NULL) OR
+                 (result_json IS NOT NULL AND completed_at IS NOT NULL))
+        );
+
+        CREATE INDEX idx_match_history_completed
+          ON match_history_snapshot(completed_at, fixture_id)
+          WHERE result_json IS NOT NULL;
+      `);
+    },
+  },
+
+  {
+    version: 6,
+    description: "Mark reconstructed legacy match history snapshots",
+    up(db) {
+      const columns = db.prepare("PRAGMA table_info(match_history_snapshot)").all() as Array<{name:string}>;
+      if (!columns.some(column => column.name === "is_legacy")) {
+        db.exec("ALTER TABLE match_history_snapshot ADD COLUMN is_legacy INTEGER NOT NULL DEFAULT 0 CHECK (is_legacy IN (0,1))");
+      }
+
+    },
+  },
+  {
+    version: 7,
+    description: "Enforce immutable kickoff snapshots and one-time result finalization",
+    up(db) {
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_match_history_kickoff_immutable
+        BEFORE UPDATE OF home_lineup_json,away_lineup_json,tactics_json,engine_version,random_seed
+        ON match_history_snapshot
+        BEGIN
+          SELECT RAISE(ABORT, 'Match kickoff snapshot is immutable');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_match_history_result_once
+        BEFORE UPDATE OF result_json,completed_at ON match_history_snapshot
+        WHEN OLD.result_json IS NOT NULL OR NEW.result_json IS NULL OR NEW.completed_at IS NULL
+        BEGIN
+          SELECT RAISE(ABORT, 'Match history can only be finalized once');
+        END;
+      `);
+    },
   },
 ];
 
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 7;
 
 export function applyMigrations(db: SqliteDatabase): number {
   const versionTable = db.prepare(

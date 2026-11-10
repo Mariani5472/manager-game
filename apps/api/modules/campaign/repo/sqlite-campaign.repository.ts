@@ -12,9 +12,17 @@ import {scheduleMatchTacticalChange} from "../../matches/engine/tacticalChangeSe
 import {progressKnockoutStage} from "../../competitions/service/knockout.service.js";
 import {finishSeasonIfComplete} from "../../competitions/service/season.service.js";
 import {advanceRoundById} from "../../competitions/service/calendar.service.js";
-import type {CampaignClubDto,CampaignOverviewResponse,CampaignCalendarResponse,CampaignSquadResponse,CampaignTeamResponse,MatchCenterResponse,MatchPreparationResponse,MatchFixtureDto,MatchLineupPlayerDto,SaveMatchLineupRequest,MatchTacticalChangeRequest} from "../../../../shared/src/index.js";
+import type {CampaignClubDto,CampaignOverviewResponse,CampaignCalendarResponse,CampaignSquadResponse,CampaignTeamResponse,MatchCenterResponse,MatchPreparationResponse,MatchFixtureDto,MatchLineupPlayerDto,SaveMatchLineupRequest,MatchTacticalChangeRequest,MatchHistorySnapshotDto} from "../../../../shared/src/index.js";
 import type {CampaignRepository} from "./campaign.repository.js";
 import {SaveNotFoundError} from "../../saves/save-not-found.error.js";
+type MatchHistorySnapshotData = {
+ homeLineup:MatchLineupPlayerDto[];
+ awayLineup:MatchLineupPlayerDto[];
+ homeTactics:MatchHistorySnapshotDto["homeTactics"];
+ awayTactics:MatchHistorySnapshotDto["awayTactics"];
+ result:{home:MatchCenterResponse["statistics"]["home"];away:MatchCenterResponse["statistics"]["away"];eventCount:number;momentumCount:number;homeScore:number;awayScore:number};
+ engineVersion:string;randomSeed:number;completedAt:string;isLegacy:boolean;
+};
 export class SqliteCampaignRepository implements CampaignRepository {
  private readonly manager=new SaveManager(masterPath,saveDir);
  scheduleTacticalChange(id:string,fixtureId:number,input:MatchTacticalChangeRequest):{changeId:number} {
@@ -151,9 +159,30 @@ export class SqliteCampaignRepository implements CampaignRepository {
    return this.matchCenterFromDb(db,fixtureId);
   });
  }
- private matchCenterFromDb(db:SqliteDatabase,fixtureId:number):MatchCenterResponse {
+ matchHistory(id:string,fixtureId:number):MatchCenterResponse {
+  return this.withSave(id,db=>{
+   const fixture=this.fixture(db,fixtureId);
+   if(fixture.status!=="COMPLETED") throw new Error("Match history is only available after full-time.");
+   const row=db.prepare("SELECT home_lineup_json AS homeLineupJson,away_lineup_json AS awayLineupJson,tactics_json AS tacticsJson,result_json AS resultJson,engine_version AS engineVersion,random_seed AS randomSeed,is_legacy AS isLegacy,completed_at AS completedAt FROM match_history_snapshot WHERE fixture_id=?").get(fixtureId) as {homeLineupJson:string;awayLineupJson:string;tacticsJson:string;resultJson:string|null;engineVersion:string;randomSeed:number;isLegacy:number;completedAt:string|null}|undefined;
+   if(!row || !row.resultJson || !row.completedAt) throw new Error("This completed match predates historical snapshots and cannot be reconstructed accurately.");
+   const tactics=JSON.parse(row.tacticsJson) as {home:MatchHistorySnapshotData["homeTactics"];away:MatchHistorySnapshotData["awayTactics"]};
+   const result=JSON.parse(row.resultJson) as {home:MatchCenterResponse["statistics"]["home"];away:MatchCenterResponse["statistics"]["away"];eventCount:number;momentumCount:number;homeScore:number;awayScore:number};
+   const persistedEventCount=(db.prepare("SELECT COUNT(*) AS count FROM match_event WHERE fixture_id=?").get(fixtureId) as {count:number}).count;
+   const persistedMomentumCount=(db.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=?").get(fixtureId) as {count:number}).count;
+   const hasFullTime=Boolean(db.prepare("SELECT 1 FROM match_event WHERE fixture_id=? AND event_type='FULL_TIME'").get(fixtureId));
+   if(result.momentumCount!==90 || persistedMomentumCount!==result.momentumCount || persistedEventCount!==result.eventCount || !hasFullTime) throw new Error("Match history is incomplete and cannot be displayed.");
+   return this.matchCenterFromDb(db,fixtureId,{
+    homeLineup:JSON.parse(row.homeLineupJson) as MatchLineupPlayerDto[],
+    awayLineup:JSON.parse(row.awayLineupJson) as MatchLineupPlayerDto[],
+    homeTactics:tactics.home,awayTactics:tactics.away,
+    result,engineVersion:row.engineVersion,randomSeed:row.randomSeed,completedAt:row.completedAt,isLegacy:row.isLegacy===1,
+   });
+  });
+ }
+ private matchCenterFromDb(db:SqliteDatabase,fixtureId:number,history?:MatchHistorySnapshotData):MatchCenterResponse {
   const fixture=this.fixture(db,fixtureId);
-  const rows=db.prepare("SELECT id,minute,club_id AS clubId,player_id AS playerId,secondary_player_id AS secondaryPlayerId,event_type AS type,xg,description FROM match_event WHERE fixture_id=? ORDER BY minute,id").all(fixtureId) as Array<{id:number;minute:number;clubId:number|null;playerId:number|null;secondaryPlayerId:number|null;type:MatchCenterResponse["events"][number]["type"];xg:number|null;description:string|null}>;
+  if(history){fixture.home.name=history.homeTactics.clubName;fixture.away.name=history.awayTactics.clubName;}
+  const rows=db.prepare("SELECT id,minute,added_time AS addedTime,club_id AS clubId,player_id AS playerId,secondary_player_id AS secondaryPlayerId,event_type AS type,xg,description FROM match_event WHERE fixture_id=? ORDER BY minute,added_time,id").all(fixtureId) as Array<{id:number;minute:number;addedTime:number;clubId:number|null;playerId:number|null;secondaryPlayerId:number|null;type:MatchCenterResponse["events"][number]["type"];xg:number|null;description:string|null}>;
   const pendingDecisions=db.prepare("SELECT id,minute,change_type AS type,payload FROM match_tactical_change WHERE fixture_id=? AND applied=0 ORDER BY minute,id").all(fixtureId) as Array<{id:number;minute:number;type:string;payload:string}>;
   const decisionEvents=pendingDecisions.map(decision=>{
    const payload=JSON.parse(decision.payload) as Record<string,unknown>;
@@ -164,7 +193,7 @@ export class SqliteCampaignRepository implements CampaignRepository {
    if(decision.type==="FORMATION") description=`Formation change scheduled (ID ${String(payload.formationId)})`;
    return {id:-decision.id,fixtureId,minute:decision.minute,addedTime:0,type:"TACTIC_CHANGE" as const,clubId:getManagedClub(db).id,playerId:null,secondaryPlayerId:null,xg:0,description};
   });
-  const events=[...rows.map(e=>({id:e.id,fixtureId,minute:e.minute,addedTime:0,type:e.type,clubId:e.clubId,playerId:e.playerId,secondaryPlayerId:e.secondaryPlayerId,xg:e.xg,description:e.description})),...decisionEvents].sort((a,b)=>a.minute-b.minute||a.id-b.id);
+  const events=[...rows.map(e=>({id:e.id,fixtureId,minute:e.minute,addedTime:e.addedTime,type:e.type,clubId:e.clubId,playerId:e.playerId,secondaryPlayerId:e.secondaryPlayerId,xg:e.xg,description:e.description})),...decisionEvents].sort((a,b)=>a.minute-b.minute||a.id-b.id);
   const momentumRows=db.prepare(`
    SELECT minute,home_pressure AS homePressure,away_pressure AS awayPressure,
     home_score AS homeScore,away_score AS awayScore,
@@ -193,7 +222,8 @@ export class SqliteCampaignRepository implements CampaignRepository {
    ...(debugByMinute.has(point.minute!) ? { debugTrace: debugByMinute.get(point.minute!)! } : {}),
   }));
   const aggregate=(clubId:number)=>{const count=(types:string[])=>rows.filter(e=>e.clubId===clubId&&types.includes(e.type)).length;return {shots:count(["GOAL","SAVE","MISS"]),shotsOnTarget:count(["GOAL","SAVE"]),goals:count(["GOAL"]),expectedGoals:rows.filter(e=>e.clubId===clubId&&["GOAL","SAVE","MISS"].includes(e.type)).reduce((sum,e)=>sum+(e.xg??0),0),fouls:count(["FOUL"]),yellowCards:count(["YELLOW_CARD"]),redCards:count(["RED_CARD"]),substitutions:count(["SUBSTITUTION"]),injuries:count(["INJURY"])};};
-  const formations=db.prepare("SELECT id,name FROM formation ORDER BY name").all() as Array<{id:number;name:string}>; return {fixture,managedClubId:getManagedClub(db).id,formations,playbackStatus:fixture.status==="COMPLETED"?"FINISHED":fixture.status==="IN_PROGRESS"?"PAUSED":"IDLE",teams:[{clubId:fixture.home.clubId,name:fixture.home.name,isHome:true,lineup:this.lineup(db,fixtureId,fixture.home.clubId)},{clubId:fixture.away.clubId,name:fixture.away.name,isHome:false,lineup:this.lineup(db,fixtureId,fixture.away.clubId)}],statistics:{home:aggregate(fixture.home.clubId),away:aggregate(fixture.away.clubId)},events,momentum};
+  const playerStats=db.prepare("SELECT player_id AS playerId,club_id AS clubId,energy,rating,minutes_played AS minutesPlayed,goals,assists,yellow_cards AS yellowCards,red_card AS redCard,substituted_out AS substitutedOut FROM match_player_state WHERE fixture_id=? ORDER BY club_id,minutes_played DESC,player_id").all(fixtureId) as Array<{playerId:number;clubId:number;energy:number;rating:number;minutesPlayed:number;goals:number;assists:number;yellowCards:number;redCard:number;substitutedOut:number}>;
+  const formations=history?[]:db.prepare("SELECT id,name FROM formation ORDER BY name").all() as Array<{id:number;name:string}>; return {fixture,managedClubId:getManagedClub(db).id,formations,playbackStatus:fixture.status==="COMPLETED"?"FINISHED":fixture.status==="IN_PROGRESS"?"PAUSED":"IDLE",teams:[{clubId:fixture.home.clubId,name:fixture.home.name,isHome:true,lineup:history?history.homeLineup:this.lineup(db,fixtureId,fixture.home.clubId)},{clubId:fixture.away.clubId,name:fixture.away.name,isHome:false,lineup:history?history.awayLineup:this.lineup(db,fixtureId,fixture.away.clubId)}],statistics:history?{home:history.result.home,away:history.result.away}:{home:aggregate(fixture.home.clubId),away:aggregate(fixture.away.clubId)},playerStats:playerStats.map(player=>({...player,redCard:player.redCard===1,substitutedOut:player.substitutedOut===1})),events,momentum,...(history?{history:{engineVersion:history.engineVersion,randomSeed:history.randomSeed,completedAt:history.completedAt,isLegacy:history.isLegacy,homeTactics:history.homeTactics,awayTactics:history.awayTactics}}:{})};
  }
 
 }
