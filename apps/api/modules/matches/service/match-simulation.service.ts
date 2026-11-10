@@ -64,7 +64,8 @@ export function simulateMatch(
     const home = loadTeam(db, fixtureId, f.home_club_id), away = loadTeam(db, fixtureId, f.away_club_id);
     const changes = db.prepare("SELECT id,minute,club_id,change_type,payload FROM match_tactical_change WHERE fixture_id=? ORDER BY minute,id").all(fixtureId) as TacticalChange[];
     const initiallyStartingPlayerIds = new Set([...home.lineup, ...away.lineup].filter(player => player.isStarting).map(player => player.id));
-    const collectMomentumTrace = process.env.MOMENTUM_DEBUG === "true";
+    const collectMomentumTrace = true;
+    // const collectMomentumTrace = process.env.MOMENTUM_DEBUG === "true";
     const timeline = simulateMatchTimeline(
         home, away, seed, changes,
         { collectMomentumTrace },

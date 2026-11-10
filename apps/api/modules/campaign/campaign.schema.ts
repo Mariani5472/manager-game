@@ -29,7 +29,7 @@ export const tacticalChangeSchema = z.discriminatedUnion("type", [
     minute: z.number().int().min(1).max(90),
     type: z.literal("INSTRUCTION"),
     key: z.enum(["pressing", "tempo", "defensive_line", "width", "passing_directness", "counter_attack"]),
-    value: z.number().finite(),
+    value: z.number(),
   }).superRefine(({ key, value }, context) => {
     const maximum = key === "counter_attack" ? 1 : 100;
     if (value < 0 || value > maximum) {
