@@ -165,6 +165,25 @@ export function simulateMatch(
         });
         begin.immediate();
     }
+    const hasHistorySnapshot = Boolean(db.prepare("SELECT 1 FROM match_history_snapshot WHERE fixture_id=?").get(fixtureId));
+    if (!hasHistorySnapshot) {
+        // Legacy in-progress saves may have a checkpoint created before kickoff snapshots existed.
+        // Preserve the best available persisted inputs, explicitly marking them as reconstructed.
+        const lineupSnapshot = (team: typeof home) => team.lineup.map(player => ({
+            playerId:player.id,name:player.name,position:player.role,slot:player.slot,isStarting:player.isStarting,
+            energy:player.energy,morale:player.morale,sharpness:player.sharpness,
+        }));
+        const clubNames = db.prepare("SELECT id,name FROM club WHERE id IN (?,?)").all(home.clubId,away.clubId) as Array<{id:number;name:string}>;
+        const clubNameById = new Map(clubNames.map(club => [club.id,club.name]));
+        const tacticsSnapshot = {
+            home:{clubId:home.clubId,clubName:clubNameById.get(home.clubId) ?? String(home.clubId),tactic:home.tactic,context:home.context ?? null},
+            away:{clubId:away.clubId,clubName:clubNameById.get(away.clubId) ?? String(away.clubId),tactic:away.tactic,context:away.context ?? null},
+            scheduledChanges:simulationConfig.tacticalChanges,
+        };
+        db.prepare("INSERT INTO match_history_snapshot(fixture_id,home_lineup_json,away_lineup_json,tactics_json,engine_version,random_seed,is_legacy) VALUES(?,?,?,?,?,?,1)").run(
+            fixtureId,JSON.stringify(lineupSnapshot(home)),JSON.stringify(lineupSnapshot(away)),JSON.stringify(tacticsSnapshot),"1.0.0",seed,
+        );
+    }
     const insertEvent = db.prepare("INSERT INTO match_event(fixture_id,minute,club_id,player_id,secondary_player_id,event_type,xg,description) VALUES(?,?,?,?,?,?,?,?)");
     const insertMomentum = db.prepare(`INSERT INTO match_momentum(
         fixture_id,minute,home_pressure,away_pressure,home_score,away_score,
