@@ -145,9 +145,11 @@ export function simulateMatch(
                 playerId: player.id, name: player.name, position: player.role, slot: player.slot,
                 isStarting: player.isStarting, energy: player.energy, morale: player.morale, sharpness: player.sharpness,
             }));
+            const clubNames = db.prepare("SELECT id,name FROM club WHERE id IN (?,?)").all(home.clubId,away.clubId) as Array<{id:number;name:string}>;
+            const clubNameById = new Map(clubNames.map(club => [club.id,club.name]));
             const tacticsSnapshot = {
-                home: { clubId: home.clubId, tactic: home.tactic, context: home.context ?? null },
-                away: { clubId: away.clubId, tactic: away.tactic, context: away.context ?? null },
+                home: { clubId: home.clubId, clubName: clubNameById.get(home.clubId) ?? String(home.clubId), tactic: home.tactic, context: home.context ?? null },
+                away: { clubId: away.clubId, clubName: clubNameById.get(away.clubId) ?? String(away.clubId), tactic: away.tactic, context: away.context ?? null },
                 scheduledChanges: simulationConfig.tacticalChanges,
             };
             db.prepare(`INSERT INTO match_history_snapshot(
