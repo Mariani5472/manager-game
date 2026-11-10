@@ -141,6 +141,21 @@ export function simulateMatch(
                 throw new Error(`Fixture ${fixtureId} already has a simulation checkpoint; refusing destructive reinitialization.`);
             }
             db.prepare("INSERT INTO match_event(fixture_id,minute,event_type,xg,description) VALUES(?,0,'KICK_OFF',0,'Partida iniciada')").run(fixtureId);
+            const lineupSnapshot = (team: typeof home) => team.lineup.map(player => ({
+                playerId: player.id, name: player.name, position: player.role, slot: player.slot,
+                isStarting: player.isStarting, energy: player.energy, morale: player.morale, sharpness: player.sharpness,
+            }));
+            const tacticsSnapshot = {
+                home: { clubId: home.clubId, tactic: home.tactic, context: home.context ?? null },
+                away: { clubId: away.clubId, tactic: away.tactic, context: away.context ?? null },
+                scheduledChanges: simulationConfig.tacticalChanges,
+            };
+            db.prepare(`INSERT INTO match_history_snapshot(
+                fixture_id,home_lineup_json,away_lineup_json,tactics_json,engine_version,random_seed
+            ) VALUES(?,?,?,?,?,?)`).run(
+                fixtureId, JSON.stringify(lineupSnapshot(home)), JSON.stringify(lineupSnapshot(away)),
+                JSON.stringify(tacticsSnapshot), "1.0.0", seed,
+            );
             db.prepare("INSERT INTO match_simulation_state(fixture_id,state_version,simulation_minute,state_json) VALUES(?,1,0,?)")
                 .run(fixtureId, JSON.stringify({ engineVersion: "1.0.0", seed, config: simulationConfig, minute: 0, homeScore: 0, awayScore: 0, completed: false }));
             const claimed = db.prepare("UPDATE fixture SET status='IN_PROGRESS',random_seed=?,current_minute=0,home_score=0,away_score=0 WHERE id=? AND status='SCHEDULED'").run(seed, fixtureId);
@@ -248,7 +263,21 @@ export function simulateMatch(
         AND (f.status='COMPLETED' OR f.id=?)`).get(playerId, fixtureId, fixtureId) as { count: number }).count;
             if (count > 0 && count % 5 === 0) db.prepare("UPDATE player_condition SET suspension_matches=MAX(suspension_matches,1) WHERE player_id=?").run(playerId);
         }
-        db.prepare("UPDATE fixture SET status='COMPLETED',current_minute=90,home_score=?,away_score=?,completed_at=COALESCE(scheduled_at,CURRENT_TIMESTAMP) WHERE id=?")
+        const momentumCount = (db.prepare("SELECT COUNT(*) AS count FROM match_momentum WHERE fixture_id=?").get(fixtureId) as { count:number }).count;
+        if (momentumCount !== 90) throw new Error(`Fixture ${fixtureId} cannot be finalized: expected 90 momentum samples, found ${momentumCount}.`);
+        const eventRows = db.prepare("SELECT club_id AS clubId,event_type AS type,COALESCE(xg,0) AS xg FROM match_event WHERE fixture_id=?").all(fixtureId) as Array<{clubId:number|null;type:string;xg:number}>;
+        const summarize = (clubId:number) => {
+            const count = (types:string[]) => eventRows.filter(event => event.clubId === clubId && types.includes(event.type)).length;
+            return { goals:count(["GOAL"]), shots:count(["GOAL","SAVE","MISS"]), shotsOnTarget:count(["GOAL","SAVE"]),
+                expectedGoals:eventRows.filter(event => event.clubId === clubId && ["GOAL","SAVE","MISS"].includes(event.type)).reduce((sum,event) => sum + event.xg,0),
+                fouls:count(["FOUL"]), yellowCards:count(["YELLOW_CARD"]), redCards:count(["RED_CARD"]),
+                substitutions:count(["SUBSTITUTION"]), injuries:count(["INJURY"]) };
+        };
+        const historySnapshot = db.prepare("SELECT result_json AS resultJson FROM match_history_snapshot WHERE fixture_id=?").get(fixtureId) as {resultJson:string|null}|undefined;
+        if (!historySnapshot || historySnapshot.resultJson !== null) throw new Error(`Fixture ${fixtureId} is missing its kickoff snapshot or already has finalized history.`);
+        const resultSnapshot = { home:summarize(f.home_club_id), away:summarize(f.away_club_id), eventCount:eventRows.length, momentumCount, homeScore:timeline.result.homeScore, awayScore:timeline.result.awayScore };
+        db.prepare("UPDATE match_history_snapshot SET result_json=?,completed_at=CURRENT_TIMESTAMP WHERE fixture_id=? AND result_json IS NULL").run(JSON.stringify(resultSnapshot), fixtureId);
+        db.prepare("UPDATE fixture SET status='COMPLETED',current_minute=90,home_score=?,away_score=?,completed_at=CURRENT_TIMESTAMP WHERE id=?")
             .run(timeline.result.homeScore, timeline.result.awayScore, fixtureId);
         checkpoint.run(90, JSON.stringify({
             engineVersion: "1.0.0", seed, config: simulationConfig, minute: 90, homeScore: timeline.result.homeScore,
