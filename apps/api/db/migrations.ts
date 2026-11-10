@@ -98,7 +98,10 @@ const migrations: Migration[] = [
     version: 6,
     description: "Mark reconstructed legacy match history snapshots",
     up(db) {
-      db.exec(`ALTER TABLE match_history_snapshot ADD COLUMN is_legacy INTEGER NOT NULL DEFAULT 0 CHECK (is_legacy IN (0,1));`);
+      const columns = db.prepare("PRAGMA table_info(match_history_snapshot)").all() as Array<{name:string}>;
+      if (!columns.some(column => column.name === "is_legacy")) {
+        db.exec("ALTER TABLE match_history_snapshot ADD COLUMN is_legacy INTEGER NOT NULL DEFAULT 0 CHECK (is_legacy IN (0,1))");
+      }
     },
   },
 ];
