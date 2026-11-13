@@ -27,12 +27,97 @@ import type {
   MatchPreparationResponse,
   MatchFixtureDto,
   MatchLineupPlayerDto,
+  MatchTacticDto,
   SaveMatchLineupRequest,
   MatchTacticalChangeRequest,
   MatchHistorySnapshotDto,
 } from "../../../../shared/src/index.js";
 import type { CampaignRepository } from "./campaign.repository.js";
 import { SaveNotFoundError } from "../../saves/save-not-found.error.js";
+type MatchTacticRow = {
+  formationId: number;
+  formation: string;
+  mentality: MatchTacticDto["mentality"];
+  pressing: number;
+  tempo: number;
+  defensiveLine: number;
+  width: number;
+  passingDirectness: number;
+  counterAttack: number;
+};
+
+function loadEffectiveMatchTactic(
+  db: SqliteDatabase,
+  fixtureId: number,
+  clubId: number,
+  throughMinute: number,
+): MatchTacticDto {
+  const row = db
+    .prepare(
+      `SELECT tt.formation_id AS formationId,f.name AS formation,tt.mentality,
+        tt.pressing,tt.tempo,tt.defensive_line AS defensiveLine,tt.width,
+        tt.passing_directness AS passingDirectness,tt.counter_attack AS counterAttack
+       FROM team_tactic tt JOIN formation f ON f.id=tt.formation_id
+       WHERE tt.club_id=?`,
+    )
+    .get(clubId) as MatchTacticRow | undefined;
+  if (!row) throw new Error(`Tactics for club ${clubId} were not found.`);
+
+  const tactic = { ...row };
+  const changes = db
+    .prepare(
+      `SELECT change_type AS type,payload FROM match_tactical_change
+       WHERE fixture_id=? AND club_id=? AND minute<=? ORDER BY minute,id`,
+    )
+    .all(fixtureId, clubId, throughMinute) as Array<{
+      type: string;
+      payload: string;
+    }>;
+
+  for (const change of changes) {
+    const payload = JSON.parse(change.payload) as Record<string, unknown>;
+    if (change.type === "MENTALITY") {
+      tactic.mentality = String(payload.mentality) as MatchTacticDto["mentality"];
+    } else if (change.type === "INSTRUCTION") {
+      const key = String(payload.key);
+      const value = Number(payload.value);
+      if (key === "pressing") tactic.pressing = value;
+      if (key === "tempo") tactic.tempo = value;
+      if (key === "defensive_line") tactic.defensiveLine = value;
+      if (key === "width") tactic.width = value;
+      if (key === "passing_directness") tactic.passingDirectness = value;
+      if (key === "counter_attack") tactic.counterAttack = value;
+    } else if (change.type === "FORMATION") {
+      const formationId = Number(payload.formationId);
+      const formation = db
+        .prepare("SELECT name FROM formation WHERE id=?")
+        .get(formationId) as { name: string } | undefined;
+      if (formation) {
+        tactic.formationId = formationId;
+        tactic.formation = formation.name;
+      }
+    }
+  }
+
+  return { ...tactic, counterAttack: tactic.counterAttack === 1 };
+}
+
+function mapHistoryTactic(
+  tactic: MatchHistorySnapshotDto["homeTactics"]["tactic"],
+): MatchTacticDto {
+  return {
+    formationId: tactic.formation_id,
+    formation: tactic.formation_name,
+    mentality: tactic.mentality,
+    pressing: tactic.pressing,
+    tempo: tactic.tempo,
+    defensiveLine: tactic.defensive_line,
+    width: tactic.width,
+    passingDirectness: tactic.passing_directness,
+    counterAttack: tactic.counter_attack === 1,
+  };
+}
+
 type MatchHistorySnapshotData = {
   homeLineup: MatchLineupPlayerDto[];
   awayLineup: MatchLineupPlayerDto[];
@@ -759,6 +844,12 @@ export class SqliteCampaignRepository implements CampaignRepository {
       : (db
           .prepare("SELECT id,name FROM formation ORDER BY name")
           .all() as Array<{ id: number; name: string }>);
+    const homeTactic = history
+      ? mapHistoryTactic(history.homeTactics.tactic)
+      : loadEffectiveMatchTactic(db, fixtureId, fixture.home.clubId, fixture.currentMinute);
+    const awayTactic = history
+      ? mapHistoryTactic(history.awayTactics.tactic)
+      : loadEffectiveMatchTactic(db, fixtureId, fixture.away.clubId, fixture.currentMinute);
     return {
       fixture,
       managedClubId: getManagedClub(db).id,
@@ -774,6 +865,7 @@ export class SqliteCampaignRepository implements CampaignRepository {
           clubId: fixture.home.clubId,
           name: fixture.home.name,
           isHome: true,
+          tactic: homeTactic,
           lineup: history
             ? history.homeLineup
             : this.lineup(db, fixtureId, fixture.home.clubId),
@@ -782,6 +874,7 @@ export class SqliteCampaignRepository implements CampaignRepository {
           clubId: fixture.away.clubId,
           name: fixture.away.name,
           isHome: false,
+          tactic: awayTactic,
           lineup: history
             ? history.awayLineup
             : this.lineup(db, fixtureId, fixture.away.clubId),
