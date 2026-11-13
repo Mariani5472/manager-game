@@ -1,7 +1,11 @@
 import { HOME_SHOT_CHANCE_BONUS } from "./constants.js";
 import { clamp } from "./mathUtils.js";
 import type { Tactic, Team } from "../types/match-engine.types.js";
-import { getMentalityEffects, getTacticalChanceQualityModifier, getTacticalShotCreationModifier } from "./tacticalModel.js";
+import {
+  getMentalityEffects,
+  getTacticalChanceQualityModifier,
+  getTacticalShotCreationModifier,
+} from "./tacticalModel.js";
 
 const DEFAULT_CONTEXT = {
   weather: "CLEAR",
