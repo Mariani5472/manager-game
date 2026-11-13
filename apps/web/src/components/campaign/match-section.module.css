@@ -1262,3 +1262,24 @@
   color: var(--color-text-muted);
   overflow-wrap: anywhere;
 }
+
+
+.tacticalGuidance {
+  display: grid;
+  gap: 5px;
+  padding: 9px 10px;
+  border-left: 2px solid var(--color-accent);
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  font-size: 10px;
+}
+.tacticalGuidance > span {
+  color: var(--color-text-primary);
+}
+.tacticalGuidance > span strong {
+  font-variant-numeric: tabular-nums;
+}
+.tacticalGuidance small {
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
