@@ -15,6 +15,7 @@ export function CompetitionPage({ saveId }: { saveId: string }) {
   const router = useRouter();
   const overview = useQuery({ queryKey: ['campaign', saveId, 'overview'], queryFn: () => gameApi.campaignOverview(saveId) });
   const [selectedStageId, setSelectedStageId] = useState<number | null>(null);
+  const [selectedRoundId, setSelectedRoundId] = useState<number | null>(null);
   const stageId = selectedStageId ?? overview.data?.competitions[0]?.stageId ?? null;
   const detail = useQuery({
     queryKey: ['campaign', saveId, 'competition', stageId],
@@ -38,7 +39,7 @@ export function CompetitionPage({ saveId }: { saveId: string }) {
   return <div className={styles.page}>
     <PageHeading eyebrow="COMPETITIONS" title="Competition centre" description="Standings and round-by-round results for this stage, with top scorers across the competition season." />
     <div className={styles.competitionPicker}>
-      {overview.data.competitions.map(stage => <Button key={stage.stageId} size="sm" variant={stage.stageId === stageId ? 'default' : 'outline'} onClick={() => setSelectedStageId(stage.stageId)}>{stage.competition} · {stage.stage}</Button>)}
+      {overview.data.competitions.map(stage => <Button key={stage.stageId} size="sm" variant={stage.stageId === stageId ? 'default' : 'outline'} onClick={() => { setSelectedStageId(stage.stageId); setSelectedRoundId(null); }}>{stage.competition} · {stage.stage}</Button>)}
     </div>
     <Card>
       <CardHeader><div><CardTitle>{data.stage.competition}</CardTitle><CardDescription>{data.stage.stage} · {data.stage.seasonYear}</CardDescription></div><Badge variant={data.stage.stageStatus === 'COMPLETED' ? 'success' : 'secondary'}>{data.stage.stageStatus.replace('_',' ')}</Badge></CardHeader>
@@ -48,12 +49,30 @@ export function CompetitionPage({ saveId }: { saveId: string }) {
     </Card>
     <Card>
       <CardHeader><div><CardTitle>Rounds and fixtures</CardTitle><CardDescription>Completed matches can be opened to inspect their timeline and momentum.</CardDescription></div></CardHeader>
-      <CardContent>{data.rounds.map(round => <section className={styles.competitionRound} key={round.roundId}>
-        <div className={styles.competitionRoundHeading}><strong>{round.name}</strong><span>{round.completedCount}/{round.fixtureCount} completed</span></div>
-        {round.fixtures.map(fixture => <button key={fixture.id} className={styles.competitionFixture} type="button" disabled={fixture.status !== 'COMPLETED'} onClick={() => router.push(`/game/${saveId}/match/${fixture.id}/center`)}>
-          <span>{formatDate(fixture.scheduledAt)}</span><strong>{fixture.homeClub}</strong><b>{fixture.score ?? 'vs'}</b><strong>{fixture.awayClub}</strong><Badge variant={fixture.status === 'COMPLETED' ? 'success' : 'secondary'}>{fixture.status.replace('_',' ')}</Badge>
-        </button>)}
-      </section>)}</CardContent>
+      <CardContent>
+        {data.rounds.length ? (() => {
+          const selectedRoundIndex = Math.max(0, data.rounds.findIndex(round => round.roundId === selectedRoundId));
+          const selectedRound = data.rounds[selectedRoundIndex];
+          return <>
+            <div className={styles.roundNavigation}>
+              <Button size="sm" variant="outline" disabled={selectedRoundIndex === 0} onClick={() => setSelectedRoundId(data.rounds[selectedRoundIndex - 1].roundId)}>Previous</Button>
+              <label className={styles.roundSelector}>
+                <span>Round</span>
+                <select aria-label="Select competition round" value={selectedRound.roundId} onChange={event => setSelectedRoundId(Number(event.target.value))}>
+                  {data.rounds.map(round => <option key={round.roundId} value={round.roundId}>{round.name}</option>)}
+                </select>
+              </label>
+              <Button size="sm" variant="outline" disabled={selectedRoundIndex === data.rounds.length - 1} onClick={() => setSelectedRoundId(data.rounds[selectedRoundIndex + 1].roundId)}>Next</Button>
+            </div>
+            <section className={styles.competitionRound} key={selectedRound.roundId}>
+              <div className={styles.competitionRoundHeading}><strong>{selectedRound.name}</strong><span>{selectedRound.completedCount}/{selectedRound.fixtureCount} completed</span></div>
+              {selectedRound.fixtures.length ? selectedRound.fixtures.map(fixture => <button key={fixture.id} className={styles.competitionFixture} type="button" disabled={fixture.status !== 'COMPLETED'} onClick={() => router.push('/game/' + saveId + '/match/' + fixture.id + '/center')}>
+                <span>{formatDate(fixture.scheduledAt)}</span><strong>{fixture.homeClub}</strong><b>{fixture.score ?? 'vs'}</b><strong>{fixture.awayClub}</strong><Badge variant={fixture.status === 'COMPLETED' ? 'success' : 'secondary'}>{fixture.status.replace('_',' ')}</Badge>
+              </button>) : <p className={styles.emptyText}>No fixtures are scheduled for this round.</p>}
+            </section>
+          </>;
+        })() : <p className={styles.emptyText}>No rounds are available for this stage.</p>}
+      </CardContent>
     </Card>
     <Card>
       <CardHeader><div><CardTitle>Top scorers</CardTitle><CardDescription>Goals from completed fixtures across all stages of this competition season.</CardDescription></div></CardHeader>
