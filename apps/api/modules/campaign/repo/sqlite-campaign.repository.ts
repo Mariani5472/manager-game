@@ -88,6 +88,17 @@ function loadEffectiveMatchTactic(
       if (key === "passing_directness") tactic.passingDirectness = value;
       if (key === "counter_attack") tactic.counterAttack = value;
     } else if (change.type === "FORMATION") {
+      const applied = db
+        .prepare(
+          `SELECT 1 FROM match_event
+           WHERE fixture_id=? AND club_id=? AND minute=?
+             AND event_type='TACTIC_CHANGE'
+             AND description='Formação alterada durante a partida'
+           LIMIT 1`,
+        )
+        .get(fixtureId, clubId, change.minute);
+      if (!applied) continue;
+
       const formationId = Number(payload.formationId);
       const formation = db
         .prepare("SELECT name FROM formation WHERE id=?")
