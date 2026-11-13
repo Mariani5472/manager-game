@@ -1,4 +1,5 @@
 import { clamp } from "../mathUtils.js";
+import { getMentalityEffects, getTacticalPhysicalLoadPerMinute } from "../tacticalModel.js";
 import type { KernelShotEvent, Team } from "../../types/match-engine.types.js";
 import type {
   GameAction,
@@ -76,14 +77,7 @@ function calculateTeamState(
   const activeRatio = activePlayerRatio(team);
   const opponentActiveRatio = activePlayerRatio(opponent);
   const opponentDefensiveStrength = opponent.defending * opponentActiveRatio;
-  const mentalityModifiers: Record<string, number> = {
-    VERY_DEFENSIVE: -5,
-    DEFENSIVE: -2,
-    BALANCED: 0,
-    ATTACKING: 3,
-    VERY_ATTACKING: 5,
-  };
-  const mentalityModifier = mentalityModifiers[team.tactic.mentality] ?? 0;
+  const mentalityModifier = getMentalityEffects(team.tactic.mentality).territory;
 
   const teamActions = gameActions.filter(
     (action) => action.clubId === team.clubId,
@@ -152,8 +146,7 @@ function calculateTeamState(
   const intensity = previous.intensity * 0.8 + intensityTarget * 0.2;
 
   // This is an in-match load estimate. Player energy persistence remains outside this P0 scope.
-  const physicalLoadPerMinute =
-    0.025 + team.tactic.pressing * 0.0006 + team.tactic.tempo * 0.0003;
+  const physicalLoadPerMinute = getTacticalPhysicalLoadPerMinute(team.tactic);
   const physicalCondition = clamp(
     team.energy - minute * physicalLoadPerMinute,
     0,
