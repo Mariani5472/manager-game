@@ -1,3 +1,4 @@
+import type { MatchMentality } from "../../../../shared/src/contracts/match.contracts.js";
 import type { TeamGameState } from "../engine/game-state/gameState.types.js";
 import type { MatchContext } from "../service/match-context.service.js";
 
@@ -66,12 +67,7 @@ export interface Player {
   aerial_reach: number;
 }
 
-export type TacticMentality =
-  | "VERY_DEFENSIVE"
-  | "DEFENSIVE"
-  | "BALANCED"
-  | "ATTACKING"
-  | "VERY_ATTACKING";
+export type TacticMentality = MatchMentality;
 
 export interface Tactic {
   formation_id: number;
