@@ -54,15 +54,18 @@ export function getStandings(
     )
     .all(stageId);
 
-  const effectiveRules = rules.length
+  const configuredRules = rules.length
     ? rules
     : [
-        { rule_key: "POINTS" },
         { rule_key: "GOAL_DIFFERENCE" },
         { rule_key: "GOALS_FOR" },
         { rule_key: "WINS" },
         { rule_key: "FAIR_PLAY" },
       ];
+  const effectiveRules = [
+    { rule_key: "POINTS" },
+    ...configuredRules.filter((rule) => rule.rule_key !== "POINTS"),
+  ];
 
   const rows = db
     .prepare<number, StandingRow>(
@@ -165,6 +168,8 @@ export function getStandings(
 
             WHERE r.stage_id = ?
               AND f.status = 'COMPLETED'
+              AND f.home_score IS NOT NULL
+              AND f.away_score IS NOT NULL
               AND f.home_club_id IN (
                 ${ids.map(() => "?").join(",")}
               )
