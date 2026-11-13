@@ -66,9 +66,16 @@ export interface Player {
   aerial_reach: number;
 }
 
+export type TacticMentality =
+  | "VERY_DEFENSIVE"
+  | "DEFENSIVE"
+  | "BALANCED"
+  | "ATTACKING"
+  | "VERY_ATTACKING";
+
 export interface Tactic {
   formation_id: number;
-  mentality: string;
+  mentality: TacticMentality;
   pressing: number;
   tempo: number;
   defensive_line: number;
