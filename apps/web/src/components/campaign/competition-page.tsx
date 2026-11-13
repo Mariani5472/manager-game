@@ -57,7 +57,7 @@ export function CompetitionPage({ saveId }: { saveId: string }) {
     </Card>
     <Card>
       <CardHeader><div><CardTitle>Top scorers</CardTitle><CardDescription>Goals from completed fixtures across all stages of this competition season.</CardDescription></div></CardHeader>
-      <CardContent>{data.topScorers.length ? <div className={styles.scorerList}>{data.topScorers.map((scorer,index) => <div key={scorer.playerId}><span>{index+1}</span><strong>{scorer.player}<small>{scorer.clubs}</small></strong><b>{scorer.goals}</b></div>)}</div> : <p className={styles.emptyText}>No goals recorded in completed matches yet.</p>}</CardContent>
+      <CardContent>{data.topScorers.length ? <div className={styles.scorerList}>{data.topScorers.map((scorer) => <div key={scorer.playerId}><span>{scorer.position}</span><strong>{scorer.player}<small>{scorer.clubs}</small></strong><b>{scorer.goals}</b></div>)}</div> : <p className={styles.emptyText}>No goals recorded in completed matches yet.</p>}</CardContent>
     </Card>
   </div>;
 }
