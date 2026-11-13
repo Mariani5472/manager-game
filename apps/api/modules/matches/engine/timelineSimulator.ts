@@ -358,7 +358,7 @@ export function simulateMatchTimeline(
             secondaryPlayerId: null,
             eventType: "TACTIC_CHANGE",
             xg: 0,
-            description: "Formação alterada durante a partida",
+            description: `Formação alterada para #${formationId}`,
           });
         }
       }
