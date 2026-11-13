@@ -109,5 +109,5 @@ export interface CampaignCompetitionDetailResponse {
   stage: { stageId: number; competition: string; stage: string; seasonYear: number; stageKind: string; stageStatus: "IN_PROGRESS" | "COMPLETED" };
   standings: Array<{ position: number; groupId: number; groupName: string; clubId: number; club: string; played: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number; goalDifference: number; points: number }>;
   rounds: Array<{ roundId: number; roundNumber: number; name: string; fixtureCount: number; completedCount: number; fixtures: Array<{ id: number; round: string; scheduledAt: string | null; status: FixtureStatus; homeClub: string; awayClub: string; score: string | null }> }>;
-  topScorers: Array<{ playerId: number; player: string; clubs: string; goals: number }>;
+  topScorers: Array<{ position: number; playerId: number; player: string; clubs: string; goals: number }>;
 }
