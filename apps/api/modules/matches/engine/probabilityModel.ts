@@ -1,6 +1,7 @@
 import { HOME_SHOT_CHANCE_BONUS } from "./constants.js";
 import { clamp } from "./mathUtils.js";
 import type { Tactic, Team } from "../types/match-engine.types.js";
+import { getMentalityEffects, getTacticalChanceQualityModifier, getTacticalShotCreationModifier } from "./tacticalModel.js";
 
 const DEFAULT_CONTEXT = {
   weather: "CLEAR",
@@ -12,26 +13,11 @@ const DEFAULT_CONTEXT = {
 } as const;
 
 export function mentalityShotModifier(value: string): number {
-  return (
-    {
-      VERY_DEFENSIVE: -0.018,
-      DEFENSIVE: -0.009,
-      BALANCED: 0,
-      ATTACKING: 0.009,
-      VERY_ATTACKING: 0.018,
-    }[value] ?? 0
-  );
+  return getMentalityEffects(value).shotCreation;
 }
 
 export function teamPressure(team: Team, random: () => number): number {
-  const mentality =
-    {
-      VERY_DEFENSIVE: -5,
-      DEFENSIVE: -2,
-      BALANCED: 0,
-      ATTACKING: 3,
-      VERY_ATTACKING: 5,
-    }[team.tactic.mentality] ?? 0;
+  const mentality = getMentalityEffects(team.tactic.mentality).pressure;
 
   const context = team.context ?? DEFAULT_CONTEXT;
 
@@ -60,6 +46,7 @@ export function shotCreationProbability(
   isHome: boolean,
   pressure: number,
   opponentPressure: number,
+  isCounterAttack = false,
 ): number {
   const tactic = team.tactic;
   const ctx = team.context ?? {
@@ -92,12 +79,8 @@ export function shotCreationProbability(
       (team.attacking - 50) * 0.00135 +
       (50 - opponent.defending) * 0.0006 +
       mentalityShotModifier(tactic.mentality) +
-      (tactic.pressing - 50) * 0.00012 +
-      (tactic.tempo - 50) * 0.00012 +
+      getTacticalShotCreationModifier(tactic, isCounterAttack) +
       (pressure - opponentPressure) * 0.00012 +
-      (tactic.passing_directness - 50) * 0.000055 +
-      (tactic.width - 50) * 0.000025 +
-      (tactic.counter_attack ? 0.004 : 0) +
       (isHome ? HOME_SHOT_CHANCE_BONUS : 0) -
       fatigue -
       weatherPenalty -
@@ -112,6 +95,7 @@ export function sampleChanceQuality(
   tactic: Tactic,
   finishing: number,
   random: () => number,
+  isCounterAttack = false,
 ): number {
   const ctx = team.context ?? {
     weather: "CLEAR",
