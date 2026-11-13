@@ -55,6 +55,7 @@ export function MatchPreparation({
   const swapStarter = (slot: number, playerId: number) => {
     const previous = starterIds[slot];
     if (previous === playerId) return;
+    saveLineup.reset();
     const replacementIndex = starterIds.indexOf(playerId);
     const next = [...starterIds];
     next[slot] = playerId;
@@ -105,6 +106,7 @@ export function MatchPreparation({
             managed
             selectedIds={starterIds}
             onReplace={swapStarter}
+            disabled={saveLineup.isPending}
           />
           <Card>
             <CardHeader>
