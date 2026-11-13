@@ -139,6 +139,7 @@ export function MatchCenter({
         setPlaying(false);
         const history = await gameApi.matchHistory(saveId, fixtureId);
         queryClient.setQueryData(queryKey, history);
+        await queryClient.invalidateQueries({ queryKey: ['campaign', saveId, 'overview'] });
         return;
       }
       queryClient.setQueryData(queryKey, data);
@@ -229,6 +230,16 @@ export function MatchCenter({
   const playerName = (playerId: number) =>
     data.teams.flatMap((team) => team.lineup).find((player) => player.playerId === playerId)
       ?.name ?? `Player #${playerId}`;
+  const managedTeam = data.teams.find((team) => team.clubId === managedClubId);
+  const managedScore = managedTeam?.isHome ? data.fixture.score.home : data.fixture.score.away;
+  const opponentScore = managedTeam?.isHome ? data.fixture.score.away : data.fixture.score.home;
+  const matchOutcome = managedScore > opponentScore ? 'Victory' : managedScore < opponentScore ? 'Defeat' : 'Draw';
+  const playerOfMatch = [...data.playerStats]
+    .filter((player) => player.minutesPlayed > 0)
+    .sort((a, b) => b.rating - a.rating || b.goals - a.goals || b.assists - a.assists || b.minutesPlayed - a.minutesPlayed)[0];
+  const playerOfMatchTeam = playerOfMatch
+    ? data.teams.find((team) => team.clubId === playerOfMatch.clubId)
+    : undefined;
   const stats = [
     ['Shots', data.statistics.home.shots, data.statistics.away.shots],
     ['On target', data.statistics.home.shotsOnTarget, data.statistics.away.shotsOnTarget],
@@ -251,7 +262,7 @@ export function MatchCenter({
           <h1>Match centre</h1>
         </div>
         <Button variant="ghost" onClick={onBack}>
-          <RotateCcw size={15} /> Calendar
+          <RotateCcw size={15} /> {isFinished ? 'Continue career' : 'Calendar'}
         </Button>
       </div>
       <MatchHeader
@@ -262,6 +273,36 @@ export function MatchCenter({
         isPlaying={playing}
         currentMinute={currentMinute}
       />
+      {isFinished && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Full-time report</CardTitle>
+          </CardHeader>
+          <CardContent className={styles.postMatch}>
+            <div className={styles.postMatchOutcome}>
+              <strong>{matchOutcome}</strong>
+              <span>
+                {managedTeam?.name ?? 'Your club'} {managedScore}–{opponentScore}
+              </span>
+              <small>Final result recorded · Squad condition and morale updated</small>
+            </div>
+            {playerOfMatch && (
+              <div className={styles.playerOfMatch}>
+                <span>PLAYER OF THE MATCH</span>
+                <strong>{playerName(playerOfMatch.playerId)}</strong>
+                <small>
+                  {playerOfMatchTeam?.name ?? 'Team'} · {playerOfMatch.rating.toFixed(1)} rating ·
+                  {` ${playerOfMatch.goals} goals · ${playerOfMatch.assists} assists`}
+                </small>
+              </div>
+            )}
+            <div className={styles.postMatchActions}>
+              <p>Review the key moments and performances below, then return to your career hub to prepare for the next fixture.</p>
+              <Button onClick={onBack}>Continue career</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       {data.history && (
         <Card>
           <CardHeader>
@@ -297,6 +338,7 @@ export function MatchCenter({
         </Card>
       )}
 
+      {!isFinished && (
       <Card>
         <CardHeader className={styles.controlHeader}>
           <CardTitle>
@@ -359,6 +401,7 @@ export function MatchCenter({
           {advance.isError && <p className={styles.error}>{advance.error.message}</p>}
         </CardContent>
       </Card>
+      )}
 
       <MatchMomentum data={data.momentum} events={data.events} teams={data.teams} />
       <MatchTimeline events={data.events} teams={data.teams} />
@@ -434,6 +477,7 @@ export function MatchCenter({
           selectedIds={[]}
         />
       </div>
+      {!isFinished && (
       <Card>
         <CardHeader>
           <CardTitle>Manager decisions</CardTitle>
@@ -724,6 +768,7 @@ export function MatchCenter({
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }
