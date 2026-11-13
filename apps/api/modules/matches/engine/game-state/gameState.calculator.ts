@@ -76,7 +76,6 @@ function calculateTeamState(
   basePressure: number,
   minuteEvents: KernelShotEvent[],
   gameActions: GameAction[],
-  minute: number,
 ): TeamGameState {
   const activeRatio = activePlayerRatio(team);
   const opponentActiveRatio = activePlayerRatio(opponent);
@@ -195,7 +194,7 @@ export function advanceMatchGameState(
   homeBasePressure: number,
   awayBasePressure: number,
   minuteEvents: KernelShotEvent[],
-  minute: number,
+  _minute: number,
   gameActions: GameAction[] = [],
 ): MatchGameState {
   return {
@@ -206,7 +205,6 @@ export function advanceMatchGameState(
       homeBasePressure,
       minuteEvents,
       gameActions,
-      minute,
     ),
     away: calculateTeamState(
       away,
@@ -215,7 +213,6 @@ export function advanceMatchGameState(
       awayBasePressure,
       minuteEvents,
       gameActions,
-      minute,
     ),
   };
 }
