@@ -1,7 +1,11 @@
 import { clamp } from "../mathUtils.js";
 import type { Team } from "../../types/match-engine.types.js";
 import type { GameAction, TeamGameState } from "./gameState.types.js";
-import { getCounterAttackOpportunityChance, getTacticalFinalThirdModifier, getTacticalProgressionModifier } from "../tacticalModel.js";
+import {
+  getCounterAttackOpportunityChance,
+  getTacticalFinalThirdModifier,
+  getTacticalProgressionModifier,
+} from "../tacticalModel.js";
 
 export function resolveTeamGameActions(
   team: Team,
