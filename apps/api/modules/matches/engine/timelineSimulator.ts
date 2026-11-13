@@ -676,6 +676,7 @@ export function simulateMatchTimeline(
         tactic,
         shooter.finishing,
         side.random,
+        isCounterAttack,
       );
       const xg = defensiveError
         ? clamp(sampledXg + 0.1, 0.02, 0.38)
