@@ -98,13 +98,36 @@ export function MatchCenter({
   const effectiveTactic = center.data?.teams.find(
     (team) => team.clubId === center.data?.managedClubId,
   )?.tactic;
+  const effectiveFormationId = effectiveTactic?.formationId;
+  const effectiveMentality = effectiveTactic?.mentality;
+  const effectivePressing = effectiveTactic?.pressing;
+  const effectiveTempo = effectiveTactic?.tempo;
+  const effectiveDefensiveLine = effectiveTactic?.defensiveLine;
+  const effectiveWidth = effectiveTactic?.width;
+  const effectivePassingDirectness = effectiveTactic?.passingDirectness;
+  const effectiveCounterAttack = effectiveTactic?.counterAttack;
   useEffect(() => {
-    if (!effectiveTactic) return;
-    setMentality(effectiveTactic.mentality);
+    if (
+      effectiveFormationId === undefined ||
+      effectiveMentality === undefined ||
+      effectivePressing === undefined
+    ) {
+      return;
+    }
+    setMentality(effectiveMentality);
     setInstructionKey('pressing');
-    setInstructionValue(effectiveTactic.pressing);
-    setFormationId(effectiveTactic.formationId);
-  }, [effectiveTactic]);
+    setInstructionValue(effectivePressing);
+    setFormationId(effectiveFormationId);
+  }, [
+    effectiveFormationId,
+    effectiveMentality,
+    effectivePressing,
+    effectiveTempo,
+    effectiveDefensiveLine,
+    effectiveWidth,
+    effectivePassingDirectness,
+    effectiveCounterAttack,
+  ]);
   // A ref closes the interval race: state updates from React are asynchronous,
   // while a timer callback can otherwise enqueue another advance immediately.
   const advanceInFlight = useRef(false);
