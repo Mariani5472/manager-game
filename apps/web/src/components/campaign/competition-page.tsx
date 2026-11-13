@@ -26,6 +26,15 @@ export function CompetitionPage({ saveId }: { saveId: string }) {
   if (!overview.data?.competitions.length) return <PageError message="No competition stages are registered for this save." />;
   if (detail.isError || !detail.data) return <PageError message={detail.error?.message ?? 'Unable to load competition.'} />;
   const data = detail.data;
+  const standingGroups = data.standings.reduce<Array<{ groupId: number; groupName: string; rows: typeof data.standings }>>((groups, row) => {
+    let group = groups.find((item) => item.groupId === row.groupId);
+    if (!group) {
+      group = { groupId: row.groupId, groupName: row.groupName, rows: [] };
+      groups.push(group);
+    }
+    group.rows.push(row);
+    return groups;
+  }, []);
   return <div className={styles.page}>
     <PageHeading eyebrow="COMPETITIONS" title="Competition centre" description="Standings, round-by-round results and the leading scorers for this stage." />
     <div className={styles.competitionPicker}>
@@ -34,7 +43,7 @@ export function CompetitionPage({ saveId }: { saveId: string }) {
     <Card>
       <CardHeader><div><CardTitle>{data.stage.competition}</CardTitle><CardDescription>{data.stage.stage} · {data.stage.seasonYear}</CardDescription></div><Badge variant={data.stage.stageStatus === 'COMPLETED' ? 'success' : 'secondary'}>{data.stage.stageStatus.replace('_',' ')}</Badge></CardHeader>
       <CardContent>
-        {data.standings.length > 0 ? <div className={styles.competitionTableWrap}><table className={styles.competitionTable}><thead><tr><th>#</th><th>Club</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th></tr></thead><tbody>{data.standings.map(row => <tr key={row.clubId}><td>{row.position}</td><td>{row.club}</td><td>{row.played}</td><td>{row.wins}</td><td>{row.draws}</td><td>{row.losses}</td><td>{row.goalsFor}</td><td>{row.goalsAgainst}</td><td>{row.goalDifference > 0 ? '+' : ''}{row.goalDifference}</td><td><strong>{row.points}</strong></td></tr>)}</tbody></table></div> : <p className={styles.emptyText}>This stage does not use a league table.</p>}
+        {standingGroups.length > 0 ? <div className={styles.competitionTableWrap}>{standingGroups.map(group => <section key={group.groupId} className={styles.competitionStandingGroup}>{data.stage.stageKind === 'GROUPS' && <h3>{group.groupName}</h3>}<table className={styles.competitionTable}><thead><tr><th>#</th><th>Club</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th></tr></thead><tbody>{group.rows.map(row => <tr key={row.clubId}><td>{row.position}</td><td>{row.club}</td><td>{row.played}</td><td>{row.wins}</td><td>{row.draws}</td><td>{row.losses}</td><td>{row.goalsFor}</td><td>{row.goalsAgainst}</td><td>{row.goalDifference > 0 ? '+' : ''}{row.goalDifference}</td><td><strong>{row.points}</strong></td></tr>)}</tbody></table></section>)}</div> : <p className={styles.emptyText}>This stage does not use a league table.</p>}
       </CardContent>
     </Card>
     <Card>
@@ -48,7 +57,7 @@ export function CompetitionPage({ saveId }: { saveId: string }) {
     </Card>
     <Card>
       <CardHeader><div><CardTitle>Top scorers</CardTitle><CardDescription>Goals from completed fixtures only.</CardDescription></div></CardHeader>
-      <CardContent>{data.topScorers.length ? <div className={styles.scorerList}>{data.topScorers.map((scorer,index) => <div key={`${scorer.playerId}-${scorer.clubId}`}><span>{index+1}</span><strong>{scorer.player}<small>{scorer.club}</small></strong><b>{scorer.goals}</b></div>)}</div> : <p className={styles.emptyText}>No goals recorded in completed matches yet.</p>}</CardContent>
+      <CardContent>{data.topScorers.length ? <div className={styles.scorerList}>{data.topScorers.map((scorer,index) => <div key={scorer.playerId}><span>{index+1}</span><strong>{scorer.player}<small>{scorer.clubs}</small></strong><b>{scorer.goals}</b></div>)}</div> : <p className={styles.emptyText}>No goals recorded in completed matches yet.</p>}</CardContent>
     </Card>
   </div>;
 }
