@@ -1354,3 +1354,20 @@
   }
 }
 
+.historyDetails {
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  padding: 10px 12px;
+  background: var(--color-surface);
+}
+.historyDetails > summary {
+  color: var(--color-text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style-position: inside;
+}
+.historyDetails > div,
+.historyDetails > article {
+  margin-top: 10px;
+}
