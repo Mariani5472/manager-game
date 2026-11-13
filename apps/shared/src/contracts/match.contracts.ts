@@ -218,7 +218,7 @@ export interface MatchHistoryTacticSnapshotDto {
   tactic: {
     formation_id: number;
     formation_name: string;
-    mentality: string;
+    mentality: MatchMentality;
     pressing: number;
     tempo: number;
     defensive_line: number;
@@ -277,13 +277,7 @@ export type MatchTacticalChangeRequest =
   | {
       minute: number;
       type: "INSTRUCTION";
-      key:
-        | "pressing"
-        | "tempo"
-        | "defensive_line"
-        | "width"
-        | "passing_directness"
-        | "counter_attack";
+      key: MatchInstructionKey;
       value: number;
     }
   | {
