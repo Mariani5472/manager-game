@@ -137,9 +137,15 @@ export function MatchCenter({
     onSuccess: async (data) => {
       if (data.fixture.status === 'COMPLETED') {
         setPlaying(false);
-        const history = await gameApi.matchHistory(saveId, fixtureId);
-        queryClient.setQueryData(queryKey, history);
+        // Keep the completed response visible even if the optional history read fails.
+        queryClient.setQueryData(queryKey, data);
         await queryClient.invalidateQueries({ queryKey: ['campaign', saveId, 'overview'] });
+        try {
+          const history = await gameApi.matchHistory(saveId, fixtureId);
+          queryClient.setQueryData(queryKey, history);
+        } catch {
+          // The full-time report can still use the completed match response.
+        }
         return;
       }
       queryClient.setQueryData(queryKey, data);
