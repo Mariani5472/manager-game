@@ -1,7 +1,10 @@
 import type { SqliteDatabase } from "../../../db/database.js";
 import { loadTeam } from "./teamService.js";
 import type { TacticalChangeType } from "../types/match-engine.types.js";
-import { MATCH_MENTALITIES, MATCH_TACTICAL_INSTRUCTIONS } from "../../../../shared/src/contracts/match.contracts.js";
+import {
+  MATCH_MENTALITIES,
+  MATCH_TACTICAL_INSTRUCTIONS,
+} from "../../../../shared/src/contracts/match.contracts.js";
 
 interface ProjectedLineupPlayer {
   playerId: number;
