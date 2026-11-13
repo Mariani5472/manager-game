@@ -158,6 +158,28 @@ test("a high opposing defensive line creates more counter-attack opportunity", (
   assert.ok(highLine.some((action) => action.type === "COUNTER_ATTACK"));
 });
 
+test("pressing and tempo workload applies only from the minute a tactic is active", () => {
+  const home = createTeam(1, 65);
+  const away = createTeam(2, 60);
+  const previous = createMatchGameState(home, away);
+  const highIntensity = {
+    ...home,
+    tactic: { ...home.tactic, pressing: 100, tempo: 100 },
+  };
+
+  const next = advanceMatchGameState(
+    previous,
+    highIntensity,
+    away,
+    50,
+    50,
+    [],
+    60,
+  );
+
+  assert.ok(Math.abs(next.home.physicalCondition - 99.885) < 1e-10);
+});
+
 test("attacking mentality trades defensive stability for attacking intent", () => {
   const defensive = createTeam(1, 65);
   const attacking = createTeam(2, 65);
