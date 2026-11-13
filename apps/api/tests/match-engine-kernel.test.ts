@@ -111,6 +111,15 @@ test("counter-attack bonuses apply only when a counter action is generated", () 
   const normalQuality = sampleChanceQuality(home, home.tactic, 60, () => 0.5, false);
   const counterQuality = sampleChanceQuality(home, home.tactic, 60, () => 0.5, true);
   assert.ok(Math.abs(counterQuality - normalQuality - 0.012) < 1e-10);
+
+  const counterDisabled = {
+    ...home,
+    tactic: { ...home.tactic, counter_attack: 0 },
+  };
+  assert.equal(
+    shotCreationProbability(counterDisabled, away, true, 50, 50, true),
+    shotCreationProbability(counterDisabled, away, true, 50, 50, false),
+  );
 });
 
 test("a high opposing defensive line creates more counter-attack opportunity", () => {
