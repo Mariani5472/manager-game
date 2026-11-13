@@ -127,7 +127,7 @@ export class SqliteCampaignRepository implements CampaignRepository {
         )
         .map((s) => {
           const rows =
-            ["LEAGUE", "GROUPS"].includes(s.stageKind) ? getStandings(db, s.stageId, false) : [];
+            ["LEAGUE", "GROUPS"].includes(s.stageKind) ? getStandings(db, s.stageId) : [];
           return {
             competition: s.competition,
             stage: s.stage,
@@ -136,7 +136,7 @@ export class SqliteCampaignRepository implements CampaignRepository {
             pendingFixtures: s.pendingFixtures,
             completedFixtures: s.completedFixtures,
             stageId: s.stageId,
-            standing: rows.map((row, index) => ({
+            standing: rows.map((row) => ({
               position: row.position,
               groupId: row.groupId,
               groupName: row.groupName,
