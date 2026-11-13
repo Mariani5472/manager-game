@@ -4,6 +4,8 @@ import { getStage } from "./competition.repository.js";
 export interface StandingRow {
   stageId: number;
   groupId: number;
+  groupName: string;
+  position: number;
   clubId: number;
   club: string;
   played: number;
@@ -52,12 +54,24 @@ export function getStandings(
     )
     .all(stageId);
 
+  const effectiveRules = rules.length
+    ? rules
+    : [
+        { rule_key: "POINTS" },
+        { rule_key: "GOAL_DIFFERENCE" },
+        { rule_key: "GOALS_FOR" },
+        { rule_key: "WINS" },
+        { rule_key: "FAIR_PLAY" },
+      ];
+
   const rows = db
     .prepare<number, StandingRow>(
       `
       SELECT
         ss.stage_id AS stageId,
         ss.group_id AS groupId,
+        sg.name AS groupName,
+        0 AS position,
         ss.club_id AS clubId,
         c.name AS club,
         ss.played,
@@ -75,14 +89,27 @@ export function getStandings(
       JOIN club c
         ON c.id = ss.club_id
 
+      JOIN stage_group sg
+        ON sg.id = ss.group_id
+
       WHERE ss.stage_id = ?
+      ORDER BY sg.sort_order, c.name COLLATE NOCASE, c.id
     `,
     )
     .all(stageId);
 
-  let groups: StandingRow[][] = [rows];
+  const rowsByGroup = new Map<number, StandingRow[]>();
+  for (const row of rows) {
+    const group = rowsByGroup.get(row.groupId) ?? [];
+    group.push(row);
+    rowsByGroup.set(row.groupId, group);
+  }
 
-  for (const { rule_key } of rules) {
+  const allTieGroups: StandingRow[][] = [];
+  for (const groupRows of rowsByGroup.values()) {
+    let groups: StandingRow[][] = [groupRows];
+
+    for (const { rule_key } of effectiveRules) {
     const refined: StandingRow[][] = [];
 
     for (const group of groups) {
@@ -243,21 +270,62 @@ export function getStandings(
       }
     }
 
-    groups = refined;
+      groups = refined;
+    }
+
+    allTieGroups.push(...groups);
   }
 
-  return groups.flatMap((group) =>
-    group.length > 1
+  const nextPositionByGroup = new Map<number, number>();
+  return allTieGroups.flatMap((group) => {
+    const ordered = group.length > 1
       ? [...group].sort(
           (a, b) =>
             a.club.localeCompare(b.club, "pt-BR") || a.clubId - b.clubId,
         )
-      : group,
-  );
+      : group;
+    const groupId = ordered[0]?.groupId;
+    if (groupId === undefined) return [];
+    const position = nextPositionByGroup.get(groupId) ?? 1;
+    nextPositionByGroup.set(groupId, position + ordered.length);
+    return ordered.map((row) => ({ ...row, position }));
+  });
 }
 
 export function rebuildStandings(db: SqliteDatabase, stageId: number): void {
   getStage(db, stageId);
+
+  const invalidFixture = db
+    .prepare<number, { id: number }>(
+      `
+      SELECT f.id
+      FROM fixture f
+      JOIN competition_round r ON r.id = f.round_id
+      WHERE r.stage_id = ?
+        AND f.status = 'COMPLETED'
+        AND (
+          f.home_score IS NULL
+          OR f.away_score IS NULL
+          OR NOT EXISTS (
+            SELECT 1 FROM stage_participant sp
+            WHERE sp.stage_id = r.stage_id AND sp.club_id = f.home_club_id
+          )
+          OR NOT EXISTS (
+            SELECT 1 FROM stage_participant sp
+            WHERE sp.stage_id = r.stage_id AND sp.club_id = f.away_club_id
+          )
+        )
+      ORDER BY f.id
+      LIMIT 1
+      `,
+    )
+    .get(stageId);
+
+  if (invalidFixture) {
+    throw new Error(
+      `Cannot rebuild standings: completed fixture ${invalidFixture.id} has a missing score or a club outside the stage participants.`,
+    );
+  }
 
   const rebuild = db.transaction(() => {
     db.prepare("DELETE FROM stage_standing WHERE stage_id=?").run(stageId);
@@ -327,6 +395,8 @@ export function rebuildStandings(db: SqliteDatabase, stageId: number): void {
 
         WHERE r.stage_id = ?
           AND f.status = 'COMPLETED'
+          AND f.home_score IS NOT NULL
+          AND f.away_score IS NOT NULL
       `,
       )
       .all(stageId);
