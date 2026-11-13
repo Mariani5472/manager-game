@@ -134,9 +134,9 @@ export function OverviewSection({ data }: { data: CampaignOverviewResponse }) {
                                 ? Math.min(competition.standing.length, managedIndex + 4)
                                 : 6;
 
-                            return competition.standing.slice(startIndex, endIndex).map((row) => (
+                            return competition.standing.slice(startIndex, endIndex).map((row, i) => (
                               <tr
-                                key={row.position}
+                                key={i}
                                 className={row.isManaged ? styles.managedRow : undefined}
                               >
                                 <TableCell>{row.position}</TableCell>
