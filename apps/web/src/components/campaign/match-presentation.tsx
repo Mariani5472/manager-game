@@ -530,6 +530,79 @@ export function MatchTimeline({ events, teams }: { events: MatchEventDto[]; team
   const orderedEvents = [...events].sort(
     (a, b) => b.minute - a.minute || b.addedTime - a.addedTime || b.id - a.id,
   );
+  const periodEvents = orderedEvents.filter(
+    (event) => event.type === 'HALF_TIME' || event.type === 'FULL_TIME' || event.type === 'KICK_OFF',
+  );
+  const isPrimaryEvent = (event: MatchEventDto) =>
+    [
+      'GOAL',
+      'OWN_GOAL',
+      'PENALTY_GOAL',
+      'PENALTY',
+      'PENALTY_MISS',
+      'YELLOW_CARD',
+      'RED_CARD',
+      'SUBSTITUTION',
+      'INJURY',
+      'CHANCE',
+      'SHOT_ON_TARGET',
+      'SAVE',
+    ].includes(event.type);
+  const primaryEvents = orderedEvents.filter(
+    (event) => isPrimaryEvent(event) || periodEvents.some((periodEvent) => periodEvent.id === event.id),
+  );
+  const secondaryEvents = orderedEvents.filter(
+    (event) => !isPrimaryEvent(event) && !periodEvents.some((periodEvent) => periodEvent.id === event.id),
+  );
+
+  const renderEvent = (event: MatchEventDto) => {
+    if (
+      event.type === 'HALF_TIME' ||
+      event.type === 'FULL_TIME' ||
+      event.type === 'KICK_OFF'
+    ) {
+      const label =
+        event.type === 'HALF_TIME'
+          ? 'HALF TIME'
+          : event.type === 'FULL_TIME'
+            ? 'FULL TIME'
+            : 'KICK-OFF';
+      return (
+        <div className={styles.timelinePeriod} key={event.id}>
+          <span />
+          <strong>
+            {label} · {formatMinute(event.minute, event.addedTime)}
+          </strong>
+          <span />
+        </div>
+      );
+    }
+
+    const side =
+      event.clubId === home.clubId ? 'home' : event.clubId === away.clubId ? 'away' : null;
+    return (
+      <div className={styles.timelineRow} key={event.id}>
+        {side === 'home' ? (
+          <MatchTimelineItem event={event} side="home" teams={teams} />
+        ) : (
+          <span />
+        )}
+        {side === null ? (
+          <span className={styles.timelineCenterEvent}>
+            {formatMinute(event.minute, event.addedTime)} {getEventIcon(event.type)}{' '}
+            {event.description ?? getEventLabel(event.type)}
+          </span>
+        ) : (
+          <span className={styles.timelineSpine} />
+        )}
+        {side === 'away' ? (
+          <MatchTimelineItem event={event} side="away" teams={teams} />
+        ) : (
+          <span />
+        )}
+      </div>
+    );
+  };
 
   return (
     <Card>
@@ -539,60 +612,44 @@ export function MatchTimeline({ events, teams }: { events: MatchEventDto[]; team
       <CardContent className={styles.timeline}>
         <div className={styles.timelineTeamLabels}>
           <strong>{home.name}</strong>
-          <span>EVENT</span>
+          <span>KEY EVENTS</span>
           <strong>{away.name}</strong>
         </div>
         {orderedEvents.length === 0 ? (
           <p className={styles.chartEmpty}>Match events will appear here as the game progresses.</p>
         ) : (
-          orderedEvents.map((event) => {
-            if (
-              event.type === 'HALF_TIME' ||
-              event.type === 'FULL_TIME' ||
-              event.type === 'KICK_OFF'
-            ) {
-              const label =
-                event.type === 'HALF_TIME'
-                  ? 'HALF TIME'
-                  : event.type === 'FULL_TIME'
-                    ? 'FULL TIME'
-                    : 'KICK-OFF';
-              return (
-                <div className={styles.timelinePeriod} key={event.id}>
-                  <span />
-                  <strong>
-                    {label} · {formatMinute(event.minute, event.addedTime)}
-                  </strong>
-                  <span />
+          <>
+            {primaryEvents.length > 0 ? (
+              primaryEvents.map(renderEvent)
+            ) : (
+              <p className={styles.chartEmpty}>No key events yet. The match is still developing.</p>
+            )}
+            {secondaryEvents.length > 0 && (
+              <details className={styles.secondaryTimeline}>
+                <summary>
+                  Other events <span>{secondaryEvents.length}</span>
+                </summary>
+                <div className={styles.secondaryTimelineList}>
+                  {secondaryEvents.map((event) => {
+                    const playerName = getPlayerName(event, teams);
+                    return (
+                      <div className={styles.secondaryTimelineItem} key={event.id}>
+                        <time>{formatMinute(event.minute, event.addedTime)}</time>
+                        <span>{getEventIcon(event.type)}</span>
+                        <span>
+                          <strong>{getEventLabel(event.type)}</strong>
+                          {playerName && <small>{playerName}</small>}
+                          {event.description && event.description !== playerName && (
+                            <small>{event.description}</small>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            }
-
-            const side =
-              event.clubId === home.clubId ? 'home' : event.clubId === away.clubId ? 'away' : null;
-            return (
-              <div className={styles.timelineRow} key={event.id}>
-                {side === 'home' ? (
-                  <MatchTimelineItem event={event} side="home" teams={teams} />
-                ) : (
-                  <span />
-                )}
-                {side === null ? (
-                  <span className={styles.timelineCenterEvent}>
-                    {formatMinute(event.minute, event.addedTime)} {getEventIcon(event.type)}{' '}
-                    {event.description ?? getEventLabel(event.type)}
-                  </span>
-                ) : (
-                  <span className={styles.timelineSpine} />
-                )}
-                {side === 'away' ? (
-                  <MatchTimelineItem event={event} side="away" teams={teams} />
-                ) : (
-                  <span />
-                )}
-              </div>
-            );
-          })
+              </details>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
