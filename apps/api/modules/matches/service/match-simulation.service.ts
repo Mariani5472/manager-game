@@ -7,6 +7,7 @@ import {
 } from "./match-context.service.js";
 import { loadTeam } from "../engine/teamService.js";
 import { simulateMatchTimeline } from "../engine/timelineSimulator.js";
+import { MATCH_ENGINE_VERSION } from "../engine/constants.js";
 import type {
   FixtureRow,
   KernelMinute,
@@ -352,7 +353,7 @@ export function simulateMatch(
         JSON.stringify(lineupSnapshot(home)),
         JSON.stringify(lineupSnapshot(away)),
         JSON.stringify(tacticsSnapshot),
-        "1.0.0",
+        MATCH_ENGINE_VERSION,
         seed,
       );
       db.prepare(
@@ -360,7 +361,7 @@ export function simulateMatch(
       ).run(
         fixtureId,
         JSON.stringify({
-          engineVersion: "1.0.0",
+          engineVersion: MATCH_ENGINE_VERSION,
           seed,
           config: simulationConfig,
           minute: 0,
@@ -445,7 +446,7 @@ export function simulateMatch(
       JSON.stringify(lineupSnapshot(home)),
       JSON.stringify(lineupSnapshot(away)),
       JSON.stringify(tacticsSnapshot),
-      "1.0.0",
+      MATCH_ENGINE_VERSION,
       seed,
     );
   }
@@ -508,7 +509,7 @@ export function simulateMatch(
     checkpoint.run(
       m.minute,
       JSON.stringify({
-        engineVersion: "1.0.0",
+        engineVersion: MATCH_ENGINE_VERSION,
         seed,
         config: simulationConfig,
         minute: m.minute,
@@ -809,7 +810,7 @@ export function simulateMatch(
     checkpoint.run(
       90,
       JSON.stringify({
-        engineVersion: "1.0.0",
+        engineVersion: MATCH_ENGINE_VERSION,
         seed,
         config: simulationConfig,
         minute: 90,
