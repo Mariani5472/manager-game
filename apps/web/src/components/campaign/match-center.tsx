@@ -7,7 +7,7 @@ import {
   MATCH_TACTICAL_INSTRUCTIONS,
   type MatchCenterResponse,
   type MatchTacticalChangeRequest,
-} from '@shared/index';
+} from '@shared/contracts/match.contracts';
 import { gameApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
