@@ -127,7 +127,7 @@ export class SqliteCampaignRepository implements CampaignRepository {
         )
         .map((s) => {
           const rows =
-            s.stageKind === "LEAGUE" ? getStandings(db, s.stageId, false) : [];
+            ["LEAGUE", "GROUPS"].includes(s.stageKind) ? getStandings(db, s.stageId, false) : [];
           return {
             competition: s.competition,
             stage: s.stage,
@@ -137,7 +137,9 @@ export class SqliteCampaignRepository implements CampaignRepository {
             completedFixtures: s.completedFixtures,
             stageId: s.stageId,
             standing: rows.map((row, index) => ({
-              position: index + 1,
+              position: row.position,
+              groupId: row.groupId,
+              groupName: row.groupName,
               club: row.club,
               played: row.played,
               wins: row.wins,
@@ -429,7 +431,7 @@ export class SqliteCampaignRepository implements CampaignRepository {
     return this.withSave(id, (db) => {
       const stage = getSeasonStatus(db, stageId)[0];
       if (!stage) throw new Error(`Competition stage ${stageId} was not found.`);
-      const standings = stage.stageKind === "LEAGUE" ? getStandings(db, stageId) : [];
+      const standings = ["LEAGUE", "GROUPS"].includes(stage.stageKind) ? getStandings(db, stageId) : [];
       const rounds = db.prepare(`
         SELECT r.id AS roundId, r.round_number AS roundNumber, r.name,
           COUNT(f.id) AS fixtureCount,
@@ -449,20 +451,44 @@ export class SqliteCampaignRepository implements CampaignRepository {
         WHERE r.stage_id=? ORDER BY r.round_number, f.scheduled_at, f.id
       `).all(stageId) as Array<{id:number;roundNumber:number;roundName:string;scheduledAt:string|null;status:CampaignCompetitionFixtureDto["status"];homeScore:number|null;awayScore:number|null;homeClub:string;awayClub:string}>;
       const scorers = db.prepare(`
-        SELECT e.player_id AS playerId, p.full_name AS player,
-          e.club_id AS clubId, c.name AS club, COUNT(*) AS goals
-        FROM match_event e JOIN fixture f ON f.id=e.fixture_id
-        JOIN competition_round r ON r.id=f.round_id
-        JOIN person p ON p.id=e.player_id JOIN club c ON c.id=e.club_id
-        WHERE r.stage_id=? AND f.status='COMPLETED'
-          AND e.event_type IN ('GOAL','PENALTY_GOAL')
-          AND e.player_id IS NOT NULL AND e.club_id IS NOT NULL
-        GROUP BY e.player_id,e.club_id
-        ORDER BY goals DESC, player COLLATE NOCASE, playerId LIMIT 50
-      `).all(stageId) as Array<{playerId:number;player:string;clubId:number;club:string;goals:number}>;
+        SELECT
+          e.player_id AS playerId,
+          p.full_name AS player,
+          (
+            SELECT GROUP_CONCAT(club_name, ', ')
+            FROM (
+              SELECT DISTINCT c2.name AS club_name
+              FROM match_event e2
+              JOIN fixture f2 ON f2.id = e2.fixture_id
+              JOIN competition_round r2 ON r2.id = f2.round_id
+              JOIN competition_stage st2 ON st2.id = r2.stage_id
+              JOIN club c2 ON c2.id = e2.club_id
+              WHERE e2.player_id = e.player_id
+                AND st2.season_id = ?
+                AND f2.status = 'COMPLETED'
+                AND e2.event_type IN ('GOAL', 'PENALTY_GOAL')
+                AND e2.club_id IS NOT NULL
+              ORDER BY c2.name COLLATE NOCASE
+            )
+          ) AS clubs,
+          COUNT(*) AS goals
+        FROM match_event e
+        JOIN fixture f ON f.id = e.fixture_id
+        JOIN competition_round r ON r.id = f.round_id
+        JOIN competition_stage st ON st.id = r.stage_id
+        JOIN person p ON p.id = e.player_id
+        WHERE st.season_id = ?
+          AND f.status = 'COMPLETED'
+          AND e.event_type IN ('GOAL', 'PENALTY_GOAL')
+          AND e.player_id IS NOT NULL
+          AND e.club_id IS NOT NULL
+        GROUP BY e.player_id, p.full_name
+        ORDER BY goals DESC, player COLLATE NOCASE, playerId
+        LIMIT 50
+      `).all(stage.seasonId, stage.seasonId) as Array<{playerId:number;player:string;clubs:string;goals:number}>;
       return {
         stage: {stageId:stage.stageId,competition:stage.competition,stage:stage.stage,seasonYear:stage.seasonYear,stageKind:stage.stageKind,stageStatus:stage.stageStatus},
-        standings: standings.map((row,index)=>({position:index+1,clubId:row.clubId,club:row.club,played:row.played,wins:row.wins,draws:row.draws,losses:row.losses,goalsFor:row.goalsFor,goalsAgainst:row.goalsAgainst,goalDifference:row.goalDifference,points:row.points})),
+        standings: standings.map((row)=>({position:row.position,groupId:row.groupId,groupName:row.groupName,clubId:row.clubId,club:row.club,played:row.played,wins:row.wins,draws:row.draws,losses:row.losses,goalsFor:row.goalsFor,goalsAgainst:row.goalsAgainst,goalDifference:row.goalDifference,points:row.points})),
         rounds: rounds.map(round=>({...round,completedCount:round.completedCount??0,fixtures:fixtures.filter(f=>f.roundNumber===round.roundNumber).map(f=>({id:f.id,round:f.roundName,scheduledAt:f.scheduledAt,status:f.status,homeClub:f.homeClub,awayClub:f.awayClub,score:f.status==="COMPLETED"?`${f.homeScore ?? 0}–${f.awayScore ?? 0}`:null}))})),
         topScorers: scorers,
       };
