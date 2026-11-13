@@ -1,3 +1,5 @@
+export const MATCH_ENGINE_VERSION = "1.1.0";
+
 import type { MatchEventProbabilities } from "../types/match-engine.types.js";
 
 export const HOME_SHOT_CHANCE_BONUS = 0.004;
