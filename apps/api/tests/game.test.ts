@@ -64,6 +64,83 @@ async function createSave(root: string, name = "Test Campaign", clubId = 1) {
   return { masterPath, manager, save };
 }
 
+test("standings always rank by points when a stage has no configured tie-break rules", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof open> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Standings without rules");
+    db = manager.open(save.filePath);
+    const participants = db
+      .prepare("SELECT club_id AS clubId FROM stage_participant WHERE stage_id=1 ORDER BY club_id")
+      .all() as Array<{ clubId: number }>;
+    assert.ok(participants.length >= 3);
+    const [first, second, third] = participants;
+    assert.ok(first && second && third);
+
+    const fixtures = db
+      .prepare(`
+        SELECT f.id, f.home_club_id AS homeClubId, f.away_club_id AS awayClubId
+        FROM fixture f
+        JOIN competition_round r ON r.id=f.round_id
+        WHERE r.stage_id=1
+      `)
+      .all() as Array<{ id: number; homeClubId: number; awayClubId: number }>;
+    const firstVsSecond = fixtures.find(
+      (fixture) =>
+        (fixture.homeClubId === first.clubId && fixture.awayClubId === second.clubId) ||
+        (fixture.homeClubId === second.clubId && fixture.awayClubId === first.clubId),
+    );
+    const firstVsThird = fixtures.find(
+      (fixture) =>
+        (fixture.homeClubId === first.clubId && fixture.awayClubId === third.clubId) ||
+        (fixture.homeClubId === third.clubId && fixture.awayClubId === first.clubId),
+    );
+    assert.ok(firstVsSecond && firstVsThird);
+
+    db.prepare("DELETE FROM stage_standing_rule WHERE stage_id=1").run();
+    db.prepare(`
+      UPDATE fixture SET status='SCHEDULED',home_score=NULL,away_score=NULL
+      WHERE id IN (
+        SELECT f.id FROM fixture f
+        JOIN competition_round r ON r.id=f.round_id
+        WHERE r.stage_id=1
+      )
+    `).run();
+
+    const winnerHomeScore = firstVsSecond.homeClubId === second.clubId ? 1 : 0;
+    const winnerAwayScore = firstVsSecond.awayClubId === second.clubId ? 1 : 0;
+    db.prepare("UPDATE fixture SET status='COMPLETED',home_score=?,away_score=? WHERE id=?")
+      .run(winnerHomeScore, winnerAwayScore, firstVsSecond.id);
+    db.prepare("UPDATE fixture SET status='COMPLETED',home_score=0,away_score=0 WHERE id=?")
+      .run(firstVsThird.id);
+
+    const standings = getStandings(db, 1);
+    assert.equal(standings[0]?.clubId, second.clubId);
+    assert.equal(standings[0]?.points, 3);
+    assert.equal(standings.find((row) => row.clubId === first.clubId)?.points, 1);
+  } finally {
+    if (db?.open) db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("standings reject completed fixtures without a valid score", async () => {
+  const root = tempRoot();
+  let db: ReturnType<typeof open> | undefined;
+  try {
+    const { manager, save } = await createSave(root, "Invalid completed fixture");
+    db = manager.open(save.filePath);
+    db.prepare("UPDATE fixture SET status='COMPLETED',home_score=NULL,away_score=0 WHERE id=1").run();
+    assert.throws(
+      () => getStandings(db!, 1),
+      /completed fixture 1 has a missing score/,
+    );
+  } finally {
+    if (db?.open) db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("complete schema executes and passes SQLite integrity and foreign-key checks", () => {
   const root = tempRoot();
   try {
