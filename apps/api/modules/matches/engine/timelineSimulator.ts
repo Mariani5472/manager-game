@@ -600,6 +600,7 @@ export function simulateMatchTimeline(
         isHome: true,
         pressure: gameState.home.momentum,
         opponentPressure: gameState.away.momentum,
+        opponentDefensiveStability: gameState.away.defensiveStability,
         random: homeRandom,
         opponentErrorRandom: awayErrorRandom,
       },
@@ -609,6 +610,7 @@ export function simulateMatchTimeline(
         isHome: false,
         pressure: gameState.away.momentum,
         opponentPressure: gameState.home.momentum,
+        opponentDefensiveStability: gameState.home.defensiveStability,
         random: awayRandom,
         opponentErrorRandom: homeErrorRandom,
       },
@@ -628,6 +630,7 @@ export function simulateMatchTimeline(
         side.pressure,
         side.opponentPressure,
         isCounterAttack,
+        side.opponentDefensiveStability,
       );
       if (!defensiveError && side.random() >= chance) continue;
       if (defensiveError) {
