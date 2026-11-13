@@ -10,12 +10,14 @@ export function LineupList({
   managed,
   selectedIds,
   onReplace,
+  disabled = false,
 }: {
   title: string;
   players: MatchLineupPlayerDto[];
   managed: boolean;
   selectedIds: number[];
   onReplace?: (slot: number, playerId: number) => void;
+  disabled?: boolean;
 }) {
   const startingSlots = players.filter((player) => player.isStarting);
   const substitutes = players.filter((player) =>
@@ -52,6 +54,7 @@ export function LineupList({
                 <select
                   aria-label={`Player for ${slotPlayer.position} slot`}
                   value={selectedId}
+                  disabled={disabled}
                   onChange={(event) => onReplace(index, Number(event.target.value))}
                 >
                   {players.map((option) => (
