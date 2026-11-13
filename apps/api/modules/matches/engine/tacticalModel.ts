@@ -46,7 +46,7 @@ export function getTacticalShotCreationModifier(
     (tactic.tempo - 50) * 0.00012 +
     (tactic.passing_directness - 50) * 0.000055 +
     (tactic.width - 50) * 0.000025 +
-    (isCounterAttack ? 0.004 : 0)
+    (isCounterAttack && tactic.counter_attack === 1 ? 0.004 : 0)
   );
 }
 
@@ -58,7 +58,7 @@ export function getTacticalChanceQualityModifier(
     (tactic.tempo - 50) * 0.00004 +
     (tactic.passing_directness - 50) * 0.00006 +
     (tactic.width - 50) * 0.000035 +
-    (isCounterAttack ? 0.012 : 0)
+    (isCounterAttack && tactic.counter_attack === 1 ? 0.012 : 0)
   );
 }
 
