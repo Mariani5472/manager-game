@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, Pause, Play, Radio, RotateCcw, SkipForward, Timer, Zap } from 'lucide-react';
-import type { MatchCenterResponse, MatchTacticalChangeRequest } from '@shared/index';
+import { MATCH_MENTALITIES, MATCH_TACTICAL_INSTRUCTIONS, type MatchCenterResponse, type MatchTacticalChangeRequest } from '@shared/index';
 import { gameApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -90,6 +90,16 @@ export function MatchCenter({
   const [playerOutId, setPlayerOutId] = useState<number | null>(null);
   const [playerInId, setPlayerInId] = useState<number | null>(null);
   const [formationId, setFormationId] = useState<number | null>(null);
+  const effectiveTactic = center.data?.teams.find(
+    (team) => team.clubId === center.data?.managedClubId,
+  )?.tactic;
+  useEffect(() => {
+    if (!effectiveTactic) return;
+    setMentality(effectiveTactic.mentality);
+    setInstructionKey('pressing');
+    setInstructionValue(effectiveTactic.pressing);
+    setFormationId(effectiveTactic.formationId);
+  }, [effectiveTactic]);
   // A ref closes the interval race: state updates from React are asynchronous,
   // while a timer callback can otherwise enqueue another advance immediately.
   const advanceInFlight = useRef(false);
@@ -477,25 +487,22 @@ export function MatchCenter({
             </section>
             <section className={styles.decisionPanel}>
               <strong>Team mentality</strong>
+              <p className={styles.speedHint}>
+                Effective now: {effectiveTactic?.mentality.replaceAll('_', ' ').toLowerCase() ?? '—'}.
+                The selected mentality is applied from minute {nextDecisionMinute}.
+              </p>
               <div className={styles.optionGrid}>
-                {(
-                  [
-                    ['VERY_DEFENSIVE', 'Very defensive'],
-                    ['DEFENSIVE', 'Defensive'],
-                    ['BALANCED', 'Balanced'],
-                    ['ATTACKING', 'Attacking'],
-                    ['VERY_ATTACKING', 'Very attacking'],
-                  ] as const
-                ).map(([value, label]) => (
+                {MATCH_MENTALITIES.map((option) => (
                   <button
                     type="button"
-                    key={value}
-                    className={mentality === value ? styles.choiceSelected : styles.choiceButton}
-                    aria-pressed={mentality === value}
+                    key={option.value}
+                    className={mentality === option.value ? styles.choiceSelected : styles.choiceButton}
+                    aria-pressed={mentality === option.value}
                     disabled={!userCanDecide || decisionBusy}
-                    onClick={() => setMentality(value)}
+                    onClick={() => setMentality(option.value)}
                   >
-                    {label}
+                    {option.label}
+                    <small>{option.description}</small>
                   </button>
                 ))}
               </div>
@@ -511,35 +518,61 @@ export function MatchCenter({
             </section>
             <section className={styles.decisionPanel}>
               <strong>Tactical instruction</strong>
-              <span className={styles.speedHint}>Choose an instruction to tune.</span>
+              <span className={styles.speedHint}>
+                Current values are loaded from the match tactics and update when a scheduled
+                instruction takes effect.
+              </span>
               <div className={styles.optionGrid}>
-                {(
-                  [
-                    ['pressing', 'Pressing'],
-                    ['tempo', 'Tempo'],
-                    ['defensive_line', 'Defensive line'],
-                    ['width', 'Width'],
-                    ['passing_directness', 'Passing'],
-                    ['counter_attack', 'Counter attack'],
-                  ] as const
-                ).map(([value, label]) => (
+                {MATCH_TACTICAL_INSTRUCTIONS.map((option) => (
                   <button
                     type="button"
-                    key={value}
+                    key={option.key}
                     className={
-                      instructionKey === value ? styles.choiceSelected : styles.choiceButton
+                      instructionKey === option.key ? styles.choiceSelected : styles.choiceButton
                     }
-                    aria-pressed={instructionKey === value}
+                    aria-pressed={instructionKey === option.key}
                     disabled={!userCanDecide || decisionBusy}
                     onClick={() => {
-                      setInstructionKey(value);
-                      if (value === 'counter_attack') setInstructionValue(1);
+                      setInstructionKey(option.key);
+                      if (option.key === 'counter_attack') {
+                        setInstructionValue(effectiveTactic?.counterAttack ? 1 : 0);
+                      } else if (effectiveTactic) {
+                        const currentValues = {
+                          pressing: effectiveTactic.pressing,
+                          tempo: effectiveTactic.tempo,
+                          defensive_line: effectiveTactic.defensiveLine,
+                          width: effectiveTactic.width,
+                          passing_directness: effectiveTactic.passingDirectness,
+                        };
+                        setInstructionValue(currentValues[option.key]);
+                      }
                     }}
                   >
-                    {label}
+                    {option.label}
                   </button>
                 ))}
               </div>
+              {(() => {
+                const option = MATCH_TACTICAL_INSTRUCTIONS.find((item) => item.key === instructionKey)!;
+                const currentValue = effectiveTactic
+                  ? instructionKey === 'counter_attack'
+                    ? Number(effectiveTactic.counterAttack)
+                    : {
+                        pressing: effectiveTactic.pressing,
+                        tempo: effectiveTactic.tempo,
+                        defensive_line: effectiveTactic.defensiveLine,
+                        width: effectiveTactic.width,
+                        passing_directness: effectiveTactic.passingDirectness,
+                      }[instructionKey]
+                  : null;
+                return (
+                  <div className={styles.tacticalGuidance}>
+                    <span>Effective now: <strong>{currentValue === null ? '—' : currentValue}</strong></span>
+                    <small>{option.description}</small>
+                    <small>{option.tradeoff}</small>
+                  </div>
+                );
+              })()}
               {instructionKey === 'counter_attack' ? (
                 <div className={styles.optionGrid}>
                   {(
@@ -572,9 +605,9 @@ export function MatchCenter({
                   <input
                     aria-label="Instruction intensity"
                     type="range"
-                    min="0"
-                    max="100"
-                    step="5"
+                    min={MATCH_TACTICAL_INSTRUCTIONS.find((option) => option.key === instructionKey)!.min}
+                    max={MATCH_TACTICAL_INSTRUCTIONS.find((option) => option.key === instructionKey)!.max}
+                    step={MATCH_TACTICAL_INSTRUCTIONS.find((option) => option.key === instructionKey)!.step}
                     value={instructionValue}
                     disabled={!userCanDecide || decisionBusy}
                     onChange={(event) => setInstructionValue(Number(event.target.value))}
@@ -603,7 +636,8 @@ export function MatchCenter({
             <section className={styles.decisionPanel}>
               <strong>Formation</strong>
               <span className={styles.speedHint}>
-                Choose one of the formations supported by your data package.
+                Effective now: {effectiveTactic?.formation ?? '—'}. The selected formation is
+                applied from minute {nextDecisionMinute}.
               </span>
               <div className={styles.optionGrid}>
                 {data.formations.map((formation) => (
