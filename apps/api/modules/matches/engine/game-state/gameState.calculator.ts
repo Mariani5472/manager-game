@@ -20,7 +20,11 @@ function initialTeamState(team: Team): TeamGameState {
   const physicalCondition = clamp(team.energy, 0, 100);
   const territorialControl = 50;
   const offensiveThreat = 25;
-  const defensiveStability = clamp(team.defending, 0, 100);
+  const defensiveStability = clamp(
+    team.defending + getMentalityEffects(team.tactic.mentality).defensiveStability,
+    0,
+    100,
+  );
   const momentum =
     territorialControl * 0.4 +
     offensiveThreat * 0.4 +
@@ -153,7 +157,12 @@ function calculateTeamState(
     100,
   );
 
-  const defensiveStability = clamp(team.defending * activeRatio, 0, 100);
+  const defensiveStability = clamp(
+    team.defending * activeRatio +
+      getMentalityEffects(team.tactic.mentality).defensiveStability,
+    0,
+    100,
+  );
 
   const rawMomentum = clamp(
     territorialControl * 0.3 +
