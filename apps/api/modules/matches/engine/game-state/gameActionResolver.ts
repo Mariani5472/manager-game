@@ -1,6 +1,7 @@
 import { clamp } from "../mathUtils.js";
 import type { Team } from "../../types/match-engine.types.js";
 import type { GameAction, TeamGameState } from "./gameState.types.js";
+import { getCounterAttackOpportunityChance, getTacticalProgressionModifier } from "../tacticalModel.js";
 
 export function resolveTeamGameActions(
   team: Team,
@@ -19,8 +20,7 @@ export function resolveTeamGameActions(
   const progressionChance = clamp(
     0.24 +
       attackingMatchup * 0.0015 +
-      (team.tactic.pressing - 50) * 0.0009 +
-      (team.tactic.tempo - 50) * 0.0006 +
+      getTacticalProgressionModifier(team.tactic) +
       (state.territorialControl - 50) * 0.0015 -
       fatiguePenalty +
       (activeRatio - 1) * 0.2,
@@ -33,7 +33,12 @@ export function resolveTeamGameActions(
       team.tactic.counter_attack &&
       opponentState.territorialControl >= 62 &&
       random() <
-        clamp(0.08 + (team.attacking - opponent.defending) * 0.001, 0.04, 0.2)
+        getCounterAttackOpportunityChance(
+          team.tactic,
+          opponent.tactic,
+          team.attacking,
+          opponent.defending,
+        )
     ) {
       actions.push({ minute, clubId: team.clubId, type: "COUNTER_ATTACK" });
     }
