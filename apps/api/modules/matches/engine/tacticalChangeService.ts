@@ -1,6 +1,7 @@
 import type { SqliteDatabase } from "../../../db/database.js";
 import { loadTeam } from "./teamService.js";
 import type { TacticalChangeType } from "../types/match-engine.types.js";
+import { MATCH_TACTICAL_INSTRUCTIONS } from "../../../../shared/src/contracts/match.contracts.js";
 
 interface ProjectedLineupPlayer {
   playerId: number;
@@ -163,20 +164,15 @@ export function scheduleMatchTacticalChange(
   if (changeType === "INSTRUCTION") {
     const key = String(payload.key ?? "");
     const value = Number(payload.value);
-    const ranges: Record<string, [number, number]> = {
-      pressing: [0, 100],
-      tempo: [0, 100],
-      defensive_line: [0, 100],
-      width: [0, 100],
-      passing_directness: [0, 100],
-      counter_attack: [0, 1],
-    };
+    const instruction = MATCH_TACTICAL_INSTRUCTIONS.find(
+      (option) => option.key === key,
+    );
 
     if (
-      !ranges[key] ||
+      !instruction ||
       !Number.isFinite(value) ||
-      value < ranges[key]![0] ||
-      value > ranges[key]![1]
+      value < instruction.min ||
+      value > instruction.max
     ) {
       throw new Error("Invalid instruction key or value.");
     }
