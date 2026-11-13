@@ -2,7 +2,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, Pause, Play, Radio, RotateCcw, SkipForward, Timer, Zap } from 'lucide-react';
-import { MATCH_MENTALITIES, MATCH_TACTICAL_INSTRUCTIONS, type MatchCenterResponse, type MatchTacticalChangeRequest } from '@shared/index';
+import {
+  MATCH_MENTALITIES,
+  MATCH_TACTICAL_INSTRUCTIONS,
+  type MatchCenterResponse,
+  type MatchTacticalChangeRequest,
+} from '@shared/index';
 import { gameApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -488,15 +493,18 @@ export function MatchCenter({
             <section className={styles.decisionPanel}>
               <strong>Team mentality</strong>
               <p className={styles.speedHint}>
-                Effective now: {effectiveTactic?.mentality.replaceAll('_', ' ').toLowerCase() ?? '—'}.
-                The selected mentality is applied from minute {nextDecisionMinute}.
+                Effective now:{' '}
+                {effectiveTactic?.mentality.replaceAll('_', ' ').toLowerCase() ?? '—'}. The selected
+                mentality is applied from minute {nextDecisionMinute}.
               </p>
               <div className={styles.optionGrid}>
                 {MATCH_MENTALITIES.map((option) => (
                   <button
                     type="button"
                     key={option.value}
-                    className={mentality === option.value ? styles.choiceSelected : styles.choiceButton}
+                    className={
+                      mentality === option.value ? styles.choiceSelected : styles.choiceButton
+                    }
                     aria-pressed={mentality === option.value}
                     disabled={!userCanDecide || decisionBusy}
                     onClick={() => setMentality(option.value)}
@@ -553,7 +561,9 @@ export function MatchCenter({
                 ))}
               </div>
               {(() => {
-                const option = MATCH_TACTICAL_INSTRUCTIONS.find((item) => item.key === instructionKey)!;
+                const option = MATCH_TACTICAL_INSTRUCTIONS.find(
+                  (item) => item.key === instructionKey,
+                )!;
                 const currentValue = effectiveTactic
                   ? instructionKey === 'counter_attack'
                     ? Number(effectiveTactic.counterAttack)
@@ -567,7 +577,10 @@ export function MatchCenter({
                   : null;
                 return (
                   <div className={styles.tacticalGuidance}>
-                    <span>Effective now: <strong>{currentValue === null ? '—' : currentValue}</strong></span>
+                    <span>
+                      Effective now:{' '}
+                      <strong>{currentValue === null ? '—' : currentValue}</strong>
+                    </span>
                     <small>{option.description}</small>
                     <small>{option.tradeoff}</small>
                   </div>
@@ -605,9 +618,15 @@ export function MatchCenter({
                   <input
                     aria-label="Instruction intensity"
                     type="range"
-                    min={MATCH_TACTICAL_INSTRUCTIONS.find((option) => option.key === instructionKey)!.min}
-                    max={MATCH_TACTICAL_INSTRUCTIONS.find((option) => option.key === instructionKey)!.max}
-                    step={MATCH_TACTICAL_INSTRUCTIONS.find((option) => option.key === instructionKey)!.step}
+                    min={
+                      MATCH_TACTICAL_INSTRUCTIONS.find((option) => option.key === instructionKey)!.min
+                    }
+                    max={
+                      MATCH_TACTICAL_INSTRUCTIONS.find((option) => option.key === instructionKey)!.max
+                    }
+                    step={
+                      MATCH_TACTICAL_INSTRUCTIONS.find((option) => option.key === instructionKey)!.step
+                    }
                     value={instructionValue}
                     disabled={!userCanDecide || decisionBusy}
                     onChange={(event) => setInstructionValue(Number(event.target.value))}
