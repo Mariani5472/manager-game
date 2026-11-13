@@ -1,5 +1,5 @@
 import { MATCH_EVENT_PROBABILITIES } from "./constants.js";
-import { MATCH_TACTICAL_INSTRUCTIONS } from "../../../../shared/src/contracts/match.contracts.js";
+import { MATCH_MENTALITIES, MATCH_TACTICAL_INSTRUCTIONS } from "../../../../shared/src/contracts/match.contracts.js";
 import {
   advanceMatchGameState,
   createMatchGameState,
@@ -204,19 +204,11 @@ export function simulateMatchTimeline(
         }
       } else if (change.change_type === "MENTALITY") {
         const mentality = String(payload.mentality ?? "");
-        if (
-          ![
-            "VERY_DEFENSIVE",
-            "DEFENSIVE",
-            "BALANCED",
-            "ATTACKING",
-            "VERY_ATTACKING",
-          ].includes(mentality)
-        )
+        if (!MATCH_MENTALITIES.some((option) => option.value === mentality))
           throw new Error(
             `Tactical change ${change.id} has invalid mentality.`,
           );
-        team.tactic = { ...team.tactic, mentality };
+        team.tactic = { ...team.tactic, mentality: mentality as Team["tactic"]["mentality"] };
         minuteEvents.push({
           minute,
           clubId: team.clubId,
