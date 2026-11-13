@@ -6,6 +6,7 @@ import {
   createMatchGameState,
 } from "../modules/matches/engine/game-state/gameState.calculator.js";
 import { resolveTeamGameActions } from "../modules/matches/engine/game-state/gameActionResolver.js";
+import { sampleChanceQuality, shotCreationProbability } from "../modules/matches/engine/probabilityModel.js";
 import { runMomentumCalibration } from "../modules/matches/engine/momentum/momentumAnalysis.js";
 import type {
   MatchPlayer,
@@ -97,6 +98,56 @@ function createTeam(clubId: number, level = 60, goalkeeperLevel = level): Team {
     },
   };
 }
+
+test("counter-attack bonuses apply only when a counter action is generated", () => {
+  const home = createTeam(1, 65);
+  const away = createTeam(2, 60);
+  home.tactic.counter_attack = 1;
+
+  const normalChance = shotCreationProbability(home, away, true, 50, 50, false);
+  const counterChance = shotCreationProbability(home, away, true, 50, 50, true);
+  assert.ok(Math.abs(counterChance - normalChance - 0.004) < 1e-10);
+
+  const normalQuality = sampleChanceQuality(home, home.tactic, 60, () => 0.5, false);
+  const counterQuality = sampleChanceQuality(home, home.tactic, 60, () => 0.5, true);
+  assert.ok(Math.abs(counterQuality - normalQuality - 0.012) < 1e-10);
+});
+
+test("a high opposing defensive line creates more counter-attack opportunity", () => {
+  const team = createTeam(1, 65);
+  const opponent = createTeam(2, 60);
+  team.tactic.counter_attack = 1;
+  const teamState = createMatchGameState(team, opponent).home;
+  const opponentState = {
+    ...createMatchGameState(team, opponent).away,
+    territorialControl: 80,
+  };
+  const scriptedRandom = () => {
+    const values = [0.99, 0.1];
+    let index = 0;
+    return () => values[index++] ?? 0.99;
+  };
+
+  const lowLine = resolveTeamGameActions(
+    team,
+    { ...opponent, tactic: { ...opponent.tactic, defensive_line: 0 } },
+    teamState,
+    opponentState,
+    30,
+    scriptedRandom(),
+  );
+  const highLine = resolveTeamGameActions(
+    team,
+    { ...opponent, tactic: { ...opponent.tactic, defensive_line: 100 } },
+    teamState,
+    opponentState,
+    30,
+    scriptedRandom(),
+  );
+
+  assert.ok(!lowLine.some((action) => action.type === "COUNTER_ATTACK"));
+  assert.ok(highLine.some((action) => action.type === "COUNTER_ATTACK"));
+});
 
 test("same teams, seed and tactical commands produce an identical timeline without mutating inputs", () => {
   const home = createTeam(1, 70);
