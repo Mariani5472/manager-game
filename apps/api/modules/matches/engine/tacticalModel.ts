@@ -16,7 +16,10 @@ const MENTALITY_EFFECTS: Record<TacticMentality, MentalityEffects> = {
 };
 
 export function getMentalityEffects(mentality: string): MentalityEffects {
-  return MENTALITY_EFFECTS[mentality as TacticMentality] ?? MENTALITY_EFFECTS.BALANCED;
+  return (
+    MENTALITY_EFFECTS[mentality as TacticMentality] ??
+    MENTALITY_EFFECTS.BALANCED
+  );
 }
 
 export function getTacticalProgressionModifier(tactic: Tactic): number {
