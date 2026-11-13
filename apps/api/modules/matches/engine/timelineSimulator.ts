@@ -1,4 +1,5 @@
 import { MATCH_EVENT_PROBABILITIES } from "./constants.js";
+import { MATCH_TACTICAL_INSTRUCTIONS } from "../../../../shared/src/contracts/match.contracts.js";
 import {
   advanceMatchGameState,
   createMatchGameState,
@@ -228,19 +229,14 @@ export function simulateMatchTimeline(
       } else if (change.change_type === "INSTRUCTION") {
         const key = String(payload.key ?? ""),
           value = Number(payload.value);
-        const ranges: Record<string, [number, number]> = {
-          pressing: [0, 100],
-          tempo: [0, 100],
-          defensive_line: [0, 100],
-          width: [0, 100],
-          passing_directness: [0, 100],
-          counter_attack: [0, 1],
-        };
+        const instruction = MATCH_TACTICAL_INSTRUCTIONS.find(
+          (option) => option.key === key,
+        );
         if (
-          !ranges[key] ||
+          !instruction ||
           !Number.isFinite(value) ||
-          value < ranges[key]![0] ||
-          value > ranges[key]![1]
+          value < instruction.min ||
+          value > instruction.max
         )
           throw new Error(
             `Tactical change ${change.id} has invalid instruction.`,
@@ -623,6 +619,10 @@ export function simulateMatchTimeline(
       },
     ]) {
       const tactic = side.team.tactic;
+      const isCounterAttack = gameActions.some(
+        (action) =>
+          action.clubId === side.team.clubId && action.type === "COUNTER_ATTACK",
+      );
       const defensiveError =
         side.opponentErrorRandom() <
         MATCH_EVENT_PROBABILITIES.defensiveErrorPerDefendingTeamMinute;
@@ -632,6 +632,7 @@ export function simulateMatchTimeline(
         side.isHome,
         side.pressure,
         side.opponentPressure,
+        isCounterAttack,
       );
       if (!defensiveError && side.random() >= chance) continue;
       if (defensiveError) {
