@@ -1,5 +1,8 @@
 import { MATCH_EVENT_PROBABILITIES } from "./constants.js";
-import { MATCH_MENTALITIES, MATCH_TACTICAL_INSTRUCTIONS } from "../../../../shared/src/contracts/match.contracts.js";
+import {
+  MATCH_MENTALITIES,
+  MATCH_TACTICAL_INSTRUCTIONS,
+} from "../../../../shared/src/contracts/match.contracts.js";
 import {
   advanceMatchGameState,
   createMatchGameState,
