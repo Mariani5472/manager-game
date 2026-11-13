@@ -36,7 +36,7 @@ export function CompetitionPage({ saveId }: { saveId: string }) {
     return groups;
   }, []);
   return <div className={styles.page}>
-    <PageHeading eyebrow="COMPETITIONS" title="Competition centre" description="Standings, round-by-round results and the leading scorers for this stage." />
+    <PageHeading eyebrow="COMPETITIONS" title="Competition centre" description="Standings and round-by-round results for this stage, with top scorers across the competition season." />
     <div className={styles.competitionPicker}>
       {overview.data.competitions.map(stage => <Button key={stage.stageId} size="sm" variant={stage.stageId === stageId ? 'default' : 'outline'} onClick={() => setSelectedStageId(stage.stageId)}>{stage.competition} · {stage.stage}</Button>)}
     </div>
@@ -56,7 +56,7 @@ export function CompetitionPage({ saveId }: { saveId: string }) {
       </section>)}</CardContent>
     </Card>
     <Card>
-      <CardHeader><div><CardTitle>Top scorers</CardTitle><CardDescription>Goals from completed fixtures only.</CardDescription></div></CardHeader>
+      <CardHeader><div><CardTitle>Top scorers</CardTitle><CardDescription>Goals from completed fixtures across all stages of this competition season.</CardDescription></div></CardHeader>
       <CardContent>{data.topScorers.length ? <div className={styles.scorerList}>{data.topScorers.map((scorer,index) => <div key={scorer.playerId}><span>{index+1}</span><strong>{scorer.player}<small>{scorer.clubs}</small></strong><b>{scorer.goals}</b></div>)}</div> : <p className={styles.emptyText}>No goals recorded in completed matches yet.</p>}</CardContent>
     </Card>
   </div>;
