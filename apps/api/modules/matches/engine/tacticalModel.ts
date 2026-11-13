@@ -5,14 +5,35 @@ export interface MentalityEffects {
   pressure: number;
   territory: number;
   shotCreation: number;
+  defensiveStability: number;
 }
 
 const MENTALITY_EFFECTS: Record<TacticMentality, MentalityEffects> = {
-  VERY_DEFENSIVE: { pressure: -5, territory: -5, shotCreation: -0.018 },
-  DEFENSIVE: { pressure: -2, territory: -2, shotCreation: -0.009 },
-  BALANCED: { pressure: 0, territory: 0, shotCreation: 0 },
-  ATTACKING: { pressure: 3, territory: 3, shotCreation: 0.009 },
-  VERY_ATTACKING: { pressure: 5, territory: 5, shotCreation: 0.018 },
+  VERY_DEFENSIVE: {
+    pressure: -5,
+    territory: -5,
+    shotCreation: -0.018,
+    defensiveStability: 3,
+  },
+  DEFENSIVE: {
+    pressure: -2,
+    territory: -2,
+    shotCreation: -0.009,
+    defensiveStability: 1.5,
+  },
+  BALANCED: { pressure: 0, territory: 0, shotCreation: 0, defensiveStability: 0 },
+  ATTACKING: {
+    pressure: 3,
+    territory: 3,
+    shotCreation: 0.009,
+    defensiveStability: -1.5,
+  },
+  VERY_ATTACKING: {
+    pressure: 5,
+    territory: 5,
+    shotCreation: 0.018,
+    defensiveStability: -3,
+  },
 };
 
 export function getMentalityEffects(mentality: string): MentalityEffects {
