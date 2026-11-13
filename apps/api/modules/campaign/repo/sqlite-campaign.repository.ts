@@ -453,41 +453,54 @@ export class SqliteCampaignRepository implements CampaignRepository {
         WHERE r.stage_id=? ORDER BY r.round_number, f.scheduled_at, f.id
       `).all(stageId) as Array<{id:number;roundNumber:number;roundName:string;scheduledAt:string|null;status:CampaignFixtureDto["status"];homeScore:number|null;awayScore:number|null;homeClub:string;awayClub:string}>;
       const scorers = db.prepare(`
-        SELECT
-          e.player_id AS playerId,
-          p.full_name AS player,
-          (
-            SELECT GROUP_CONCAT(club_name, ', ')
-            FROM (
-              SELECT DISTINCT c2.name AS club_name
-              FROM match_event e2
-              JOIN fixture f2 ON f2.id = e2.fixture_id
-              JOIN competition_round r2 ON r2.id = f2.round_id
-              JOIN competition_stage st2 ON st2.id = r2.stage_id
-              JOIN club c2 ON c2.id = e2.club_id
-              WHERE e2.player_id = e.player_id
-                AND st2.season_id = ?
-                AND f2.status = 'COMPLETED'
-                AND e2.event_type IN ('GOAL', 'PENALTY_GOAL')
-                AND e2.club_id IS NOT NULL
-              ORDER BY c2.name COLLATE NOCASE
-            )
-          ) AS clubs,
-          COUNT(*) AS goals
-        FROM match_event e
-        JOIN fixture f ON f.id = e.fixture_id
-        JOIN competition_round r ON r.id = f.round_id
-        JOIN competition_stage st ON st.id = r.stage_id
-        JOIN person p ON p.id = e.player_id
-        WHERE st.season_id = ?
-          AND f.status = 'COMPLETED'
-          AND e.event_type IN ('GOAL', 'PENALTY_GOAL')
-          AND e.player_id IS NOT NULL
-          AND e.club_id IS NOT NULL
-        GROUP BY e.player_id, p.full_name
-        ORDER BY goals DESC, player COLLATE NOCASE, playerId
-        LIMIT 50
-      `).all(stage.seasonId, stage.seasonId) as Array<{playerId:number;player:string;clubs:string;goals:number}>;
+        WITH scorer_totals AS (
+          SELECT
+            e.player_id AS playerId,
+            p.full_name AS player,
+            (
+              SELECT GROUP_CONCAT(club_name, ', ')
+              FROM (
+                SELECT DISTINCT c2.name AS club_name
+                FROM match_event e2
+                JOIN fixture f2 ON f2.id = e2.fixture_id
+                JOIN competition_round r2 ON r2.id = f2.round_id
+                JOIN competition_stage st2 ON st2.id = r2.stage_id
+                JOIN club c2 ON c2.id = e2.club_id
+                WHERE e2.player_id = e.player_id
+                  AND st2.season_id = ?
+                  AND f2.status = 'COMPLETED'
+                  AND e2.event_type IN ('GOAL', 'PENALTY_GOAL')
+                  AND e2.club_id IS NOT NULL
+                ORDER BY c2.name COLLATE NOCASE
+              )
+            ) AS clubs,
+            COUNT(*) AS goals
+          FROM match_event e
+          JOIN fixture f ON f.id = e.fixture_id
+          JOIN competition_round r ON r.id = f.round_id
+          JOIN competition_stage st ON st.id = r.stage_id
+          JOIN person p ON p.id = e.player_id
+          WHERE st.season_id = ?
+            AND f.status = 'COMPLETED'
+            AND e.event_type IN ('GOAL', 'PENALTY_GOAL')
+            AND e.player_id IS NOT NULL
+            AND e.club_id IS NOT NULL
+          GROUP BY e.player_id, p.full_name
+        ),
+        ranked_scorers AS (
+          SELECT
+            RANK() OVER (ORDER BY goals DESC) AS position,
+            playerId,
+            player,
+            clubs,
+            goals
+          FROM scorer_totals
+        )
+        SELECT position, playerId, player, clubs, goals
+        FROM ranked_scorers
+        WHERE position <= 50
+        ORDER BY position, player COLLATE NOCASE, playerId
+      `).all(stage.seasonId, stage.seasonId) as Array<{position:number;playerId:number;player:string;clubs:string;goals:number}>;
       return {
         stage: {stageId:stage.stageId,competition:stage.competition,stage:stage.stage,seasonYear:stage.seasonYear,stageKind:stage.stageKind,stageStatus:stage.stageStatus},
         standings: standings.map((row)=>({position:row.position,groupId:row.groupId,groupName:row.groupName,clubId:row.clubId,club:row.club,played:row.played,wins:row.wins,draws:row.draws,losses:row.losses,goalsFor:row.goalsFor,goalsAgainst:row.goalsAgainst,goalDifference:row.goalDifference,points:row.points})),
