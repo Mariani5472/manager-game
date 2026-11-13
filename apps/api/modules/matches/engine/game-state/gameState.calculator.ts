@@ -152,7 +152,7 @@ function calculateTeamState(
   // This is an in-match load estimate. Player energy persistence remains outside this P0 scope.
   const physicalLoadPerMinute = getTacticalPhysicalLoadPerMinute(team.tactic);
   const physicalCondition = clamp(
-    team.energy - minute * physicalLoadPerMinute,
+    previous.physicalCondition - physicalLoadPerMinute,
     0,
     100,
   );
