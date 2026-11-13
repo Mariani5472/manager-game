@@ -9,22 +9,90 @@ export const FIXTURE_STATUSES = [
 export type FixtureStatus = (typeof FIXTURE_STATUSES)[number];
 
 export const MATCH_MENTALITIES = [
-  { value: "VERY_DEFENSIVE", label: "Very defensive", description: "Protect space and reduce attacking commitment." },
-  { value: "DEFENSIVE", label: "Defensive", description: "Prioritise shape while keeping selective attacking outlets." },
-  { value: "BALANCED", label: "Balanced", description: "Keep a neutral balance between risk and control." },
-  { value: "ATTACKING", label: "Attacking", description: "Commit more players forward and accept additional exposure." },
-  { value: "VERY_ATTACKING", label: "Very attacking", description: "Maximise attacking intent while leaving more space to defend." },
+  {
+    value: "VERY_DEFENSIVE",
+    label: "Very defensive",
+    description: "Protect space and reduce attacking commitment.",
+  },
+  {
+    value: "DEFENSIVE",
+    label: "Defensive",
+    description: "Prioritise shape while keeping selective attacking outlets.",
+  },
+  {
+    value: "BALANCED",
+    label: "Balanced",
+    description: "Keep a neutral balance between risk and control.",
+  },
+  {
+    value: "ATTACKING",
+    label: "Attacking",
+    description: "Commit more players forward and accept additional exposure.",
+  },
+  {
+    value: "VERY_ATTACKING",
+    label: "Very attacking",
+    description: "Maximise attacking intent while leaving more space to defend.",
+  },
 ] as const;
 
 export type MatchMentality = (typeof MATCH_MENTALITIES)[number]["value"];
 
 export const MATCH_TACTICAL_INSTRUCTIONS = [
-  { key: "pressing", label: "Pressing", min: 0, max: 100, step: 5, description: "How aggressively the team tries to recover possession.", tradeoff: "Higher pressing creates more pressure but increases physical load." },
-  { key: "tempo", label: "Tempo", min: 0, max: 100, step: 5, description: "How quickly the team tries to move the ball and progress.", tradeoff: "Higher tempo increases attacking activity but consumes more energy." },
-  { key: "defensive_line", label: "Defensive line", min: 0, max: 100, step: 5, description: "How high the defensive block is positioned.", tradeoff: "A higher line supports territorial pressure but gives counter-attacks more space." },
-  { key: "width", label: "Width", min: 0, max: 100, step: 5, description: "How much the team stretches play across the pitch.", tradeoff: "Width has a modest effect on shot creation and chance quality; it is not a direct strength bonus." },
-  { key: "passing_directness", label: "Passing directness", min: 0, max: 100, step: 5, description: "How quickly passes try to move the ball towards the final third.", tradeoff: "Direct passing helps progression but does not guarantee better-quality chances." },
-  { key: "counter_attack", label: "Counter attack", min: 0, max: 1, step: 1, description: "Whether the team looks to break quickly after the opponent advances.", tradeoff: "Only creates a benefit when a counter-attack opportunity actually occurs." },
+  {
+    key: "pressing",
+    label: "Pressing",
+    min: 0,
+    max: 100,
+    step: 5,
+    description: "How aggressively the team tries to recover possession.",
+    tradeoff: "Higher pressing creates more pressure but increases physical load.",
+  },
+  {
+    key: "tempo",
+    label: "Tempo",
+    min: 0,
+    max: 100,
+    step: 5,
+    description: "How quickly the team tries to move the ball and progress.",
+    tradeoff: "Higher tempo increases attacking activity but consumes more energy.",
+  },
+  {
+    key: "defensive_line",
+    label: "Defensive line",
+    min: 0,
+    max: 100,
+    step: 5,
+    description: "How high the defensive block is positioned.",
+    tradeoff: "A higher line supports territorial pressure but gives counter-attacks more space.",
+  },
+  {
+    key: "width",
+    label: "Width",
+    min: 0,
+    max: 100,
+    step: 5,
+    description: "How much the team stretches play across the pitch.",
+    tradeoff: "Width has a modest effect on shot creation and chance quality; it is not a direct strength bonus.",
+  },
+  {
+    key: "passing_directness",
+    label: "Passing directness",
+    min: 0,
+    max: 100,
+    step: 5,
+    description: "How quickly passes try to move the ball towards the final third.",
+    tradeoff: "Direct passing helps progression but does not guarantee better-quality chances.",
+  },
+  {
+    key: "counter_attack",
+    label: "Counter attack",
+    min: 0,
+    max: 1,
+    step: 1,
+    description: "Whether the team looks to break quickly after the opponent advances.",
+    tradeoff: "Only creates a benefit when a counter-attack opportunity actually occurs.",
+  },
 ] as const;
 
 export type MatchInstructionKey = (typeof MATCH_TACTICAL_INSTRUCTIONS)[number]["key"];
