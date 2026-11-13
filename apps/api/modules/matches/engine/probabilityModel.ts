@@ -116,9 +116,7 @@ export function sampleChanceQuality(
     baseXg +
       (team.attacking - 50) * 0.00042 +
       (finishing - 50) * 0.00018 +
-      (tactic.tempo - 50) * 0.00004 +
-      (tactic.passing_directness - 50) * 0.00006 +
-      (tactic.width - 50) * 0.000035 -
+      getTacticalChanceQualityModifier(tactic, isCounterAttack) -
       Math.max(0, 70 - ctx.pitchCondition) * 0.00025 -
       (ctx.weather === "HEAVY_RAIN"
         ? 0.012
