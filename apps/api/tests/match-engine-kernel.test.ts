@@ -158,6 +158,41 @@ test("a high opposing defensive line creates more counter-attack opportunity", (
   assert.ok(highLine.some((action) => action.type === "COUNTER_ATTACK"));
 });
 
+test("attacking mentality trades defensive stability for attacking intent", () => {
+  const defensive = createTeam(1, 65);
+  const attacking = createTeam(2, 65);
+  const opponent = createTeam(3, 60);
+  defensive.tactic.mentality = "VERY_DEFENSIVE";
+  attacking.tactic.mentality = "VERY_ATTACKING";
+
+  const defensiveStability = createMatchGameState(defensive, opponent).home
+    .defensiveStability;
+  const attackingStability = createMatchGameState(attacking, opponent).home
+    .defensiveStability;
+
+  assert.equal(defensiveStability - attackingStability, 6);
+  assert.ok(
+    shotCreationProbability(
+      opponent,
+      defensive,
+      false,
+      50,
+      50,
+      false,
+      defensiveStability,
+    ) <
+      shotCreationProbability(
+        opponent,
+        attacking,
+        false,
+        50,
+        50,
+        false,
+        attackingStability,
+      ),
+  );
+});
+
 test("same teams, seed and tactical commands produce an identical timeline without mutating inputs", () => {
   const home = createTeam(1, 70);
   const away = createTeam(2, 55);
