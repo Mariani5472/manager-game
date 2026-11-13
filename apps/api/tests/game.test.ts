@@ -130,10 +130,22 @@ test("standings reject completed fixtures without a valid score", async () => {
   try {
     const { manager, save } = await createSave(root, "Invalid completed fixture");
     db = manager.open(save.filePath);
-    db.prepare("UPDATE fixture SET status='COMPLETED',home_score=NULL,away_score=0 WHERE id=1").run();
+    const fixture = db
+      .prepare(`
+        SELECT f.id
+        FROM fixture f
+        JOIN competition_round r ON r.id=f.round_id
+        WHERE r.stage_id=1
+        ORDER BY f.id
+        LIMIT 1
+      `)
+      .get() as { id: number } | undefined;
+    assert.ok(fixture);
+    db.prepare("UPDATE fixture SET status='COMPLETED',home_score=NULL,away_score=0 WHERE id=?")
+      .run(fixture.id);
     assert.throws(
       () => getStandings(db!, 1),
-      /completed fixture 1 has a missing score/,
+      /completed fixture \\d+ has a missing score/,
     );
   } finally {
     if (db?.open) db.close();
