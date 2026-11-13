@@ -408,49 +408,52 @@ export function MatchCenter({
           <div className={styles.decisionGrid}>
             <section className={styles.decisionPanel}>
               <strong>Substitution</strong>
-              <span className={styles.speedHint}>1. Choose the player leaving the pitch.</span>
-              <div className={styles.choiceList}>
-                {activePlayers.map((player) => (
-                  <button
-                    type="button"
-                    key={player.playerId}
-                    className={
-                      playerOutId === player.playerId ? styles.choiceSelected : styles.choiceButton
-                    }
-                    aria-pressed={playerOutId === player.playerId}
-                    disabled={!userCanDecide || decisionBusy}
-                    onClick={() => {
-                      setPlayerOutId(player.playerId);
-                      setPlayerInId(null);
-                    }}
-                  >
-                    <span>{player.name}</span>
-                    <small>
-                      {player.position} · {Math.round(player.energy)}% energy
-                    </small>
-                  </button>
-                ))}
-              </div>
-              <span className={styles.speedHint}>2. Choose the substitute entering.</span>
-              <div className={styles.choiceList}>
-                {benchPlayers.map((player) => (
-                  <button
-                    type="button"
-                    key={player.playerId}
-                    className={
-                      playerInId === player.playerId ? styles.choiceSelected : styles.choiceButton
-                    }
-                    aria-pressed={playerInId === player.playerId}
-                    disabled={!userCanDecide || decisionBusy || playerOutId === null}
-                    onClick={() => setPlayerInId(player.playerId)}
-                  >
-                    <span>{player.name}</span>
-                    <small>
-                      {player.position} · {Math.round(player.energy)}% energy
-                    </small>
-                  </button>
-                ))}
-              </div>
+              <span className={styles.speedHint}>
+                Select an active player to replace and an available substitute. The change is
+                scheduled for minute {nextDecisionMinute}.
+              </span>
+              <label className={styles.substitutionField}>
+                <span>Player leaving</span>
+                <select
+                  value={playerOutId ?? ''}
+                  disabled={!userCanDecide || decisionBusy || activePlayers.length === 0}
+                  onChange={(event) => {
+                    setPlayerOutId(event.target.value ? Number(event.target.value) : null);
+                    setPlayerInId(null);
+                  }}
+                >
+                  <option value="">Choose a starting player</option>
+                  {activePlayers.map((player) => (
+                    <option key={player.playerId} value={player.playerId}>
+                      {player.name} · {player.position} · {Math.round(player.energy)}% energy
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={styles.substitutionField}>
+                <span>Player entering</span>
+                <select
+                  value={playerInId ?? ''}
+                  disabled={!userCanDecide || decisionBusy || playerOutId === null || benchPlayers.length === 0}
+                  onChange={(event) =>
+                    setPlayerInId(event.target.value ? Number(event.target.value) : null)
+                  }
+                >
+                  <option value="">Choose a substitute</option>
+                  {benchPlayers.map((player) => (
+                    <option key={player.playerId} value={player.playerId}>
+                      {player.name} · {player.position} · {Math.round(player.energy)}% energy
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {playerOutId !== null && playerInId !== null && (
+                <div className={styles.substitutionPreview}>
+                  <span>{playerName(playerOutId)}</span>
+                  <b>→</b>
+                  <span>{playerName(playerInId)}</span>
+                </div>
+              )}
               <Button
                 size="sm"
                 disabled={
