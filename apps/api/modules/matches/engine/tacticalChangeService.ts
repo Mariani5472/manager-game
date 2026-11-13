@@ -1,7 +1,7 @@
 import type { SqliteDatabase } from "../../../db/database.js";
 import { loadTeam } from "./teamService.js";
 import type { TacticalChangeType } from "../types/match-engine.types.js";
-import { MATCH_TACTICAL_INSTRUCTIONS } from "../../../../shared/src/contracts/match.contracts.js";
+import { MATCH_MENTALITIES, MATCH_TACTICAL_INSTRUCTIONS } from "../../../../shared/src/contracts/match.contracts.js";
 
 interface ProjectedLineupPlayer {
   playerId: number;
@@ -150,13 +150,9 @@ export function scheduleMatchTacticalChange(
 
   if (
     changeType === "MENTALITY" &&
-    ![
-      "VERY_DEFENSIVE",
-      "DEFENSIVE",
-      "BALANCED",
-      "ATTACKING",
-      "VERY_ATTACKING",
-    ].includes(String(payload.mentality ?? ""))
+    !MATCH_MENTALITIES.some(
+      (option) => option.value === String(payload.mentality ?? ""),
+    )
   ) {
     throw new Error("Invalid mentality.");
   }
