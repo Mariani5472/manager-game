@@ -51,6 +51,7 @@ export function shotCreationProbability(
   pressure: number,
   opponentPressure: number,
   isCounterAttack = false,
+  opponentDefensiveStability = opponent.defending,
 ): number {
   const tactic = team.tactic;
   const ctx = team.context ?? {
@@ -81,7 +82,7 @@ export function shotCreationProbability(
   return clamp(
     0.095 +
       (team.attacking - 50) * 0.00135 +
-      (50 - opponent.defending) * 0.0006 +
+      (50 - opponentDefensiveStability) * 0.0006 +
       mentalityShotModifier(tactic.mentality) +
       getTacticalShotCreationModifier(tactic, isCounterAttack) +
       (pressure - opponentPressure) * 0.00012 +
