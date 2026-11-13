@@ -17,6 +17,8 @@ import { finishSeasonIfComplete } from "../../competitions/service/season.servic
 import { advanceRoundById } from "../../competitions/service/calendar.service.js";
 import type {
   CampaignClubDto,
+  CampaignFixtureDto,
+  CampaignCompetitionDetailResponse,
   CampaignOverviewResponse,
   CampaignCalendarResponse,
   CampaignSquadResponse,
@@ -449,7 +451,7 @@ export class SqliteCampaignRepository implements CampaignRepository {
         FROM fixture f JOIN competition_round r ON r.id=f.round_id
         JOIN club home ON home.id=f.home_club_id JOIN club away ON away.id=f.away_club_id
         WHERE r.stage_id=? ORDER BY r.round_number, f.scheduled_at, f.id
-      `).all(stageId) as Array<{id:number;roundNumber:number;roundName:string;scheduledAt:string|null;status:CampaignCompetitionFixtureDto["status"];homeScore:number|null;awayScore:number|null;homeClub:string;awayClub:string}>;
+      `).all(stageId) as Array<{id:number;roundNumber:number;roundName:string;scheduledAt:string|null;status:CampaignFixtureDto["status"];homeScore:number|null;awayScore:number|null;homeClub:string;awayClub:string}>;
       const scorers = db.prepare(`
         SELECT
           e.player_id AS playerId,
