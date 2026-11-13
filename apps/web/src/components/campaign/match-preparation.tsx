@@ -60,11 +60,13 @@ export function MatchPreparation({
     next[slot] = playerId;
     if (replacementIndex >= 0) next[replacementIndex] = previous!;
     setStarterIds(next);
-    setBenchIds((current) => {
-      const without = current.filter((id) => id !== playerId && id !== previous);
-      if (replacementIndex < 0 && previous !== undefined) without.push(previous);
-      return without.slice(0, 7);
-    });
+    if (replacementIndex < 0) {
+      setBenchIds((current) => {
+        const nextBench = current.filter((id) => id !== playerId);
+        if (previous !== undefined) nextBench.push(previous);
+        return nextBench.slice(0, 7);
+      });
+    }
   };
   return (
     <div className={styles.stack}>
@@ -72,7 +74,7 @@ export function MatchPreparation({
         <div>
           <span className={styles.eyebrow}>MATCH DAY</span>
           <h1>Match preparation</h1>
-          <p>Confirm your starting eleven before kick-off.</p>
+          <p>Build your starting XI and choose up to seven substitutes before kick-off.</p>
         </div>
         <Button variant="ghost" onClick={onBack}>
           <RotateCcw size={15} /> Back to calendar
@@ -109,9 +111,9 @@ export function MatchPreparation({
               <CardTitle>Selection notes</CardTitle>
             </CardHeader>
             <CardContent className={styles.notes}>
-              Use the selectors to exchange starters with substitutes. Position order follows the
-              club&apos;s saved formation. Injured and suspended players are excluded by the
-              backend.
+              Select a player for each formation slot. Choosing a substitute moves the replaced
+              starter to the bench; choosing another starter swaps their slots. The server remains
+              responsible for eligibility and goalkeeper validation.
             </CardContent>
           </Card>
         </div>
@@ -131,22 +133,27 @@ export function MatchPreparation({
             </CardHeader>
             <CardContent className={styles.notes}>
               Weather, pitch condition, travel and rest are resolved from the saved fixture context
-              when the match starts.
+              when the match starts. Opponent selection is shown for information only.
             </CardContent>
           </Card>
         </div>
       </div>
       <div className={styles.actionBar}>
+        <div className={styles.lineupSaveStatus}>
+          <span>{starterIds.length}/11 starters</span>
+          <span>{benchIds.length}/7 substitutes</span>
+          {saveLineup.isSuccess && <Badge variant="success">Lineup saved</Badge>}
+        </div>
         {saveLineup.isError && <p className={styles.error}>{saveLineup.error.message}</p>}
         <Button
           variant="secondary"
-          disabled={saveLineup.isPending || starterIds.length !== 11}
+          disabled={saveLineup.isPending || starterIds.length !== 11 || benchIds.length > 7}
           onClick={() => saveLineup.mutate()}
         >
           {saveLineup.isPending ? 'Saving…' : 'Save lineup'}
         </Button>
         <Button
-          disabled={starterIds.length !== 11 || saveLineup.isPending}
+          disabled={starterIds.length !== 11 || benchIds.length > 7 || saveLineup.isPending}
           onClick={async () => {
             try {
               await saveLineup.mutateAsync();
