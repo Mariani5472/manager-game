@@ -1,7 +1,7 @@
 import { clamp } from "../mathUtils.js";
 import type { Team } from "../../types/match-engine.types.js";
 import type { GameAction, TeamGameState } from "./gameState.types.js";
-import { getCounterAttackOpportunityChance, getTacticalProgressionModifier } from "../tacticalModel.js";
+import { getCounterAttackOpportunityChance, getTacticalFinalThirdModifier, getTacticalProgressionModifier } from "../tacticalModel.js";
 
 export function resolveTeamGameActions(
   team: Team,
@@ -51,7 +51,7 @@ export function resolveTeamGameActions(
     0.2 +
       attackingMatchup * 0.0012 +
       (state.territorialControl - 50) * 0.0018 +
-      (team.tactic.passing_directness - 50) * 0.0005 -
+      getTacticalFinalThirdModifier(team.tactic) -
       fatiguePenalty,
     0.06,
     0.38,
