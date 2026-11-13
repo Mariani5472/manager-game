@@ -66,10 +66,11 @@ function loadEffectiveMatchTactic(
   const tactic = { ...row };
   const changes = db
     .prepare(
-      `SELECT change_type AS type,payload FROM match_tactical_change
+      `SELECT minute,change_type AS type,payload FROM match_tactical_change
        WHERE fixture_id=? AND club_id=? AND minute<=? ORDER BY minute,id`,
     )
     .all(fixtureId, clubId, throughMinute) as Array<{
+      minute: number;
       type: string;
       payload: string;
     }>;
