@@ -262,7 +262,7 @@ export function MatchCenter({
           <h1>Match centre</h1>
         </div>
         <Button variant="ghost" onClick={onBack}>
-          <RotateCcw size={15} /> {isFinished ? 'Continue career' : 'Calendar'}
+          <RotateCcw size={15} /> Calendar
         </Button>
       </div>
       <MatchHeader
@@ -304,11 +304,13 @@ export function MatchCenter({
         </Card>
       )}
       {data.history && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Historical match record</CardTitle>
-          </CardHeader>
-          <CardContent className={styles.historyTactics}>
+        <details className={styles.historyDetails}>
+          <summary>Technical match record</summary>
+          <Card>
+            <CardHeader>
+              <CardTitle>Historical match record</CardTitle>
+            </CardHeader>
+            <CardContent className={styles.historyTactics}>
             <p>
               {data.history.isLegacy
                 ? 'Reconstructed from a legacy checkpoint; kickoff details may be approximate.'
@@ -334,8 +336,9 @@ export function MatchCenter({
                 </section>
               ))}
             </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </details>
       )}
 
       {!isFinished && (
